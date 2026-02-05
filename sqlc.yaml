@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "mysql"
+    queries: "./internal/adapter/mysql/sqlc/query"
+    schema: "./internal/adapter/mysql/migrations"
+    gen:
+      go:
+        package: "repo"
+        out: "./internal/adapter/mysql/sqlc"
+        emit_json_tags: true
+        emit_interface: true
+        emit_pointers_for_null_types: true
+        json_tags_case_style: camel
