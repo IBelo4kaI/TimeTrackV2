@@ -55,10 +55,13 @@ func (s *calendarService) GetCalendarDays(ctx context.Context, userId string, mo
 		userTimeEntriesMap[entryDate] = entry
 	}
 
-	calendarEventsMap := make(map[time.Time]repo.GetCalendarEventsForMonthRow)
+	// Изменяем тип map - теперь храним слайс событий
+	calendarEventsMap := make(map[time.Time][]repo.GetCalendarEventsForMonthRow)
+
 	for _, event := range calendarEvents {
 		eventDate := date.NewDate(event.EventDate.Day(), int(event.EventDate.Month()), event.EventDate.Year())
-		calendarEventsMap[eventDate] = event
+		// Добавляем событие в слайс для этой даты
+		calendarEventsMap[eventDate] = append(calendarEventsMap[eventDate], event)
 	}
 
 	dayTypesMap := make(map[string]repo.DayType)
@@ -80,7 +83,6 @@ func (s *calendarService) GetCalendarDays(ctx context.Context, userId string, mo
 			IsWeekend:  (currentDate.Weekday() == time.Saturday || currentDate.Weekday() == time.Sunday),
 			IsEditType: true,
 		}
-
 		// Заполняем данные из userTimeEntries если есть
 		if entry, exists := userTimeEntriesMap[currentDate]; exists {
 			// Преобразуем hoursWorked из string в float32
@@ -96,12 +98,17 @@ func (s *calendarService) GetCalendarDays(ctx context.Context, userId string, mo
 		}
 
 		// Заполняем данные из calendarEvents если есть
-		if event, exists := calendarEventsMap[currentDate]; exists {
-			calendarDay.CalendarEventTypeId = event.DayTypeID
-			calendarDay.IsWeekend = dayTypesMap[event.DayTypeID].IsWorkDay
+		if events, exists := calendarEventsMap[currentDate]; exists {
+			// Обрабатываем все события для этой даты
+			for _, event := range events {
+				// Устанавливаем тип дня (берем последний или приоритетный)
+				calendarDay.CalendarEventTypeId = event.DayTypeID
+				calendarDay.IsWeekend = !dayTypesMap[event.DayTypeID].IsWorkDay
 
-			if event.Description != "" {
-				calendarDay.Holidays = append(calendarDay.Holidays, event.Description)
+				// Добавляем описание в список праздников
+				if event.Description != "" {
+					calendarDay.Holidays = append(calendarDay.Holidays, event.Description)
+				}
 			}
 		}
 

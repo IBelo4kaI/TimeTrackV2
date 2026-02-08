@@ -1,0 +1,532 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TimeTrack API",
+    "description": "API для системы учета рабочего времени",
+    "version": "1.0.0",
+    "contact": {
+      "name": "TimeTrack Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://192.168.88.147:8181",
+      "description": "Локальный сервер разработки"
+    }
+  ],
+  "paths": {
+    "/v1/calendar/{userId}/{year}/{month}": {
+      "get": {
+        "tags": [
+          "Calendar"
+        ],
+        "summary": "Получение календарных данных",
+        "description": "Возвращает календарные данные для указанного пользователя, месяца и года",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID пользователя",
+            "example": "b5b2e35e-01bd-11f1-bf7c-c21b751ece2a"
+          },
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Год",
+            "example": 2024
+          },
+          {
+            "name": "month",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "description": "Месяц (1-12)",
+            "example": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Неверные параметры запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/daytypes": {
+      "get": {
+        "tags": [
+          "DayTypes"
+        ],
+        "summary": "Получение списка типов дней",
+        "description": "Возвращает все доступные типы дней (рабочие, выходные, праздники и т.д.)",
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DayType"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usertimeentries/create": {
+      "post": {
+        "tags": [
+          "UserTimeEntries"
+        ],
+        "summary": "Создание записей о рабочем времени",
+        "description": "Создает одну или несколько записей о рабочем времени пользователя",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CreateUserTimeEntryParams"
+                },
+                "example": [
+                  {
+                    "userId": "b5b2e35e-01bd-11f1-bf7c-c21b751ece2a",
+                    "entryDate": "2024-03-15T00:00:00Z",
+                    "dayTypeId": "workday-id",
+                    "hoursWorked": "8.00"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Записи успешно созданы"
+          },
+          "400": {
+            "description": "Неверный формат запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usertimeentries/update": {
+      "post": {
+        "tags": [
+          "UserTimeEntries"
+        ],
+        "summary": "Обновление записей о рабочем времени",
+        "description": "Обновляет одну или несколько записей о рабочем времени пользователя",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserTimeEntriesParams"
+              },
+              "example": {
+                "ids": [
+                  "entry-id-1",
+                  "entry-id-2"
+                ],
+                "dayTypeId": "workday-id",
+                "hoursWorked": "8.00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Записи успешно обновлены"
+          },
+          "400": {
+            "description": "Неверный формат запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usertimeentries/delete": {
+      "post": {
+        "tags": [
+          "UserTimeEntries"
+        ],
+        "summary": "Удаление записей о рабочем времени",
+        "description": "Удаляет одну или несколько записей о рабочем времени пользователя",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "entry-id-1",
+                  "entry-id-2"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Записи успешно удалены"
+          },
+          "400": {
+            "description": "Неверный формат запроса",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CalendarResponse": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarDay"
+            }
+          }
+        }
+      },
+      "CalendarDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата дня",
+            "example": "2024-03-15T00:00:00Z"
+          },
+          "hours": {
+            "type": "number",
+            "format": "float",
+            "description": "Количество отработанных часов",
+            "example": 8.0
+          },
+          "userTimeId": {
+            "type": "string",
+            "description": "ID записи о рабочем времени",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "userTimeTypeId": {
+            "type": "string",
+            "description": "ID типа дня для записи о рабочем времени",
+            "example": "workday-id"
+          },
+          "calendarEventTypeId": {
+            "type": "string",
+            "description": "ID типа календарного события",
+            "example": "holiday-id"
+          },
+          "holidays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Список праздников в этот день",
+            "example": [
+              "Новый год"
+            ]
+          },
+          "isWeekend": {
+            "type": "boolean",
+            "description": "Является ли день выходным",
+            "example": false
+          },
+          "isEditType": {
+            "type": "boolean",
+            "description": "Можно ли редактировать тип дня (нельзя для отпуска)",
+            "example": true
+          }
+        }
+      },
+      "DayType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Уникальный идентификатор типа дня",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "name": {
+            "type": "string",
+            "description": "Название типа дня",
+            "example": "Рабочий день"
+          },
+          "systemName": {
+            "type": "string",
+            "description": "Системное название типа дня",
+            "example": "workday"
+          },
+          "isWorkDay": {
+            "type": "boolean",
+            "description": "Является ли день рабочим",
+            "example": true
+          },
+          "affectsVacation": {
+            "type": "boolean",
+            "description": "Влияет ли на расчет отпуска",
+            "example": true
+          },
+          "colorCode": {
+            "type": "string",
+            "description": "Цветовой код для отображения",
+            "example": "#4CAF50"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата создания",
+            "example": "2024-01-01T00:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата последнего обновления",
+            "example": "2024-01-01T00:00:00Z"
+          }
+        }
+      },
+      "CreateUserTimeEntryParams": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "ID пользователя",
+            "example": "b5b2e35e-01bd-11f1-bf7c-c21b751ece2a"
+          },
+          "entryDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата записи в формате RFC3339 (YYYY-MM-DDTHH:MM:SSZ)",
+            "example": "2024-03-15T00:00:00Z"
+          },
+          "dayTypeId": {
+            "type": "string",
+            "description": "ID типа дня",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "hoursWorked": {
+            "type": "string",
+            "description": "Количество отработанных часов в формате строки с двумя знаками после запятой",
+            "example": "8.00"
+          }
+        },
+        "required": [
+          "userId",
+          "entryDate",
+          "dayTypeId",
+          "hoursWorked"
+        ]
+      },
+      "UpdateUserTimeEntriesParams": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Массив ID записей для обновления",
+            "example": [
+              "entry-id-1",
+              "entry-id-2"
+            ]
+          },
+          "dayTypeId": {
+            "type": "string",
+            "description": "ID типа дня",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "hoursWorked": {
+            "type": "string",
+            "description": "Количество отработанных часов в формате строки с двумя знаками после запятой",
+            "example": "8.00"
+          }
+        },
+        "required": [
+          "ids",
+          "dayTypeId",
+          "hoursWorked"
+        ]
+      },
+      "UserTimeEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Уникальный идентификатор записи",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "userId": {
+            "type": "string",
+            "description": "ID пользователя",
+            "example": "b5b2e35e-01bd-11f1-bf7c-c21b751ece2a"
+          },
+          "entryDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата записи в формате RFC3339",
+            "example": "2024-03-15T00:00:00Z"
+          },
+          "dayTypeId": {
+            "type": "string",
+            "description": "ID типа дня",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "hoursWorked": {
+            "type": "string",
+            "description": "Количество отработанных часов",
+            "example": "8.00"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата создания",
+            "example": "2024-03-15T10:30:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата последнего обновления",
+            "example": "2024-03-15T10:30:00Z"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Сообщение об ошибке",
+            "example": "Проверте правильность параметров запроса и повторите попытку"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Calendar",
+      "description": "Операции с календарем"
+    },
+    {
+      "name": "DayTypes",
+      "description": "Управление типами дней"
+    },
+    {
+      "name": "UserTimeEntries",
+      "description": "Управление записями о рабочем времени"
+    }
+  ]
+}
