@@ -93,7 +93,7 @@ func (s *calendarService) GetCalendarDays(ctx context.Context, userId string, mo
 			}
 			calendarDay.UserTimeId = entry.ID
 			calendarDay.UserTimeTypeId = entry.DayTypeID
-			//TODO: В настройках сервиса создать "можно ли редактировать день с типом отпуска" сейчас нельзя.
+			// TODO: В настройках сервиса создать "можно ли редактировать день с типом отпуска" сейчас нельзя.
 			calendarDay.IsEditType = dayTypesMap[entry.DayTypeID].SystemName != "vacation"
 		}
 

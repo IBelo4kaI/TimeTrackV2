@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"log/slog"
+	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/handler"
+	"timetrack/internal/middleware"
 	"timetrack/internal/service"
 
 	"github.com/gofiber/contrib/swagger"
@@ -14,14 +16,16 @@ import (
 )
 
 type application struct {
-	config config
-	db     *sql.DB
-	logger *slog.Logger
+	config     config
+	db         *sql.DB
+	grpcClient *grpc.Client
+	logger     *slog.Logger
 }
 
 type config struct {
-	addr string
-	db   dbConfig
+	addr   string
+	db     dbConfig
+	prefix string
 }
 
 type dbConfig struct {
@@ -43,7 +47,10 @@ func (app *application) mount() *fiber.App {
 
 	fiberApp.Use(swagger.New(cfg))
 
-	fiberApp.Use(cors.New())
+	fiberApp.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://192.168.88.147:5173,http://localhost:5173,http://192.168.88.147:5176",
+		AllowCredentials: true,
+	}))
 	fiberApp.Use(logger.New(logger.Config{
 		Format: "${time} | [${ip}]:${port} | ${latency} | ${status} - ${method} ${path} \n",
 	}))
@@ -55,7 +62,9 @@ func (app *application) mount() *fiber.App {
 	calendarRouter := v1.Group("/calendar")
 
 	// permission calendar.all:read
-	calendarRouter.Get("/:userId/:year/:month", calendarHandler.GetCalendarDaysWithUserId)
+	calendarRouter.Get("/:userId/:year/:month", middleware.Require(app.grpcClient,
+		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "read"}),
+		calendarHandler.GetCalendarDaysWithUserId)
 
 	dayTypeService := service.NewDayTypeService(repo.New(app.db))
 	dayTypeHandler := handler.NewDayTypeHandler(dayTypeService)
@@ -69,9 +78,16 @@ func (app *application) mount() *fiber.App {
 	userTimeEntryRouter := v1.Group("/usertimeentries")
 
 	// permission usertime.all:edit
-	userTimeEntryRouter.Post("/create", userTimeEntryHandler.CreateUserTimeEntry)
-	userTimeEntryRouter.Post("/update", userTimeEntryHandler.UpdateUserTimeEntries)
-	userTimeEntryRouter.Post("/delete", userTimeEntryHandler.DeleteUserTimeEntries)
+	userTimeEntryRouter.Post("/create", middleware.RequireFromBody(app.grpcClient,
+		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "create"}),
+		userTimeEntryHandler.CreateUserTimeEntry)
+	userTimeEntryRouter.Post("/update",
+		middleware.RequireFromBody(app.grpcClient,
+			middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "edit"}),
+		userTimeEntryHandler.UpdateUserTimeEntries)
+	userTimeEntryRouter.Post("/delete", middleware.RequireFromBody(app.grpcClient,
+		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "delete"}),
+		userTimeEntryHandler.DeleteUserTimeEntries)
 
 	return fiberApp
 }

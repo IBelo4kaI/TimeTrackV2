@@ -99,48 +99,6 @@ func (ns NullVacationsStatus) Value() (driver.Value, error) {
 	return string(ns.VacationsStatus), nil
 }
 
-type WorkStandardsGender string
-
-const (
-	WorkStandardsGenderMale   WorkStandardsGender = "male"
-	WorkStandardsGenderFemale WorkStandardsGender = "female"
-)
-
-func (e *WorkStandardsGender) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = WorkStandardsGender(s)
-	case string:
-		*e = WorkStandardsGender(s)
-	default:
-		return fmt.Errorf("unsupported scan type for WorkStandardsGender: %T", src)
-	}
-	return nil
-}
-
-type NullWorkStandardsGender struct {
-	WorkStandardsGender WorkStandardsGender `json:"workStandardsGender"`
-	Valid               bool                `json:"valid"` // Valid is true if WorkStandardsGender is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullWorkStandardsGender) Scan(value interface{}) error {
-	if value == nil {
-		ns.WorkStandardsGender, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.WorkStandardsGender.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullWorkStandardsGender) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.WorkStandardsGender), nil
-}
-
 type CalendarEvent struct {
 	ID          string         `json:"id"`
 	EventDate   time.Time      `json:"eventDate"`
@@ -156,6 +114,7 @@ type DayType struct {
 	SystemName      string    `json:"systemName"`
 	IsWorkDay       bool      `json:"isWorkDay"`
 	AffectsVacation bool      `json:"affectsVacation"`
+	IsUserSelect    bool      `json:"isUserSelect"`
 	ColorCode       string    `json:"colorCode"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
@@ -196,13 +155,13 @@ type Vacation struct {
 }
 
 type WorkStandard struct {
-	ID            string              `json:"id"`
-	UserID        sql.NullString      `json:"userId"`
-	Month         int32               `json:"month"`
-	Year          int32               `json:"year"`
-	StandardHours int32               `json:"standardHours"`
-	StandardDays  int32               `json:"standardDays"`
-	Gender        WorkStandardsGender `json:"gender"`
-	CreatedAt     sql.NullTime        `json:"createdAt"`
-	UpdatedAt     sql.NullTime        `json:"updatedAt"`
+	ID            string         `json:"id"`
+	UserID        sql.NullString `json:"userId"`
+	Month         int32          `json:"month"`
+	Year          int32          `json:"year"`
+	StandardHours int32          `json:"standardHours"`
+	StandardDays  int32          `json:"standardDays"`
+	Gender        int32          `json:"gender"`
+	CreatedAt     sql.NullTime   `json:"createdAt"`
+	UpdatedAt     sql.NullTime   `json:"updatedAt"`
 }

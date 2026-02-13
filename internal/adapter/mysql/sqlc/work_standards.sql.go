@@ -16,12 +16,12 @@ VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateWorkStandardParams struct {
-	UserID        sql.NullString      `json:"userId"`
-	Month         int32               `json:"month"`
-	Year          int32               `json:"year"`
-	StandardHours int32               `json:"standardHours"`
-	StandardDays  int32               `json:"standardDays"`
-	Gender        WorkStandardsGender `json:"gender"`
+	UserID        sql.NullString `json:"userId"`
+	Month         int32          `json:"month"`
+	Year          int32          `json:"year"`
+	StandardHours int32          `json:"standardHours"`
+	StandardDays  int32          `json:"standardDays"`
+	Gender        int32          `json:"gender"`
 }
 
 func (q *Queries) CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error {
@@ -124,10 +124,10 @@ WHERE month = ? AND year = ? AND gender = ? AND (user_id IS NULL OR user_id = ?)
 `
 
 type GetWorkStandardsByMonthAndGenderIdParams struct {
-	Month  int32               `json:"month"`
-	Year   int32               `json:"year"`
-	Gender WorkStandardsGender `json:"gender"`
-	UserID sql.NullString      `json:"userId"`
+	Month  int32          `json:"month"`
+	Year   int32          `json:"year"`
+	Gender int32          `json:"gender"`
+	UserID sql.NullString `json:"userId"`
 }
 
 func (q *Queries) GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdParams) (WorkStandard, error) {

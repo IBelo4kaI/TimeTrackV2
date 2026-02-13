@@ -17,8 +17,8 @@ type Querier interface {
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
-	DeleteUserTimeEntries(ctx context.Context, ids []string) error
-	DeleteUserTimeEntry(ctx context.Context, id string) error
+	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
+	DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error
 	DeleteWorkStandard(ctx context.Context, id string) error
 	GetCalendarEventsByDate(ctx context.Context, eventDate time.Time) (GetCalendarEventsByDateRow, error)
 	GetCalendarEventsById(ctx context.Context, id string) (GetCalendarEventsByIdRow, error)
@@ -32,14 +32,17 @@ type Querier interface {
 	// day_types queries
 	// ============================================
 	GetDayTypes(ctx context.Context) ([]DayType, error)
-	GetTotalHoursForUserTimeEntriesByMonth(ctx context.Context, arg GetTotalHoursForUserTimeEntriesByMonthParams) ([]GetTotalHoursForUserTimeEntriesByMonthRow, error)
-	GetTotalHoursForUserTimeEntriesByYear(ctx context.Context, arg GetTotalHoursForUserTimeEntriesByYearParams) ([]GetTotalHoursForUserTimeEntriesByYearRow, error)
+	GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (int64, error)
+	GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (int64, error)
+	GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByMonthParams) (interface{}, error)
+	GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYearParams) (interface{}, error)
 	// ============================================
 	// user_time_entries queries
 	// ============================================
 	GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTimeEntriesForMonthParams) ([]UserTimeEntry, error)
 	GetUserTimeEntryById(ctx context.Context, id string) (UserTimeEntry, error)
 	GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]UserTimeEntry, error)
+	GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (int64, error)
 	// ============================================
 	// work_standards queries
 	// ============================================
@@ -51,6 +54,7 @@ type Querier interface {
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
 	UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCodeDayTypeParams) error
 	UpdateDayType(ctx context.Context, arg UpdateDayTypeParams) error
+	UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error
 	UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTypeParams) error
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error

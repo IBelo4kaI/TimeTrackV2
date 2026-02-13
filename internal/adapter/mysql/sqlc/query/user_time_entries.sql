@@ -18,26 +18,49 @@ SELECT *
 FROM user_time_entries
 WHERE id IN (sqlc.slice('ids'));
 
--- name: GetTotalHoursForUserTimeEntriesByMonth :many
+-- name: GetTotalHoursByMonth :one
 SELECT
-    user_id,
-    YEAR(entry_date) as year,
-    MONTH(entry_date) as month,
     SUM(hours_worked) as total_hours
 FROM user_time_entries
-WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = sqlc.arg(year) AND MONTH(entry_date) = sqlc.arg(month)
+WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year)) AND MONTH(entry_date) = MONTH(sqlc.arg(month))
 GROUP BY user_id, YEAR(entry_date), MONTH(entry_date);
 
--- name: GetTotalHoursForUserTimeEntriesByYear :many
+-- name: GetTotalHoursByYear :one
 SELECT
-    user_id,
-    YEAR(entry_date) as year,
-    MONTH(entry_date) as month,
     SUM(hours_worked) as total_hours
 FROM user_time_entries
-WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = sqlc.arg(year)
-GROUP BY user_id, YEAR(entry_date), MONTH(entry_date)
-ORDER BY MONTH(entry_date);
+WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year))
+GROUP BY user_id, YEAR(entry_date);
+
+-- name: GetWorkDaysByMonth :one
+SELECT
+    COUNT(DISTINCT entry_date) as total_days
+FROM user_time_entries
+WHERE user_id = sqlc.arg(user_id)
+    AND YEAR(entry_date) = YEAR(sqlc.arg(year))
+    AND MONTH(entry_date) = MONTH(sqlc.arg(month))
+    AND hours_worked > 0;
+
+-- name: GetTotalDaysByMonthWithSystemName :one
+SELECT
+    COUNT(ute.entry_date) as total_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = sqlc.arg(user_id)
+    AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
+    AND MONTH(ute.entry_date) = MONTH(sqlc.arg(month))
+    AND dt.system_name = sqlc.arg(system_name)
+GROUP BY ute.user_id, YEAR(ute.entry_date), MONTH(ute.entry_date);
+
+-- name: GetTotalDaysByYearWithSystemName :one
+SELECT
+    COUNT(ute.entry_date) as total_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = sqlc.arg(user_id)
+    AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
+    AND dt.system_name = sqlc.arg(system_name)
+GROUP BY ute.user_id, YEAR(ute.entry_date);
 
 -- name: CreateUserTimeEntry :exec
 INSERT INTO user_time_entries (user_id, entry_date, day_type_id, hours_worked)
@@ -48,17 +71,17 @@ UPDATE user_time_entries
 SET
     day_type_id = ?,
     hours_worked = ?
-WHERE id = ?;
+WHERE entry_date = ? AND user_id = ?;
 
 -- name: UpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
     day_type_id = ?,
     hours_worked = ?
-WHERE id IN (sqlc.slice('ids'));
+WHERE entry_date IN (sqlc.slice('entry_date')) AND user_id = ?;
 
 -- name: DeleteUserTimeEntry :exec
-DELETE FROM user_time_entries WHERE id = ?;
+DELETE FROM user_time_entries WHERE entry_date = ? AND user_id = ?;
 
 -- name: DeleteUserTimeEntries :exec
-DELETE FROM user_time_entries WHERE id IN (sqlc.slice('ids'));
+DELETE FROM user_time_entries WHERE entry_date IN (sqlc.slice('entry_date')) AND user_id = ?;

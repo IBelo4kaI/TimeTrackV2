@@ -9,7 +9,7 @@ SELECT * FROM day_types;
 SELECT * FROM day_types WHERE id = ?;
 
 -- name: CreateDayType :exec
-INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, color_code) VALUES (?, ?, ?, ?, ?);
+INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, is_user_select, color_code) VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: UpdateNameDayType :exec
 UPDATE day_types SET name = ? WHERE id = ?;
@@ -26,8 +26,11 @@ UPDATE day_types SET affects_vacation = ? WHERE id = ?;
 -- name: UpdateColorCodeDayType :exec
 UPDATE day_types SET color_code = ? WHERE id = ?;
 
+-- name: UpdateIsUserSelectDayType :exec
+UPDATE day_types SET is_user_select = ? WHERE id = ?;
+
 -- name: UpdateDayType :exec
-UPDATE day_types SET name = ?, system_name = ?, is_work_day = ?, affects_vacation = ?, color_code = ? WHERE id = ?;
+UPDATE day_types SET name = ?, system_name = ?, is_work_day = ?, affects_vacation = ?, is_user_select = ?, color_code = ? WHERE id = ?;
 
 -- name: DeleteDayType :exec
 DELETE FROM day_types WHERE id = ?;

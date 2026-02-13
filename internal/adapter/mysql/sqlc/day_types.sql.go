@@ -10,7 +10,7 @@ import (
 )
 
 const createDayType = `-- name: CreateDayType :exec
-INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, color_code) VALUES (?, ?, ?, ?, ?)
+INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, is_user_select, color_code) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateDayTypeParams struct {
@@ -18,6 +18,7 @@ type CreateDayTypeParams struct {
 	SystemName      string `json:"systemName"`
 	IsWorkDay       bool   `json:"isWorkDay"`
 	AffectsVacation bool   `json:"affectsVacation"`
+	IsUserSelect    bool   `json:"isUserSelect"`
 	ColorCode       string `json:"colorCode"`
 }
 
@@ -27,6 +28,7 @@ func (q *Queries) CreateDayType(ctx context.Context, arg CreateDayTypeParams) er
 		arg.SystemName,
 		arg.IsWorkDay,
 		arg.AffectsVacation,
+		arg.IsUserSelect,
 		arg.ColorCode,
 	)
 	return err
@@ -42,7 +44,7 @@ func (q *Queries) DeleteDayType(ctx context.Context, id string) error {
 }
 
 const getDayTypeByID = `-- name: GetDayTypeByID :one
-SELECT id, name, system_name, is_work_day, affects_vacation, color_code, created_at, updated_at FROM day_types WHERE id = ?
+SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types WHERE id = ?
 `
 
 func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error) {
@@ -54,6 +56,7 @@ func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error
 		&i.SystemName,
 		&i.IsWorkDay,
 		&i.AffectsVacation,
+		&i.IsUserSelect,
 		&i.ColorCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -63,7 +66,7 @@ func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error
 
 const getDayTypes = `-- name: GetDayTypes :many
 
-SELECT id, name, system_name, is_work_day, affects_vacation, color_code, created_at, updated_at FROM day_types
+SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types
 `
 
 // ============================================
@@ -84,6 +87,7 @@ func (q *Queries) GetDayTypes(ctx context.Context) ([]DayType, error) {
 			&i.SystemName,
 			&i.IsWorkDay,
 			&i.AffectsVacation,
+			&i.IsUserSelect,
 			&i.ColorCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -130,7 +134,7 @@ func (q *Queries) UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCod
 }
 
 const updateDayType = `-- name: UpdateDayType :exec
-UPDATE day_types SET name = ?, system_name = ?, is_work_day = ?, affects_vacation = ?, color_code = ? WHERE id = ?
+UPDATE day_types SET name = ?, system_name = ?, is_work_day = ?, affects_vacation = ?, is_user_select = ?, color_code = ? WHERE id = ?
 `
 
 type UpdateDayTypeParams struct {
@@ -138,6 +142,7 @@ type UpdateDayTypeParams struct {
 	SystemName      string `json:"systemName"`
 	IsWorkDay       bool   `json:"isWorkDay"`
 	AffectsVacation bool   `json:"affectsVacation"`
+	IsUserSelect    bool   `json:"isUserSelect"`
 	ColorCode       string `json:"colorCode"`
 	ID              string `json:"id"`
 }
@@ -148,9 +153,24 @@ func (q *Queries) UpdateDayType(ctx context.Context, arg UpdateDayTypeParams) er
 		arg.SystemName,
 		arg.IsWorkDay,
 		arg.AffectsVacation,
+		arg.IsUserSelect,
 		arg.ColorCode,
 		arg.ID,
 	)
+	return err
+}
+
+const updateIsUserSelectDayType = `-- name: UpdateIsUserSelectDayType :exec
+UPDATE day_types SET is_user_select = ? WHERE id = ?
+`
+
+type UpdateIsUserSelectDayTypeParams struct {
+	IsUserSelect bool   `json:"isUserSelect"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error {
+	_, err := q.db.ExecContext(ctx, updateIsUserSelectDayType, arg.IsUserSelect, arg.ID)
 	return err
 }
 

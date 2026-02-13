@@ -34,135 +34,138 @@ func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEnt
 }
 
 const deleteUserTimeEntries = `-- name: DeleteUserTimeEntries :exec
-DELETE FROM user_time_entries WHERE id IN (/*SLICE:ids*/?)
+DELETE FROM user_time_entries WHERE entry_date IN (/*SLICE:entry_date*/?) AND user_id = ?
 `
 
-func (q *Queries) DeleteUserTimeEntries(ctx context.Context, ids []string) error {
+type DeleteUserTimeEntriesParams struct {
+	EntryDate []time.Time `json:"entryDate"`
+	UserID    string      `json:"userId"`
+}
+
+func (q *Queries) DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error {
 	query := deleteUserTimeEntries
 	var queryParams []interface{}
-	if len(ids) > 0 {
-		for _, v := range ids {
+	if len(arg.EntryDate) > 0 {
+		for _, v := range arg.EntryDate {
 			queryParams = append(queryParams, v)
 		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", strings.Repeat(",?", len(arg.EntryDate))[1:], 1)
 	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.UserID)
 	_, err := q.db.ExecContext(ctx, query, queryParams...)
 	return err
 }
 
 const deleteUserTimeEntry = `-- name: DeleteUserTimeEntry :exec
-DELETE FROM user_time_entries WHERE id = ?
+DELETE FROM user_time_entries WHERE entry_date = ? AND user_id = ?
 `
 
-func (q *Queries) DeleteUserTimeEntry(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteUserTimeEntry, id)
+type DeleteUserTimeEntryParams struct {
+	EntryDate time.Time `json:"entryDate"`
+	UserID    string    `json:"userId"`
+}
+
+func (q *Queries) DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserTimeEntry, arg.EntryDate, arg.UserID)
 	return err
 }
 
-const getTotalHoursForUserTimeEntriesByMonth = `-- name: GetTotalHoursForUserTimeEntriesByMonth :many
+const getTotalDaysByMonthWithSystemName = `-- name: GetTotalDaysByMonthWithSystemName :one
 SELECT
-    user_id,
-    YEAR(entry_date) as year,
-    MONTH(entry_date) as month,
+    COUNT(ute.entry_date) as total_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = ?
+    AND YEAR(ute.entry_date) = YEAR(?)
+    AND MONTH(ute.entry_date) = MONTH(?)
+    AND dt.system_name = ?
+GROUP BY ute.user_id, YEAR(ute.entry_date), MONTH(ute.entry_date)
+`
+
+type GetTotalDaysByMonthWithSystemNameParams struct {
+	UserID     string    `json:"userId"`
+	Year       time.Time `json:"year"`
+	Month      time.Time `json:"month"`
+	SystemName string    `json:"systemName"`
+}
+
+func (q *Queries) GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalDaysByMonthWithSystemName,
+		arg.UserID,
+		arg.Year,
+		arg.Month,
+		arg.SystemName,
+	)
+	var total_days int64
+	err := row.Scan(&total_days)
+	return total_days, err
+}
+
+const getTotalDaysByYearWithSystemName = `-- name: GetTotalDaysByYearWithSystemName :one
+SELECT
+    COUNT(ute.entry_date) as total_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = ?
+    AND YEAR(ute.entry_date) = YEAR(?)
+    AND dt.system_name = ?
+GROUP BY ute.user_id, YEAR(ute.entry_date)
+`
+
+type GetTotalDaysByYearWithSystemNameParams struct {
+	UserID     string    `json:"userId"`
+	Year       time.Time `json:"year"`
+	SystemName string    `json:"systemName"`
+}
+
+func (q *Queries) GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTotalDaysByYearWithSystemName, arg.UserID, arg.Year, arg.SystemName)
+	var total_days int64
+	err := row.Scan(&total_days)
+	return total_days, err
+}
+
+const getTotalHoursByMonth = `-- name: GetTotalHoursByMonth :one
+SELECT
     SUM(hours_worked) as total_hours
 FROM user_time_entries
-WHERE user_id = ? AND YEAR(entry_date) = ? AND MONTH(entry_date) = ?
+WHERE user_id = ? AND YEAR(entry_date) = YEAR(?) AND MONTH(entry_date) = MONTH(?)
 GROUP BY user_id, YEAR(entry_date), MONTH(entry_date)
 `
 
-type GetTotalHoursForUserTimeEntriesByMonthParams struct {
+type GetTotalHoursByMonthParams struct {
 	UserID string    `json:"userId"`
 	Year   time.Time `json:"year"`
 	Month  time.Time `json:"month"`
 }
 
-type GetTotalHoursForUserTimeEntriesByMonthRow struct {
-	UserID     string      `json:"userId"`
-	Year       int32       `json:"year"`
-	Month      int32       `json:"month"`
-	TotalHours interface{} `json:"totalHours"`
+func (q *Queries) GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByMonthParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getTotalHoursByMonth, arg.UserID, arg.Year, arg.Month)
+	var total_hours interface{}
+	err := row.Scan(&total_hours)
+	return total_hours, err
 }
 
-func (q *Queries) GetTotalHoursForUserTimeEntriesByMonth(ctx context.Context, arg GetTotalHoursForUserTimeEntriesByMonthParams) ([]GetTotalHoursForUserTimeEntriesByMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTotalHoursForUserTimeEntriesByMonth, arg.UserID, arg.Year, arg.Month)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetTotalHoursForUserTimeEntriesByMonthRow
-	for rows.Next() {
-		var i GetTotalHoursForUserTimeEntriesByMonthRow
-		if err := rows.Scan(
-			&i.UserID,
-			&i.Year,
-			&i.Month,
-			&i.TotalHours,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getTotalHoursForUserTimeEntriesByYear = `-- name: GetTotalHoursForUserTimeEntriesByYear :many
+const getTotalHoursByYear = `-- name: GetTotalHoursByYear :one
 SELECT
-    user_id,
-    YEAR(entry_date) as year,
-    MONTH(entry_date) as month,
     SUM(hours_worked) as total_hours
 FROM user_time_entries
-WHERE user_id = ? AND YEAR(entry_date) = ?
-GROUP BY user_id, YEAR(entry_date), MONTH(entry_date)
-ORDER BY MONTH(entry_date)
+WHERE user_id = ? AND YEAR(entry_date) = YEAR(?)
+GROUP BY user_id, YEAR(entry_date)
 `
 
-type GetTotalHoursForUserTimeEntriesByYearParams struct {
+type GetTotalHoursByYearParams struct {
 	UserID string    `json:"userId"`
 	Year   time.Time `json:"year"`
 }
 
-type GetTotalHoursForUserTimeEntriesByYearRow struct {
-	UserID     string      `json:"userId"`
-	Year       int32       `json:"year"`
-	Month      int32       `json:"month"`
-	TotalHours interface{} `json:"totalHours"`
-}
-
-func (q *Queries) GetTotalHoursForUserTimeEntriesByYear(ctx context.Context, arg GetTotalHoursForUserTimeEntriesByYearParams) ([]GetTotalHoursForUserTimeEntriesByYearRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTotalHoursForUserTimeEntriesByYear, arg.UserID, arg.Year)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetTotalHoursForUserTimeEntriesByYearRow
-	for rows.Next() {
-		var i GetTotalHoursForUserTimeEntriesByYearRow
-		if err := rows.Scan(
-			&i.UserID,
-			&i.Year,
-			&i.Month,
-			&i.TotalHours,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYearParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getTotalHoursByYear, arg.UserID, arg.Year)
+	var total_hours interface{}
+	err := row.Scan(&total_hours)
+	return total_hours, err
 }
 
 const getUserTimeEntriesForMonth = `-- name: GetUserTimeEntriesForMonth :many
@@ -281,18 +284,42 @@ func (q *Queries) GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]Us
 	return items, nil
 }
 
+const getWorkDaysByMonth = `-- name: GetWorkDaysByMonth :one
+SELECT
+    COUNT(DISTINCT entry_date) as total_days
+FROM user_time_entries
+WHERE user_id = ?
+    AND YEAR(entry_date) = YEAR(?)
+    AND MONTH(entry_date) = MONTH(?)
+    AND hours_worked > 0
+`
+
+type GetWorkDaysByMonthParams struct {
+	UserID string    `json:"userId"`
+	Year   time.Time `json:"year"`
+	Month  time.Time `json:"month"`
+}
+
+func (q *Queries) GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getWorkDaysByMonth, arg.UserID, arg.Year, arg.Month)
+	var total_days int64
+	err := row.Scan(&total_days)
+	return total_days, err
+}
+
 const updateUserTimeEntries = `-- name: UpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
     day_type_id = ?,
     hours_worked = ?
-WHERE id IN (/*SLICE:ids*/?)
+WHERE entry_date IN (/*SLICE:entry_date*/?) AND user_id = ?
 `
 
 type UpdateUserTimeEntriesParams struct {
-	DayTypeID   string   `json:"dayTypeId"`
-	HoursWorked string   `json:"hoursWorked"`
-	Ids         []string `json:"ids"`
+	DayTypeID   string      `json:"dayTypeId"`
+	HoursWorked string      `json:"hoursWorked"`
+	EntryDate   []time.Time `json:"entryDate"`
+	UserID      string      `json:"userId"`
 }
 
 func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error {
@@ -300,14 +327,15 @@ func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeE
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.DayTypeID)
 	queryParams = append(queryParams, arg.HoursWorked)
-	if len(arg.Ids) > 0 {
-		for _, v := range arg.Ids {
+	if len(arg.EntryDate) > 0 {
+		for _, v := range arg.EntryDate {
 			queryParams = append(queryParams, v)
 		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", strings.Repeat(",?", len(arg.EntryDate))[1:], 1)
 	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.UserID)
 	_, err := q.db.ExecContext(ctx, query, queryParams...)
 	return err
 }
@@ -317,16 +345,22 @@ UPDATE user_time_entries
 SET
     day_type_id = ?,
     hours_worked = ?
-WHERE id = ?
+WHERE entry_date = ? AND user_id = ?
 `
 
 type UpdateUserTimeEntryParams struct {
-	DayTypeID   string `json:"dayTypeId"`
-	HoursWorked string `json:"hoursWorked"`
-	ID          string `json:"id"`
+	DayTypeID   string    `json:"dayTypeId"`
+	HoursWorked string    `json:"hoursWorked"`
+	EntryDate   time.Time `json:"entryDate"`
+	UserID      string    `json:"userId"`
 }
 
 func (q *Queries) UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserTimeEntry, arg.DayTypeID, arg.HoursWorked, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateUserTimeEntry,
+		arg.DayTypeID,
+		arg.HoursWorked,
+		arg.EntryDate,
+		arg.UserID,
+	)
 	return err
 }

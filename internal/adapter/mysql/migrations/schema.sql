@@ -13,6 +13,7 @@ CREATE TABLE `day_types` (
   `system_name` varchar(50) NOT NULL,
   `is_work_day` tinyint(1) NOT NULL DEFAULT '1',
   `affects_vacation` tinyint(1) NOT NULL DEFAULT '1',
+  `is_user_select` tinyint(1) NOT NULL DEFAULT '1',
   `color_code` varchar(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '#000000',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -59,7 +60,7 @@ CREATE TABLE `work_standards` (
   `year` int NOT NULL,
   `standard_hours` int NOT NULL DEFAULT '0',
   `standard_days` int NOT NULL DEFAULT '0',
-  `gender` enum('male','female') NOT NULL,
+  `gender` int NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ;

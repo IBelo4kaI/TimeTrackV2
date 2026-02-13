@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"timetrack/internal/adapter/grpc"
 	"timetrack/internal/env"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,6 +19,7 @@ func main() {
 		db: dbConfig{
 			dsn: env.GetDbString(),
 		},
+		prefix: "time",
 	}
 
 	db, err := sql.Open("mysql", cfg.db.dsn)
@@ -31,10 +33,16 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
+	grpcClient, err := grpc.NewClient("localhost:8383")
+	if err != nil {
+		panic(err)
+	}
+
 	app := application{
-		config: cfg,
-		db:     db,
-		logger: logger,
+		config:     cfg,
+		db:         db,
+		grpcClient: grpcClient,
+		logger:     logger,
 	}
 
 	app.run(app.mount())
