@@ -9,7 +9,6 @@ import (
 	"timetrack/internal/middleware"
 	"timetrack/internal/service"
 
-	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -35,20 +34,11 @@ type dbConfig struct {
 func (app *application) mount() *fiber.App {
 	fiberApp := fiber.New(fiber.Config{
 		// Prefork: true,
-		// EnablePrintRoutes: true,
+		EnablePrintRoutes: true,
 	})
 
-	cfg := swagger.Config{
-		BasePath: "/",
-		FilePath: "./docs/swagger.json",
-		Path:     "swagger",
-		Title:    "Swagger API Docs",
-	}
-
-	fiberApp.Use(swagger.New(cfg))
-
 	fiberApp.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://192.168.88.147:5173,http://localhost:5173,http://192.168.88.147:5176",
+		AllowOrigins:     "http://192.168.88.147:5173,http://localhost:5173,http://localhost:8080,http://192.168.88.147:5176,http://192.168.88.147:8080",
 		AllowCredentials: true,
 	}))
 	fiberApp.Use(logger.New(logger.Config{
@@ -62,8 +52,8 @@ func (app *application) mount() *fiber.App {
 	calendarRouter := v1.Group("/calendar")
 
 	// permission calendar.all:read
-	calendarRouter.Get("/:userId/:year/:month", middleware.Require(app.grpcClient,
-		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "read"}),
+	calendarRouter.Get("/:userId/:year/:month",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "read"}),
 		calendarHandler.GetCalendarDaysWithUserId)
 
 	dayTypeService := service.NewDayTypeService(repo.New(app.db))
@@ -77,17 +67,105 @@ func (app *application) mount() *fiber.App {
 	userTimeEntryHandler := handler.NewUserTimeEntryHandler(userTimeEntryService)
 	userTimeEntryRouter := v1.Group("/usertimeentries")
 
-	// permission usertime.all:edit
-	userTimeEntryRouter.Post("/create", middleware.RequireFromBody(app.grpcClient,
-		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "create"}),
+	// permission usertime:edit
+	userTimeEntryRouter.Post("/create",
+		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "create"}),
 		userTimeEntryHandler.CreateUserTimeEntry)
 	userTimeEntryRouter.Post("/update",
-		middleware.RequireFromBody(app.grpcClient,
-			middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "edit"}),
+		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "edit"}),
 		userTimeEntryHandler.UpdateUserTimeEntries)
-	userTimeEntryRouter.Post("/delete", middleware.RequireFromBody(app.grpcClient,
-		middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "delete"}),
+	userTimeEntryRouter.Post("/delete",
+		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "delete"}),
 		userTimeEntryHandler.DeleteUserTimeEntries)
+
+	// Report statistics route
+	userTimeEntryRouter.Get("/statistics/:userId/:year/:month/:gender",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "read"}),
+		userTimeEntryHandler.GetReportStatistics)
+
+	// Vacation calculation routes
+	vacationService := service.NewVacationService(repo.New(app.db), app.db, userTimeEntryService)
+	vacationHandler := handler.NewVacationHandler(vacationService)
+	vacationRouter := v1.Group("/vacation")
+
+	// permission vacation:read
+	vacationRouter.Get("/calculate",
+		vacationHandler.CalculateVacationDays)
+	vacationRouter.Get("/stats/:userId/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
+		vacationHandler.GetVacationStatistics)
+	vacationRouter.Get("/all/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation.all", Action: "read"}),
+		vacationHandler.GetAllUserVacationsByYear)
+	vacationRouter.Get("/:userId/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
+		vacationHandler.GetVacationsByYear)
+
+	vacationRouter.Post("/create",
+		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "create"}),
+		vacationHandler.CreateVacation)
+
+	vacationRouter.Put("/:id/approve",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "edit"}),
+		vacationHandler.ApproveVacation)
+
+	vacationRouter.Put("/:id/status",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "edit"}),
+		vacationHandler.UpdateVacationStatus)
+
+	vacationRouter.Delete("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "delete"}),
+		vacationHandler.DeleteVacation)
+
+	// System settings routes
+	systemSettingsService := service.NewSystemSettingsService(repo.New(app.db))
+	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsService)
+	systemSettingsRouter := v1.Group("/system-settings")
+
+	// permission system_settings:read
+	systemSettingsRouter.Get("/:key",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "system_settings", Action: "read"}),
+		systemSettingsHandler.GetSystemSettingByKey)
+
+	// permission system_settings:edit
+	systemSettingsRouter.Post("/value",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "system_settings", Action: "edit"}),
+		systemSettingsHandler.UpdateSystemSettingValue)
+
+	// Work standards routes
+	workStandardService := service.NewWorkStandardService(repo.New(app.db))
+	workStandardHandler := handler.NewWorkStandardHandler(workStandardService)
+	workStandardRouter := v1.Group("/work-standards")
+
+	// permission work_standards:create
+	workStandardRouter.Post("",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "create"}),
+		workStandardHandler.CreateWorkStandard)
+
+	// permission work_standards:read
+	workStandardRouter.Get("/month/:month/year/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "read"}),
+		workStandardHandler.GetWorkStandardsByMonth)
+
+	// permission work_standards:read
+	workStandardRouter.Get("/year/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "read"}),
+		workStandardHandler.GetWorkStandardsByYear)
+
+	// permission work_standards:read
+	workStandardRouter.Get("/year/:year/grouped",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "read"}),
+		workStandardHandler.GetWorkStandardsByYearGrouped)
+
+	// permission work_standards:edit
+	workStandardRouter.Put("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "edit"}),
+		workStandardHandler.UpdateWorkStandard)
+
+	// permission work_standards:delete
+	workStandardRouter.Delete("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "work_standards", Action: "delete"}),
+		workStandardHandler.DeleteWorkStandard)
 
 	return fiberApp
 }

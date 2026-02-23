@@ -13,13 +13,18 @@ import (
 type Querier interface {
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
 	CreateDayType(ctx context.Context, arg CreateDayTypeParams) error
+	CreateSystemSetting(ctx context.Context, arg CreateSystemSettingParams) error
 	CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error
+	CreateVacation(ctx context.Context, arg CreateVacationParams) error
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
+	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
 	DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error
+	DeleteVacation(ctx context.Context, id string) error
 	DeleteWorkStandard(ctx context.Context, id string) error
+	GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUsersVacationsByYearParams) ([]GetAllUsersVacationsByYearRow, error)
 	GetCalendarEventsByDate(ctx context.Context, eventDate time.Time) (GetCalendarEventsByDateRow, error)
 	GetCalendarEventsById(ctx context.Context, id string) (GetCalendarEventsByIdRow, error)
 	// ============================================
@@ -27,13 +32,23 @@ type Querier interface {
 	// ============================================
 	GetCalendarEventsForMonth(ctx context.Context, arg GetCalendarEventsForMonthParams) ([]GetCalendarEventsForMonthRow, error)
 	GetCalendarEventsForYear(ctx context.Context, year time.Time) ([]GetCalendarEventsForYearRow, error)
+	GetCountVacationsByStatus(ctx context.Context, arg GetCountVacationsByStatusParams) (interface{}, error)
 	GetDayTypeByID(ctx context.Context, id string) (DayType, error)
+	GetDayTypeBySystemName(ctx context.Context, systemName string) (DayType, error)
 	// ============================================
 	// day_types queries
 	// ============================================
 	GetDayTypes(ctx context.Context) ([]DayType, error)
-	GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (int64, error)
-	GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (int64, error)
+	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
+	GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error)
+	GetSystemSettingByKeyAndCategory(ctx context.Context, arg GetSystemSettingByKeyAndCategoryParams) (SystemSetting, error)
+	// ============================================
+	// system_settings queries
+	// ============================================
+	GetSystemSettings(ctx context.Context) ([]SystemSetting, error)
+	GetSystemSettingsByCategory(ctx context.Context, category sql.NullString) ([]SystemSetting, error)
+	GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (interface{}, error)
+	GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (interface{}, error)
 	GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByMonthParams) (interface{}, error)
 	GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYearParams) (interface{}, error)
 	// ============================================
@@ -42,7 +57,11 @@ type Querier interface {
 	GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTimeEntriesForMonthParams) ([]UserTimeEntry, error)
 	GetUserTimeEntryById(ctx context.Context, id string) (UserTimeEntry, error)
 	GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]UserTimeEntry, error)
-	GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (int64, error)
+	GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error)
+	GetVacationDaysByMonth(ctx context.Context, arg GetVacationDaysByMonthParams) (interface{}, error)
+	GetVacationDaysByYear(ctx context.Context, arg GetVacationDaysByYearParams) (interface{}, error)
+	GetVacationsByYear(ctx context.Context, arg GetVacationsByYearParams) ([]GetVacationsByYearRow, error)
+	GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (interface{}, error)
 	// ============================================
 	// work_standards queries
 	// ============================================
@@ -58,8 +77,11 @@ type Querier interface {
 	UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTypeParams) error
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
+	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error
 	UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error
 	UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error
+	UpdateVacationStatus(ctx context.Context, arg UpdateVacationStatusParams) error
+	UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error
 	UpdateWorkStandard(ctx context.Context, arg UpdateWorkStandardParams) error
 }
 

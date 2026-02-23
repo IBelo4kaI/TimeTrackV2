@@ -48,10 +48,10 @@ CREATE TABLE `vacations` (
   `end_date` date NOT NULL,
   `total_days` int NOT NULL,
   `description` text,
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ;
+);
 
 CREATE TABLE `work_standards` (
   `id` varchar(36) NOT NULL DEFAULT (uuid()),
@@ -63,4 +63,4 @@ CREATE TABLE `work_standards` (
   `gender` int NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ;
+);

@@ -20,21 +20,19 @@ WHERE id IN (sqlc.slice('ids'));
 
 -- name: GetTotalHoursByMonth :one
 SELECT
-    SUM(hours_worked) as total_hours
+    COALESCE(SUM(hours_worked), 0) as total_hours
 FROM user_time_entries
-WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year)) AND MONTH(entry_date) = MONTH(sqlc.arg(month))
-GROUP BY user_id, YEAR(entry_date), MONTH(entry_date);
+WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year)) AND MONTH(entry_date) = MONTH(sqlc.arg(month));
 
 -- name: GetTotalHoursByYear :one
 SELECT
-    SUM(hours_worked) as total_hours
+    COALESCE(SUM(hours_worked), 0) as total_hours
 FROM user_time_entries
-WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year))
-GROUP BY user_id, YEAR(entry_date);
+WHERE user_id = sqlc.arg(user_id) AND YEAR(entry_date) = YEAR(sqlc.arg(year));
 
 -- name: GetWorkDaysByMonth :one
 SELECT
-    COUNT(DISTINCT entry_date) as total_days
+    COALESCE(COUNT(DISTINCT entry_date), 0) as total_days
 FROM user_time_entries
 WHERE user_id = sqlc.arg(user_id)
     AND YEAR(entry_date) = YEAR(sqlc.arg(year))
@@ -43,24 +41,41 @@ WHERE user_id = sqlc.arg(user_id)
 
 -- name: GetTotalDaysByMonthWithSystemName :one
 SELECT
-    COUNT(ute.entry_date) as total_days
+    COALESCE(COUNT(ute.entry_date), 0) as total_days
 FROM user_time_entries ute
 JOIN day_types dt ON ute.day_type_id = dt.id
 WHERE ute.user_id = sqlc.arg(user_id)
     AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
     AND MONTH(ute.entry_date) = MONTH(sqlc.arg(month))
-    AND dt.system_name = sqlc.arg(system_name)
-GROUP BY ute.user_id, YEAR(ute.entry_date), MONTH(ute.entry_date);
+    AND dt.system_name = sqlc.arg(system_name);
 
 -- name: GetTotalDaysByYearWithSystemName :one
 SELECT
-    COUNT(ute.entry_date) as total_days
+    COALESCE(COUNT(ute.entry_date), 0) as total_days
 FROM user_time_entries ute
 JOIN day_types dt ON ute.day_type_id = dt.id
 WHERE ute.user_id = sqlc.arg(user_id)
     AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
-    AND dt.system_name = sqlc.arg(system_name)
-GROUP BY ute.user_id, YEAR(ute.entry_date);
+    AND dt.system_name = sqlc.arg(system_name);
+
+-- name: GetVacationDaysByYear :one
+SELECT
+    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = sqlc.arg(user_id)
+    AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
+    AND dt.system_name = 'vacation';
+
+-- name: GetVacationDaysByMonth :one
+SELECT
+    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = sqlc.arg(user_id)
+    AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
+    AND MONTH(ute.entry_date) = MONTH(sqlc.arg(month))
+    AND dt.system_name = 'vacation';
 
 -- name: CreateUserTimeEntry :exec
 INSERT INTO user_time_entries (user_id, entry_date, day_type_id, hours_worked)

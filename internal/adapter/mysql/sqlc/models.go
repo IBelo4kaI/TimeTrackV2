@@ -143,15 +143,15 @@ type UserTimeEntry struct {
 }
 
 type Vacation struct {
-	ID          string              `json:"id"`
-	UserID      string              `json:"userId"`
-	StartDate   time.Time           `json:"startDate"`
-	EndDate     time.Time           `json:"endDate"`
-	TotalDays   int32               `json:"totalDays"`
-	Description sql.NullString      `json:"description"`
-	Status      NullVacationsStatus `json:"status"`
-	CreatedAt   sql.NullTime        `json:"createdAt"`
-	UpdatedAt   sql.NullTime        `json:"updatedAt"`
+	ID          string          `json:"id"`
+	UserID      string          `json:"userId"`
+	StartDate   time.Time       `json:"startDate"`
+	EndDate     time.Time       `json:"endDate"`
+	TotalDays   int32           `json:"totalDays"`
+	Description sql.NullString  `json:"description"`
+	Status      VacationsStatus `json:"status"`
+	CreatedAt   sql.NullTime    `json:"createdAt"`
+	UpdatedAt   sql.NullTime    `json:"updatedAt"`
 }
 
 type WorkStandard struct {

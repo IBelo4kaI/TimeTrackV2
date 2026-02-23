@@ -74,14 +74,13 @@ func (q *Queries) DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEnt
 
 const getTotalDaysByMonthWithSystemName = `-- name: GetTotalDaysByMonthWithSystemName :one
 SELECT
-    COUNT(ute.entry_date) as total_days
+    COALESCE(COUNT(ute.entry_date), 0) as total_days
 FROM user_time_entries ute
 JOIN day_types dt ON ute.day_type_id = dt.id
 WHERE ute.user_id = ?
     AND YEAR(ute.entry_date) = YEAR(?)
     AND MONTH(ute.entry_date) = MONTH(?)
     AND dt.system_name = ?
-GROUP BY ute.user_id, YEAR(ute.entry_date), MONTH(ute.entry_date)
 `
 
 type GetTotalDaysByMonthWithSystemNameParams struct {
@@ -91,27 +90,26 @@ type GetTotalDaysByMonthWithSystemNameParams struct {
 	SystemName string    `json:"systemName"`
 }
 
-func (q *Queries) GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (int64, error) {
+func (q *Queries) GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, getTotalDaysByMonthWithSystemName,
 		arg.UserID,
 		arg.Year,
 		arg.Month,
 		arg.SystemName,
 	)
-	var total_days int64
+	var total_days interface{}
 	err := row.Scan(&total_days)
 	return total_days, err
 }
 
 const getTotalDaysByYearWithSystemName = `-- name: GetTotalDaysByYearWithSystemName :one
 SELECT
-    COUNT(ute.entry_date) as total_days
+    COALESCE(COUNT(ute.entry_date), 0) as total_days
 FROM user_time_entries ute
 JOIN day_types dt ON ute.day_type_id = dt.id
 WHERE ute.user_id = ?
     AND YEAR(ute.entry_date) = YEAR(?)
     AND dt.system_name = ?
-GROUP BY ute.user_id, YEAR(ute.entry_date)
 `
 
 type GetTotalDaysByYearWithSystemNameParams struct {
@@ -120,19 +118,18 @@ type GetTotalDaysByYearWithSystemNameParams struct {
 	SystemName string    `json:"systemName"`
 }
 
-func (q *Queries) GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (int64, error) {
+func (q *Queries) GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, getTotalDaysByYearWithSystemName, arg.UserID, arg.Year, arg.SystemName)
-	var total_days int64
+	var total_days interface{}
 	err := row.Scan(&total_days)
 	return total_days, err
 }
 
 const getTotalHoursByMonth = `-- name: GetTotalHoursByMonth :one
 SELECT
-    SUM(hours_worked) as total_hours
+    COALESCE(SUM(hours_worked), 0) as total_hours
 FROM user_time_entries
 WHERE user_id = ? AND YEAR(entry_date) = YEAR(?) AND MONTH(entry_date) = MONTH(?)
-GROUP BY user_id, YEAR(entry_date), MONTH(entry_date)
 `
 
 type GetTotalHoursByMonthParams struct {
@@ -150,10 +147,9 @@ func (q *Queries) GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByM
 
 const getTotalHoursByYear = `-- name: GetTotalHoursByYear :one
 SELECT
-    SUM(hours_worked) as total_hours
+    COALESCE(SUM(hours_worked), 0) as total_hours
 FROM user_time_entries
 WHERE user_id = ? AND YEAR(entry_date) = YEAR(?)
-GROUP BY user_id, YEAR(entry_date)
 `
 
 type GetTotalHoursByYearParams struct {
@@ -284,9 +280,55 @@ func (q *Queries) GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]Us
 	return items, nil
 }
 
+const getVacationDaysByMonth = `-- name: GetVacationDaysByMonth :one
+SELECT
+    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = ?
+    AND YEAR(ute.entry_date) = YEAR(?)
+    AND MONTH(ute.entry_date) = MONTH(?)
+    AND dt.system_name = 'vacation'
+`
+
+type GetVacationDaysByMonthParams struct {
+	UserID string    `json:"userId"`
+	Year   time.Time `json:"year"`
+	Month  time.Time `json:"month"`
+}
+
+func (q *Queries) GetVacationDaysByMonth(ctx context.Context, arg GetVacationDaysByMonthParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getVacationDaysByMonth, arg.UserID, arg.Year, arg.Month)
+	var used_vacation_days interface{}
+	err := row.Scan(&used_vacation_days)
+	return used_vacation_days, err
+}
+
+const getVacationDaysByYear = `-- name: GetVacationDaysByYear :one
+SELECT
+    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM user_time_entries ute
+JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = ?
+    AND YEAR(ute.entry_date) = YEAR(?)
+    AND dt.system_name = 'vacation'
+`
+
+type GetVacationDaysByYearParams struct {
+	UserID string    `json:"userId"`
+	Year   time.Time `json:"year"`
+}
+
+func (q *Queries) GetVacationDaysByYear(ctx context.Context, arg GetVacationDaysByYearParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getVacationDaysByYear, arg.UserID, arg.Year)
+	var used_vacation_days interface{}
+	err := row.Scan(&used_vacation_days)
+	return used_vacation_days, err
+}
+
 const getWorkDaysByMonth = `-- name: GetWorkDaysByMonth :one
 SELECT
-    COUNT(DISTINCT entry_date) as total_days
+    COALESCE(COUNT(DISTINCT entry_date), 0) as total_days
 FROM user_time_entries
 WHERE user_id = ?
     AND YEAR(entry_date) = YEAR(?)
@@ -300,9 +342,9 @@ type GetWorkDaysByMonthParams struct {
 	Month  time.Time `json:"month"`
 }
 
-func (q *Queries) GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (int64, error) {
+func (q *Queries) GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonthParams) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, getWorkDaysByMonth, arg.UserID, arg.Year, arg.Month)
-	var total_days int64
+	var total_days interface{}
 	err := row.Scan(&total_days)
 	return total_days, err
 }

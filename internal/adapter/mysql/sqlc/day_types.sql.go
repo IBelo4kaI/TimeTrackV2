@@ -64,6 +64,27 @@ func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error
 	return i, err
 }
 
+const getDayTypeBySystemName = `-- name: GetDayTypeBySystemName :one
+SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types WHERE system_name = ?
+`
+
+func (q *Queries) GetDayTypeBySystemName(ctx context.Context, systemName string) (DayType, error) {
+	row := q.db.QueryRowContext(ctx, getDayTypeBySystemName, systemName)
+	var i DayType
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SystemName,
+		&i.IsWorkDay,
+		&i.AffectsVacation,
+		&i.IsUserSelect,
+		&i.ColorCode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getDayTypes = `-- name: GetDayTypes :many
 
 SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types

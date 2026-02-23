@@ -8,6 +8,9 @@ SELECT * FROM day_types;
 -- name: GetDayTypeByID :one
 SELECT * FROM day_types WHERE id = ?;
 
+-- name: GetDayTypeBySystemName :one
+SELECT * FROM day_types WHERE system_name = ?;
+
 -- name: CreateDayType :exec
 INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, is_user_select, color_code) VALUES (?, ?, ?, ?, ?, ?);
 

@@ -3,9 +3,13 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strconv"
+	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/date"
 	"timetrack/internal/models"
+	"timetrack/internal/parser"
 )
 
 type userTimeEntryService struct {
@@ -17,6 +21,10 @@ type UserTimeEntryService interface {
 	CreateUserTimeEntry(ctx context.Context, entries []repo.CreateUserTimeEntryParams) error
 	DeleteUserTimeEntries(ctx context.Context, prm repo.DeleteUserTimeEntriesParams) error
 	UpdateUserTimeEntries(ctx context.Context, entries []repo.UpdateUserTimeEntryParams) error
+	GetStatisticsHoursByMonth(ctx context.Context, userId string, month int, year int, gender int) (*models.HoursStatisticResponse, error)
+	GetStatisticsWorkDaysByMonth(ctx context.Context, userId string, month int, year int, gender int) (*models.WorkDaysStatisticResponse, error)
+	GetCountDaysByMonthWithSystemName(ctx context.Context, userId string, month int, year int, gender int, systemName string) (*models.CountDaysResponse, error)
+	GetVacationStatistics(ctx context.Context, userId string, year int) (*models.VacationStatisticsResponse, error)
 }
 
 func NewUserTimeEntryService(repo *repo.Queries, db *sql.DB) UserTimeEntryService {
@@ -75,6 +83,8 @@ func (s *userTimeEntryService) GetStatisticsHoursByMonth(ctx context.Context, us
 		return nil, err
 	}
 
+	fmt.Printf("%v", totalHours)
+
 	standard, err := s.repo.GetWorkStandardsByMonthAndGenderId(ctx, repo.GetWorkStandardsByMonthAndGenderIdParams{
 		Month:  int32(month),
 		Year:   int32(year),
@@ -86,7 +96,7 @@ func (s *userTimeEntryService) GetStatisticsHoursByMonth(ctx context.Context, us
 	}
 
 	return &models.HoursStatisticResponse{
-		TotalHours:    totalHours.(float32),
+		TotalHours:    parser.InterfaceToFloat32(totalHours),
 		StandardHours: standard.StandardHours,
 	}, nil
 }
@@ -111,7 +121,7 @@ func (s *userTimeEntryService) GetStatisticsWorkDaysByMonth(ctx context.Context,
 	}
 
 	return &models.WorkDaysStatisticResponse{
-		TotalWorkDays:    totalDays,
+		TotalWorkDays:    parser.InterfaceToInt64(totalDays),
 		StandardWorkDays: standard.StandardDays,
 	}, nil
 }
@@ -131,8 +141,59 @@ func (s *userTimeEntryService) GetCountDaysByMonthWithSystemName(ctx context.Con
 	}
 
 	return &models.CountDaysResponse{
-		Count: countDays,
+		Count: parser.InterfaceToInt64(countDays),
 	}, nil
 }
 
+func (s *userTimeEntryService) GetVacationStatistics(ctx context.Context, userId string, year int) (*models.VacationStatisticsResponse, error) {
+	// Получаем использованные дни отпуска за год
+	firstDayOfYear := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
+	usedVacationDaysInterface, err := s.repo.GetVacationDaysByYear(ctx, repo.GetVacationDaysByYearParams{
+		UserID: userId,
+		Year:   firstDayOfYear,
+	})
 
+	if err != nil {
+		return nil, err
+	}
+
+	usedVacationDays := parser.InterfaceToInt64(usedVacationDaysInterface)
+
+	// Получаем общее количество отпускных дней из настроек системы
+	setting, err := s.repo.GetSystemSettingByKey(ctx, "vacation_duration")
+	if err != nil {
+		// Если настройка не найдена, используем значение по умолчанию
+		if err == sql.ErrNoRows {
+			return &models.VacationStatisticsResponse{
+				UsedVacationDays:      usedVacationDays,
+				TotalVacationDays:     30, // Стандартное значение по ТК РФ
+				RemainingVacationDays: 30 - usedVacationDays,
+			}, nil
+		}
+		return nil, err
+	}
+
+	// Преобразуем значение из строки в число
+	var settingValue string
+	if setting.SettingValue.Valid {
+		settingValue = setting.SettingValue.String
+	} else {
+		// Если значение NULL, используем значение по умолчанию
+		settingValue = "30"
+	}
+
+	totalVacationDays, err := strconv.ParseInt(settingValue, 10, 64)
+	if err != nil {
+		// Если не удалось преобразовать, используем значение по умолчанию
+		totalVacationDays = 30
+	}
+
+	// Рассчитываем оставшиеся дни
+	remainingVacationDays := max(totalVacationDays-usedVacationDays, 0)
+
+	return &models.VacationStatisticsResponse{
+		UsedVacationDays:      usedVacationDays,
+		TotalVacationDays:     totalVacationDays,
+		RemainingVacationDays: remainingVacationDays,
+	}, nil
+}

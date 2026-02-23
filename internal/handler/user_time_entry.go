@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"net/http"
+	"strconv"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/models"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -94,4 +97,79 @@ func (h *UserTimeEntryHandler) DeleteUserTimeEntries(c *fiber.Ctx) error {
 	}
 
 	return response.Deleted(c)
+}
+
+func (h *UserTimeEntryHandler) GetReportStatistics(c *fiber.Ctx) error {
+	userId := c.Params("userId")
+	yearStr := c.Params("year")
+	monthStr := c.Params("month")
+	genderStr := c.Params("gender")
+
+	if userId == "" || monthStr == "" || yearStr == "" || genderStr == "" {
+		return response.BadRequest(c)
+	}
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	gender, err := strconv.Atoi(genderStr)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	ctx := c.Context()
+
+	// Получаем статистику по часам
+	hoursStat, err := h.service.GetStatisticsHoursByMonth(ctx, userId, month, year, gender)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	// Получаем статистику по рабочим дням
+	workDaysStat, err := h.service.GetStatisticsWorkDaysByMonth(ctx, userId, month, year, gender)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	// Получаем статистику по отпускам (system_name = 'vacation')
+	vacationDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "vacation")
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	// Получаем статистику по больничным (предполагаем system_name = 'sick_leave')
+	medicalDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "sick_leave")
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	// Получаем статистику по отгулам (system_name = 'time-off')
+	timeOffDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "time-off")
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	// Получаем статистику по декрету (system_name = 'decree')
+	decreeDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "decree")
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	responseData := models.ReportStatisticsResponse{
+		Hours:        *hoursStat,
+		WorkDays:     *workDaysStat,
+		VacationDays: *vacationDaysStat,
+		MedicalDays:  *medicalDaysStat,
+		TimeOffDays:  *timeOffDaysStat,
+		DecreeDays:   *decreeDaysStat,
+	}
+
+	return response.Success(c, responseData)
 }
