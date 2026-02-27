@@ -10,7 +10,12 @@ WHERE id = ?;
 -- name: GetWorkStandardsByMonthAndGenderId :one
 SELECT *
 FROM work_standards
-WHERE month = ? AND year = ? AND gender = ? AND (user_id IS NULL OR user_id = ?);
+WHERE month = ? AND year = ? AND gender = ? AND user_id IS NULL;
+
+-- name: GetWorkStandardsByMonthAndGenderIdAndUserId :one
+SELECT *
+FROM work_standards
+WHERE month = ? AND year = ? AND gender = ? AND user_id = ?;
 
 -- name: GetWorkStandardsByMonth :many
 SELECT *

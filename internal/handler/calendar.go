@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -29,7 +28,6 @@ func (h *CalendarHandler) GetCalendarDaysWithUserId(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, http.StatusBadRequest, err)
 	}
-	fmt.Println(userId)
 	calendarDays, err := h.service.GetCalendarDays(c.Context(), userId, month, year)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)

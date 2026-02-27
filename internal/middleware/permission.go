@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"log"
 	grpcClient "timetrack/internal/adapter/grpc"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,8 +36,6 @@ func Require(
 			Action:       p.Action,
 			UserId:       &userId,
 		})
-
-		log.Printf("%+v", err)
 
 		if err != nil {
 			// auth/permission сервис недоступен → deny by default
@@ -97,8 +94,6 @@ func RequireFromBody(
 			Action:       p.Action,
 			UserId:       &userId,
 		})
-
-		log.Printf("%+v", err)
 
 		if err != nil {
 			return fiber.ErrForbidden

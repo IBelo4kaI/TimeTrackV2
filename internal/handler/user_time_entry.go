@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,10 +15,11 @@ import (
 
 type UserTimeEntryHandler struct {
 	service service.UserTimeEntryService
+	logger  *slog.Logger
 }
 
-func NewUserTimeEntryHandler(service service.UserTimeEntryService) *UserTimeEntryHandler {
-	return &UserTimeEntryHandler{service: service}
+func NewUserTimeEntryHandler(service service.UserTimeEntryService, logger *slog.Logger) *UserTimeEntryHandler {
+	return &UserTimeEntryHandler{service: service, logger: logger}
 }
 
 func (h *UserTimeEntryHandler) CreateUserTimeEntry(c *fiber.Ctx) error {
@@ -125,40 +127,75 @@ func (h *UserTimeEntryHandler) GetReportStatistics(c *fiber.Ctx) error {
 	}
 
 	ctx := c.Context()
-
 	// Получаем статистику по часам
 	hoursStat, err := h.service.GetStatisticsHoursByMonth(ctx, userId, month, year, gender)
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по часам: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
 	// Получаем статистику по рабочим дням
 	workDaysStat, err := h.service.GetStatisticsWorkDaysByMonth(ctx, userId, month, year, gender)
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по рабочим дням: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
 	// Получаем статистику по отпускам (system_name = 'vacation')
 	vacationDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "vacation")
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по отпускам: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
 	// Получаем статистику по больничным (предполагаем system_name = 'sick_leave')
 	medicalDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "sick_leave")
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по больничным: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
 	// Получаем статистику по отгулам (system_name = 'time-off')
 	timeOffDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "time-off")
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по отгулам: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
 	// Получаем статистику по декрету (system_name = 'decree')
 	decreeDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "decree")
 	if err != nil {
+		h.logger.Error("Ошибка получения статистики по декрету: ",
+			slog.String("user_id", userId),
+			slog.Int("month", month),
+			slog.Int("year", year),
+			slog.Int("gender", gender),
+			slog.String("error", err.Error()))
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 

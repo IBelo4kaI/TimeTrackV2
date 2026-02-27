@@ -149,6 +149,7 @@ type Vacation struct {
 	EndDate     time.Time       `json:"endDate"`
 	TotalDays   int32           `json:"totalDays"`
 	Description sql.NullString  `json:"description"`
+	DocFileName sql.NullString  `json:"docFileName"`
 	Status      VacationsStatus `json:"status"`
 	CreatedAt   sql.NullTime    `json:"createdAt"`
 	UpdatedAt   sql.NullTime    `json:"updatedAt"`

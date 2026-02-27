@@ -68,6 +68,7 @@ type Querier interface {
 	GetWorkStandardsById(ctx context.Context, id string) (WorkStandard, error)
 	GetWorkStandardsByMonth(ctx context.Context, arg GetWorkStandardsByMonthParams) ([]WorkStandard, error)
 	GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdParams) (WorkStandard, error)
+	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
@@ -80,6 +81,7 @@ type Querier interface {
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error
 	UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error
 	UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error
+	UpdateVacationFileName(ctx context.Context, arg UpdateVacationFileNameParams) error
 	UpdateVacationStatus(ctx context.Context, arg UpdateVacationStatusParams) error
 	UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error
 	UpdateWorkStandard(ctx context.Context, arg UpdateWorkStandardParams) error

@@ -48,6 +48,7 @@ CREATE TABLE `vacations` (
   `end_date` date NOT NULL,
   `total_days` int NOT NULL,
   `description` text,
+  `doc_file_name` text,
   `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

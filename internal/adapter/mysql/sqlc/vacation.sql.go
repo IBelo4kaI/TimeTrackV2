@@ -12,8 +12,8 @@ import (
 )
 
 const createVacation = `-- name: CreateVacation :exec
-INSERT INTO vacations (user_id, start_date, end_date, total_days, description, status)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO vacations (user_id, start_date, end_date, total_days, description, doc_file_name, status)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
@@ -22,6 +22,7 @@ type CreateVacationParams struct {
 	EndDate     time.Time       `json:"endDate"`
 	TotalDays   int32           `json:"totalDays"`
 	Description sql.NullString  `json:"description"`
+	DocFileName sql.NullString  `json:"docFileName"`
 	Status      VacationsStatus `json:"status"`
 }
 
@@ -32,6 +33,7 @@ func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) 
 		arg.EndDate,
 		arg.TotalDays,
 		arg.Description,
+		arg.DocFileName,
 		arg.Status,
 	)
 	return err
@@ -54,6 +56,7 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
+    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -74,6 +77,7 @@ type GetAllUsersVacationsByYearRow struct {
 	EndDate     time.Time       `json:"endDate"`
 	TotalDays   int32           `json:"totalDays"`
 	Description string          `json:"description"`
+	DocFileName string          `json:"docFileName"`
 	Status      VacationsStatus `json:"status"`
 	CreatedAt   sql.NullTime    `json:"createdAt"`
 	UpdatedAt   sql.NullTime    `json:"updatedAt"`
@@ -95,6 +99,7 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 			&i.EndDate,
 			&i.TotalDays,
 			&i.Description,
+			&i.DocFileName,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -141,6 +146,7 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
+    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -155,6 +161,7 @@ type GetVacationByIDRow struct {
 	EndDate     time.Time       `json:"endDate"`
 	TotalDays   int32           `json:"totalDays"`
 	Description string          `json:"description"`
+	DocFileName string          `json:"docFileName"`
 	Status      VacationsStatus `json:"status"`
 	CreatedAt   sql.NullTime    `json:"createdAt"`
 	UpdatedAt   sql.NullTime    `json:"updatedAt"`
@@ -170,6 +177,7 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.EndDate,
 		&i.TotalDays,
 		&i.Description,
+		&i.DocFileName,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -185,6 +193,7 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
+    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -207,6 +216,7 @@ type GetVacationsByYearRow struct {
 	EndDate     time.Time       `json:"endDate"`
 	TotalDays   int32           `json:"totalDays"`
 	Description string          `json:"description"`
+	DocFileName string          `json:"docFileName"`
 	Status      VacationsStatus `json:"status"`
 	CreatedAt   sql.NullTime    `json:"createdAt"`
 	UpdatedAt   sql.NullTime    `json:"updatedAt"`
@@ -228,6 +238,7 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 			&i.EndDate,
 			&i.TotalDays,
 			&i.Description,
+			&i.DocFileName,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -243,6 +254,22 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateVacationFileName = `-- name: UpdateVacationFileName :exec
+UPDATE vacations
+SET doc_file_name = ?
+WHERE id = ?
+`
+
+type UpdateVacationFileNameParams struct {
+	DocFileName sql.NullString `json:"docFileName"`
+	ID          string         `json:"id"`
+}
+
+func (q *Queries) UpdateVacationFileName(ctx context.Context, arg UpdateVacationFileNameParams) error {
+	_, err := q.db.ExecContext(ctx, updateVacationFileName, arg.DocFileName, arg.ID)
+	return err
 }
 
 const updateVacationStatus = `-- name: UpdateVacationStatus :exec

@@ -26,6 +26,6 @@ func (e *Env) GetAddr() string {
 	return os.Getenv("ADDR")
 }
 
-func (e *Env) GetSecretKey() string {
-	return os.Getenv("SECRET_KEY")
+func (e *Env) GetGRPCServerAddr() string {
+	return os.Getenv("GRPC_ADDR")
 }

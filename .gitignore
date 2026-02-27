@@ -42,6 +42,7 @@ Thumbs.db
 # Project specific
 tmp/
 build-errors.log
+docs/
 
 # Compiled binary
 main

@@ -33,7 +33,7 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	grpcClient, err := grpc.NewClient("localhost:8383")
+	grpcClient, err := grpc.NewClient(env.GetGRPCServerAddr())
 	if err != nil {
 		panic(err)
 	}

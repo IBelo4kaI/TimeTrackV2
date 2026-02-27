@@ -33,8 +33,8 @@ type dbConfig struct {
 
 func (app *application) mount() *fiber.App {
 	fiberApp := fiber.New(fiber.Config{
-		// Prefork: true,
-		EnablePrintRoutes: true,
+		Prefork: true,
+		// EnablePrintRoutes: true,
 	})
 
 	fiberApp.Use(cors.New(cors.Config{
@@ -64,16 +64,18 @@ func (app *application) mount() *fiber.App {
 	dayTypeRouter.Get("", dayTypeHandler.GetDayTypes)
 
 	userTimeEntryService := service.NewUserTimeEntryService(repo.New(app.db), app.db)
-	userTimeEntryHandler := handler.NewUserTimeEntryHandler(userTimeEntryService)
+	userTimeEntryHandler := handler.NewUserTimeEntryHandler(userTimeEntryService, app.logger)
 	userTimeEntryRouter := v1.Group("/usertimeentries")
 
 	// permission usertime:edit
 	userTimeEntryRouter.Post("/create",
 		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "create"}),
 		userTimeEntryHandler.CreateUserTimeEntry)
+
 	userTimeEntryRouter.Post("/update",
 		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "edit"}),
 		userTimeEntryHandler.UpdateUserTimeEntries)
+
 	userTimeEntryRouter.Post("/delete",
 		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "delete"}),
 		userTimeEntryHandler.DeleteUserTimeEntries)
@@ -85,18 +87,22 @@ func (app *application) mount() *fiber.App {
 
 	// Vacation calculation routes
 	vacationService := service.NewVacationService(repo.New(app.db), app.db, userTimeEntryService)
-	vacationHandler := handler.NewVacationHandler(vacationService)
+	fileService := service.NewFileService("docs")
+	vacationHandler := handler.NewVacationHandler(vacationService, fileService)
 	vacationRouter := v1.Group("/vacation")
 
 	// permission vacation:read
 	vacationRouter.Get("/calculate",
 		vacationHandler.CalculateVacationDays)
+
 	vacationRouter.Get("/stats/:userId/:year",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
 		vacationHandler.GetVacationStatistics)
+
 	vacationRouter.Get("/all/:year",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation.all", Action: "read"}),
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
 		vacationHandler.GetAllUserVacationsByYear)
+
 	vacationRouter.Get("/:userId/:year",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
 		vacationHandler.GetVacationsByYear)
@@ -112,6 +118,19 @@ func (app *application) mount() *fiber.App {
 	vacationRouter.Put("/:id/status",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "edit"}),
 		vacationHandler.UpdateVacationStatus)
+
+	// File routes for vacations
+	vacationRouter.Post("/:id/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "edit"}),
+		vacationHandler.UploadVacationFile)
+
+	vacationRouter.Get("/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "read"}),
+		vacationHandler.GetVacationFile)
+
+	vacationRouter.Delete("/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "file_delete"}),
+		vacationHandler.DeleteVacationFile)
 
 	vacationRouter.Delete("/:id",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "delete"}),

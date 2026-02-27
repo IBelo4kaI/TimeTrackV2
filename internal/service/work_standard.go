@@ -36,17 +36,40 @@ func (s *WorkStandardService) GetWorkStandardsByMonth(ctx context.Context, month
 }
 
 // GetWorkStandardByMonthAndGender получает стандарт работы по месяцу, году, полу и user_id
+// Сначала пытается получить индивидуальную норму, если не найдена - общую норму
 func (s *WorkStandardService) GetWorkStandardByMonthAndGender(ctx context.Context, month, year, gender int32, userID string) (repo.WorkStandard, error) {
-	params := repo.GetWorkStandardsByMonthAndGenderIdParams{
+	// Сначала пытаемся получить индивидуальную норму для пользователя
+	if userID != "" {
+		individualParams := repo.GetWorkStandardsByMonthAndGenderIdAndUserIdParams{
+			Month:  month,
+			Year:   year,
+			Gender: gender,
+			UserID: sql.NullString{
+				String: userID,
+				Valid:  true,
+			},
+		}
+
+		individualStandard, err := s.repo.GetWorkStandardsByMonthAndGenderIdAndUserId(ctx, individualParams)
+		if err == nil {
+			// Если найдена индивидуальная норма, возвращаем ее
+			return individualStandard, nil
+		}
+
+		// Если индивидуальная норма не найдена (но не из-за других ошибок), продолжаем
+		if err != sql.ErrNoRows {
+			return repo.WorkStandard{}, err
+		}
+	}
+
+	// Если индивидуальная норма не найдена или userID пустой, получаем общую норму
+	generalParams := repo.GetWorkStandardsByMonthAndGenderIdParams{
 		Month:  month,
 		Year:   year,
 		Gender: gender,
-		UserID: sql.NullString{
-			String: userID,
-			Valid:  userID != "",
-		},
 	}
-	return s.repo.GetWorkStandardsByMonthAndGenderId(ctx, params)
+
+	return s.repo.GetWorkStandardsByMonthAndGenderId(ctx, generalParams)
 }
 
 // GetWorkStandardsByYear получает стандарты работы по году

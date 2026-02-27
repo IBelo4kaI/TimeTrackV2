@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strconv"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
@@ -74,6 +73,32 @@ func (s *userTimeEntryService) DeleteUserTimeEntries(ctx context.Context, prm re
 	return s.repo.DeleteUserTimeEntries(ctx, prm)
 }
 
+// getWorkStandardWithPriority получает норму работы с приоритетом индивидуальных данных
+// Сначала пытается получить индивидуальную норму для пользователя, если не найдена - общую норму
+func (s *userTimeEntryService) getWorkStandardWithPriority(ctx context.Context, userId string, month, year, gender int32) (repo.WorkStandard, error) {
+	// Сначала пытаемся получить индивидуальную норму для пользователя
+	standard, err := s.repo.GetWorkStandardsByMonthAndGenderIdAndUserId(ctx, repo.GetWorkStandardsByMonthAndGenderIdAndUserIdParams{
+		Month:  month,
+		Year:   year,
+		Gender: gender,
+		UserID: sql.NullString{
+			String: userId,
+			Valid:  true,
+		},
+	})
+
+	// Если индивидуальная норма не найдена, получаем общую норму
+	if err != nil && err == sql.ErrNoRows {
+		standard, err = s.repo.GetWorkStandardsByMonthAndGenderId(ctx, repo.GetWorkStandardsByMonthAndGenderIdParams{
+			Month:  month,
+			Year:   year,
+			Gender: gender,
+		})
+	}
+
+	return standard, err
+}
+
 func (s *userTimeEntryService) GetStatisticsHoursByMonth(ctx context.Context, userId string, month int, year int, gender int) (*models.HoursStatisticResponse, error) {
 	firstDayOfMonth := date.FirstDayOfMonth(month, year)
 
@@ -83,15 +108,14 @@ func (s *userTimeEntryService) GetStatisticsHoursByMonth(ctx context.Context, us
 		return nil, err
 	}
 
-	fmt.Printf("%v", totalHours)
-
-	standard, err := s.repo.GetWorkStandardsByMonthAndGenderId(ctx, repo.GetWorkStandardsByMonthAndGenderIdParams{
-		Month:  int32(month),
-		Year:   int32(year),
-		Gender: int32(gender),
-	})
-
+	standard, err := s.getWorkStandardWithPriority(ctx, userId, int32(month), int32(year), int32(gender))
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return &models.HoursStatisticResponse{
+				TotalHours:    parser.InterfaceToFloat32(totalHours),
+				StandardHours: 0,
+			}, nil
+		}
 		return nil, err
 	}
 
@@ -110,13 +134,14 @@ func (s *userTimeEntryService) GetStatisticsWorkDaysByMonth(ctx context.Context,
 		return nil, err
 	}
 
-	standard, err := s.repo.GetWorkStandardsByMonthAndGenderId(ctx, repo.GetWorkStandardsByMonthAndGenderIdParams{
-		Month:  int32(month),
-		Year:   int32(year),
-		Gender: int32(gender),
-	})
-
+	standard, err := s.getWorkStandardWithPriority(ctx, userId, int32(month), int32(year), int32(gender))
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return &models.WorkDaysStatisticResponse{
+				TotalWorkDays:    parser.InterfaceToInt64(totalDays),
+				StandardWorkDays: 0,
+			}, nil
+		}
 		return nil, err
 	}
 

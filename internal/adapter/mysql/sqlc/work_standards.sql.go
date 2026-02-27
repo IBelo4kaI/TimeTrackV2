@@ -120,18 +120,47 @@ func (q *Queries) GetWorkStandardsByMonth(ctx context.Context, arg GetWorkStanda
 const getWorkStandardsByMonthAndGenderId = `-- name: GetWorkStandardsByMonthAndGenderId :one
 SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
 FROM work_standards
-WHERE month = ? AND year = ? AND gender = ? AND (user_id IS NULL OR user_id = ?)
+WHERE month = ? AND year = ? AND gender = ? AND user_id IS NULL
 `
 
 type GetWorkStandardsByMonthAndGenderIdParams struct {
+	Month  int32 `json:"month"`
+	Year   int32 `json:"year"`
+	Gender int32 `json:"gender"`
+}
+
+func (q *Queries) GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdParams) (WorkStandard, error) {
+	row := q.db.QueryRowContext(ctx, getWorkStandardsByMonthAndGenderId, arg.Month, arg.Year, arg.Gender)
+	var i WorkStandard
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Month,
+		&i.Year,
+		&i.StandardHours,
+		&i.StandardDays,
+		&i.Gender,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkStandardsByMonthAndGenderIdAndUserId = `-- name: GetWorkStandardsByMonthAndGenderIdAndUserId :one
+SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM work_standards
+WHERE month = ? AND year = ? AND gender = ? AND user_id = ?
+`
+
+type GetWorkStandardsByMonthAndGenderIdAndUserIdParams struct {
 	Month  int32          `json:"month"`
 	Year   int32          `json:"year"`
 	Gender int32          `json:"gender"`
 	UserID sql.NullString `json:"userId"`
 }
 
-func (q *Queries) GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdParams) (WorkStandard, error) {
-	row := q.db.QueryRowContext(ctx, getWorkStandardsByMonthAndGenderId,
+func (q *Queries) GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error) {
+	row := q.db.QueryRowContext(ctx, getWorkStandardsByMonthAndGenderIdAndUserId,
 		arg.Month,
 		arg.Year,
 		arg.Gender,
