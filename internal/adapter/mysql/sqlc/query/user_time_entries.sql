@@ -77,6 +77,20 @@ WHERE ute.user_id = sqlc.arg(user_id)
     AND MONTH(ute.entry_date) = MONTH(sqlc.arg(month))
     AND dt.system_name = 'vacation';
 
+-- name: GetMonthlyStatistics :one
+SELECT
+    COALESCE(SUM(ute.hours_worked), 0)                                         AS total_hours,
+    COUNT(DISTINCT CASE WHEN ute.hours_worked > 0 THEN ute.entry_date END)     AS work_days,
+    COUNT(CASE WHEN dt.system_name = 'vacation'  THEN 1 END)                   AS vacation_days,
+    COUNT(CASE WHEN dt.system_name = 'medical'   THEN 1 END)                   AS medical_days,
+    COUNT(CASE WHEN dt.system_name = 'time-off'  THEN 1 END)                   AS time_off_days,
+    COUNT(CASE WHEN dt.system_name = 'decree'    THEN 1 END)                   AS decree_days
+FROM user_time_entries ute
+LEFT JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = sqlc.arg(user_id)
+    AND YEAR(ute.entry_date) = YEAR(sqlc.arg(year))
+    AND MONTH(ute.entry_date) = MONTH(sqlc.arg(month));
+
 -- name: CreateUserTimeEntry :exec
 INSERT INTO user_time_entries (user_id, entry_date, day_type_id, hours_worked)
 VALUES (?, ?, ?, ?);

@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
-	"timetrack/internal/models"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -126,11 +125,9 @@ func (h *UserTimeEntryHandler) GetReportStatistics(c *fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	ctx := c.Context()
-	// Получаем статистику по часам
-	hoursStat, err := h.service.GetStatisticsHoursByMonth(ctx, userId, month, year, gender)
+	stat, err := h.service.GetReportStatistics(c.Context(), userId, month, year, gender)
 	if err != nil {
-		h.logger.Error("Ошибка получения статистики по часам: ",
+		h.logger.Error("Ошибка получения статистики: ",
 			slog.String("user_id", userId),
 			slog.Int("month", month),
 			slog.Int("year", year),
@@ -139,74 +136,5 @@ func (h *UserTimeEntryHandler) GetReportStatistics(c *fiber.Ctx) error {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
-	// Получаем статистику по рабочим дням
-	workDaysStat, err := h.service.GetStatisticsWorkDaysByMonth(ctx, userId, month, year, gender)
-	if err != nil {
-		h.logger.Error("Ошибка получения статистики по рабочим дням: ",
-			slog.String("user_id", userId),
-			slog.Int("month", month),
-			slog.Int("year", year),
-			slog.Int("gender", gender),
-			slog.String("error", err.Error()))
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Получаем статистику по отпускам (system_name = 'vacation')
-	vacationDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "vacation")
-	if err != nil {
-		h.logger.Error("Ошибка получения статистики по отпускам: ",
-			slog.String("user_id", userId),
-			slog.Int("month", month),
-			slog.Int("year", year),
-			slog.Int("gender", gender),
-			slog.String("error", err.Error()))
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Получаем статистику по больничным (предполагаем system_name = 'sick_leave')
-	medicalDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "medical")
-	if err != nil {
-		h.logger.Error("Ошибка получения статистики по больничным: ",
-			slog.String("user_id", userId),
-			slog.Int("month", month),
-			slog.Int("year", year),
-			slog.Int("gender", gender),
-			slog.String("error", err.Error()))
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Получаем статистику по отгулам (system_name = 'time-off')
-	timeOffDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "time-off")
-	if err != nil {
-		h.logger.Error("Ошибка получения статистики по отгулам: ",
-			slog.String("user_id", userId),
-			slog.Int("month", month),
-			slog.Int("year", year),
-			slog.Int("gender", gender),
-			slog.String("error", err.Error()))
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Получаем статистику по декрету (system_name = 'decree')
-	decreeDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "decree")
-	if err != nil {
-		h.logger.Error("Ошибка получения статистики по декрету: ",
-			slog.String("user_id", userId),
-			slog.Int("month", month),
-			slog.Int("year", year),
-			slog.Int("gender", gender),
-			slog.String("error", err.Error()))
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	responseData := models.ReportStatisticsResponse{
-		Hours:        *hoursStat,
-		WorkDays:     *workDaysStat,
-		VacationDays: *vacationDaysStat,
-		MedicalDays:  *medicalDaysStat,
-		TimeOffDays:  *timeOffDaysStat,
-		DecreeDays:   *decreeDaysStat,
-	}
-
-	return response.Success(c, responseData)
+	return response.Success(c, stat)
 }

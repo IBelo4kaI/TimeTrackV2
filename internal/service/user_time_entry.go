@@ -9,6 +9,8 @@ import (
 	"timetrack/internal/date"
 	"timetrack/internal/models"
 	"timetrack/internal/parser"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type userTimeEntryService struct {
@@ -24,6 +26,7 @@ type UserTimeEntryService interface {
 	GetStatisticsWorkDaysByMonth(ctx context.Context, userId string, month int, year int, gender int) (*models.WorkDaysStatisticResponse, error)
 	GetCountDaysByMonthWithSystemName(ctx context.Context, userId string, month int, year int, gender int, systemName string) (*models.CountDaysResponse, error)
 	GetVacationStatistics(ctx context.Context, userId string, year int) (*models.VacationStatisticsResponse, error)
+	GetReportStatistics(ctx context.Context, userId string, month int, year int, gender int) (*models.ReportStatisticsResponse, error)
 }
 
 func NewUserTimeEntryService(repo *repo.Queries, db *sql.DB) UserTimeEntryService {
@@ -220,5 +223,61 @@ func (s *userTimeEntryService) GetVacationStatistics(ctx context.Context, userId
 		UsedVacationDays:      usedVacationDays,
 		TotalVacationDays:     totalVacationDays,
 		RemainingVacationDays: remainingVacationDays,
+	}, nil
+}
+
+func (s *userTimeEntryService) GetReportStatistics(ctx context.Context, userId string, month int, year int, gender int) (*models.ReportStatisticsResponse, error) {
+	firstDayOfMonth := date.FirstDayOfMonth(month, year)
+
+	var stat repo.GetMonthlyStatisticsRow
+	var standard repo.WorkStandard
+	var standardErr error
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		stat, err = s.repo.GetMonthlyStatistics(gCtx, repo.GetMonthlyStatisticsParams{
+			UserID: userId,
+			Year:   firstDayOfMonth,
+			Month:  firstDayOfMonth,
+		})
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		standard, err = s.getWorkStandardWithPriority(gCtx, userId, int32(month), int32(year), int32(gender))
+		if err == sql.ErrNoRows {
+			standardErr = err
+			return nil
+		}
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	var standardHours int32
+	var standardDays int32
+	if standardErr == nil {
+		standardHours = standard.StandardHours
+		standardDays = standard.StandardDays
+	}
+
+	return &models.ReportStatisticsResponse{
+		Hours: models.HoursStatisticResponse{
+			TotalHours:    parser.InterfaceToFloat32(stat.TotalHours),
+			StandardHours: standardHours,
+		},
+		WorkDays: models.WorkDaysStatisticResponse{
+			TotalWorkDays:    stat.WorkDays,
+			StandardWorkDays: standardDays,
+		},
+		VacationDays: models.CountDaysResponse{Count: stat.VacationDays},
+		MedicalDays:  models.CountDaysResponse{Count: stat.MedicalDays},
+		TimeOffDays:  models.CountDaysResponse{Count: stat.TimeOffDays},
+		DecreeDays:   models.CountDaysResponse{Count: stat.DecreeDays},
 	}, nil
 }

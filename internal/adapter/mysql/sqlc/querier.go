@@ -39,6 +39,7 @@ type Querier interface {
 	// day_types queries
 	// ============================================
 	GetDayTypes(ctx context.Context) ([]DayType, error)
+	GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error)
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
 	GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error)
 	GetSystemSettingByKeyAndCategory(ctx context.Context, arg GetSystemSettingByKeyAndCategoryParams) (SystemSetting, error)

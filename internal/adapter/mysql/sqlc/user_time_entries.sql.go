@@ -72,6 +72,50 @@ func (q *Queries) DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEnt
 	return err
 }
 
+const getMonthlyStatistics = `-- name: GetMonthlyStatistics :one
+SELECT
+    COALESCE(SUM(ute.hours_worked), 0)                                         AS total_hours,
+    COUNT(DISTINCT CASE WHEN ute.hours_worked > 0 THEN ute.entry_date END)     AS work_days,
+    COUNT(CASE WHEN dt.system_name = 'vacation'  THEN 1 END)                   AS vacation_days,
+    COUNT(CASE WHEN dt.system_name = 'medical'   THEN 1 END)                   AS medical_days,
+    COUNT(CASE WHEN dt.system_name = 'time-off'  THEN 1 END)                   AS time_off_days,
+    COUNT(CASE WHEN dt.system_name = 'decree'    THEN 1 END)                   AS decree_days
+FROM user_time_entries ute
+LEFT JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE ute.user_id = ?
+    AND YEAR(ute.entry_date) = YEAR(?)
+    AND MONTH(ute.entry_date) = MONTH(?)
+`
+
+type GetMonthlyStatisticsParams struct {
+	UserID string    `json:"userId"`
+	Year   time.Time `json:"year"`
+	Month  time.Time `json:"month"`
+}
+
+type GetMonthlyStatisticsRow struct {
+	TotalHours   interface{} `json:"totalHours"`
+	WorkDays     int64       `json:"workDays"`
+	VacationDays int64       `json:"vacationDays"`
+	MedicalDays  int64       `json:"medicalDays"`
+	TimeOffDays  int64       `json:"timeOffDays"`
+	DecreeDays   int64       `json:"decreeDays"`
+}
+
+func (q *Queries) GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error) {
+	row := q.db.QueryRowContext(ctx, getMonthlyStatistics, arg.UserID, arg.Year, arg.Month)
+	var i GetMonthlyStatisticsRow
+	err := row.Scan(
+		&i.TotalHours,
+		&i.WorkDays,
+		&i.VacationDays,
+		&i.MedicalDays,
+		&i.TimeOffDays,
+		&i.DecreeDays,
+	)
+	return i, err
+}
+
 const getTotalDaysByMonthWithSystemName = `-- name: GetTotalDaysByMonthWithSystemName :one
 SELECT
     COALESCE(COUNT(ute.entry_date), 0) as total_days
