@@ -164,7 +164,7 @@ func (h *UserTimeEntryHandler) GetReportStatistics(c *fiber.Ctx) error {
 	}
 
 	// Получаем статистику по больничным (предполагаем system_name = 'sick_leave')
-	medicalDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "sick_leave")
+	medicalDaysStat, err := h.service.GetCountDaysByMonthWithSystemName(ctx, userId, month, year, gender, "medical")
 	if err != nil {
 		h.logger.Error("Ошибка получения статистики по больничным: ",
 			slog.String("user_id", userId),
