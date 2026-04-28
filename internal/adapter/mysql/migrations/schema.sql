@@ -75,6 +75,23 @@ CREATE TABLE `vacations` (
 
 -- --------------------------------------------------------
 --
+-- Структура таблицы `sick_leaves`
+--
+CREATE TABLE `sick_leaves` (
+  `id` varchar(36) NOT NULL DEFAULT(uuid()),
+  `user_id` varchar(36) NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `total_days` int NOT NULL,
+  `description` text,
+  `doc_file_name` text,
+  `status` enum('pending', 'approved', 'rejected') DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+--
 -- Структура таблицы `work_standards`
 --
 CREATE TABLE `work_standards` (
@@ -132,6 +149,14 @@ ALTER TABLE `vacations`
 ADD PRIMARY KEY (`id`),
 ADD KEY `idx_vacations_user_status` (`user_id`, `status`),
 ADD KEY `idx_vacations_dates` (`start_date`, `end_date`);
+
+--
+-- Индексы таблицы `sick_leaves`
+--
+ALTER TABLE `sick_leaves`
+ADD PRIMARY KEY (`id`),
+ADD KEY `idx_sick_leaves_user_status` (`user_id`, `status`),
+ADD KEY `idx_sick_leaves_dates` (`start_date`, `end_date`);
 
 --
 -- Индексы таблицы `work_standards`

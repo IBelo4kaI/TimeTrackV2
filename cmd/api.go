@@ -56,6 +56,38 @@ func (app *application) mount() *fiber.App {
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar", Action: "read"}),
 		calendarHandler.GetCalendarDaysWithUserId)
 
+	calendarEventService := service.NewCalendarEventService(repo.New(app.db))
+	calendarEventHandler := handler.NewCalendarEventHandler(calendarEventService)
+	calendarEventRouter := v1.Group("/calendar-events")
+
+	// permission calendar_events:read
+	calendarEventRouter.Get("/year/:year/month/:month",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "read"}),
+		calendarEventHandler.GetCalendarEventsForMonth)
+
+	calendarEventRouter.Get("/year/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "read"}),
+		calendarEventHandler.GetCalendarEventsForYear)
+
+	calendarEventRouter.Get("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "read"}),
+		calendarEventHandler.GetCalendarEventByID)
+
+	// permission calendar_events:create
+	calendarEventRouter.Post("",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "create"}),
+		calendarEventHandler.CreateCalendarEvent)
+
+	// permission calendar_events:edit
+	calendarEventRouter.Put("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "edit"}),
+		calendarEventHandler.UpdateCalendarEvent)
+
+	// permission calendar_events:delete
+	calendarEventRouter.Delete("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "calendar_events", Action: "delete"}),
+		calendarEventHandler.DeleteCalendarEvent)
+
 	dayTypeService := service.NewDayTypeService(repo.New(app.db))
 	dayTypeHandler := handler.NewDayTypeHandler(dayTypeService)
 	dayTypeRouter := v1.Group("/daytypes")
