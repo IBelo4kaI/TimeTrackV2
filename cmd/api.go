@@ -119,7 +119,7 @@ func (app *application) mount() *fiber.App {
 
 	// Vacation calculation routes
 	vacationService := service.NewVacationService(repo.New(app.db), app.db, userTimeEntryService)
-	fileService := service.NewFileService("docs")
+	fileService := service.NewFileService(app.db, "docs")
 	vacationHandler := handler.NewVacationHandler(vacationService, fileService)
 	vacationRouter := v1.Group("/vacation")
 
@@ -167,6 +167,67 @@ func (app *application) mount() *fiber.App {
 	vacationRouter.Delete("/:id",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "vacation", Action: "delete"}),
 		vacationHandler.DeleteVacation)
+
+	// Sick leave routes
+	sickLeaveService := service.NewSickLeaveService(repo.New(app.db), userTimeEntryService)
+	sickLeaveHandler := handler.NewSickLeaveHandler(sickLeaveService, fileService)
+	sickLeaveRouter := v1.Group("/sick-leaves")
+
+	sickLeaveRouter.Post("/create",
+		middleware.RequireFromBody(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "create"}),
+		sickLeaveHandler.CreateSickLeave)
+
+	sickLeaveRouter.Get("/all/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "read"}),
+		sickLeaveHandler.GetAllUsersSickLeavesByYear)
+
+	sickLeaveRouter.Get("/:userId/:year",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "read"}),
+		sickLeaveHandler.GetSickLeavesByYear)
+
+	sickLeaveRouter.Put("/:id/status",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "edit"}),
+		sickLeaveHandler.UpdateSickLeaveStatus)
+
+	sickLeaveRouter.Post("/:id/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "edit"}),
+		sickLeaveHandler.UploadSickLeaveFile)
+
+	sickLeaveRouter.Get("/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "read"}),
+		sickLeaveHandler.GetSickLeaveFile)
+
+	sickLeaveRouter.Delete("/file",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "file_delete"}),
+		sickLeaveHandler.DeleteSickLeaveFile)
+
+	sickLeaveRouter.Delete("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "delete"}),
+		sickLeaveHandler.DeleteSickLeave)
+
+	// File routes
+	fileHandler := handler.NewFileHandler(fileService)
+	fileRouter := v1.Group("/files")
+
+	// permission files:create
+	fileRouter.Post("/upload",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "create"}),
+		fileHandler.UploadFile)
+
+	// permission files:read
+	fileRouter.Get("/open/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		fileHandler.OpenFile)
+
+	// permission files:read
+	fileRouter.Get("/entity/:entityType/:entityId",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		fileHandler.ListFilesByEntity)
+
+	// permission files:delete
+	fileRouter.Delete("/:id",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "delete"}),
+		fileHandler.DeleteFile)
 
 	// System settings routes
 	systemSettingsService := service.NewSystemSettingsService(repo.New(app.db))

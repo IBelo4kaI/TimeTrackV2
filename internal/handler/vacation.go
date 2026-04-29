@@ -214,7 +214,7 @@ func (h *VacationHandler) UploadVacationFile(c *fiber.Ctx) error {
 	}
 
 	// Загружаем файл через сервис
-	result, err := h.fileService.UploadFile(c.Context(), service.UploadFileParams{
+	result, err := h.fileService.UploadFile(c.Context(), service.LegacyUploadFileParams{
 		File:         file,
 		SubDirectory: "vacations",
 		FileName:     "",

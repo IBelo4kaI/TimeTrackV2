@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"os"
 	"timetrack/internal/adapter/grpc"
+	mysqladapter "timetrack/internal/adapter/mysql"
 	"timetrack/internal/env"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -26,8 +28,11 @@ func main() {
 	if err != nil {
 		panic("error con database")
 	}
-
 	defer db.Close()
+
+	if err := mysqladapter.RunMigrations(context.Background(), db); err != nil {
+		panic("migrations failed: " + err.Error())
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,

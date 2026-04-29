@@ -155,6 +155,82 @@ type Vacation struct {
 	UpdatedAt   sql.NullTime    `json:"updatedAt"`
 }
 
+type SickLeavesStatus string
+
+const (
+	SickLeavesStatusOfficial   SickLeavesStatus = "official"
+	SickLeavesStatusUnofficial SickLeavesStatus = "unofficial"
+)
+
+func (e *SickLeavesStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SickLeavesStatus(s)
+	case string:
+		*e = SickLeavesStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SickLeavesStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSickLeavesStatus struct {
+	SickLeavesStatus SickLeavesStatus `json:"sickLeavesStatus"`
+	Valid            bool             `json:"valid"`
+}
+
+func (ns *NullSickLeavesStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SickLeavesStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SickLeavesStatus.Scan(value)
+}
+
+func (ns NullSickLeavesStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SickLeavesStatus), nil
+}
+
+type SickLeave struct {
+	ID          string           `json:"id"`
+	UserID      string           `json:"userId"`
+	StartDate   time.Time        `json:"startDate"`
+	EndDate     time.Time        `json:"endDate"`
+	TotalDays   int32            `json:"totalDays"`
+	Description sql.NullString   `json:"description"`
+	DocFileName sql.NullString   `json:"docFileName"`
+	Status      SickLeavesStatus `json:"status"`
+	CreatedAt   sql.NullTime     `json:"createdAt"`
+	UpdatedAt   sql.NullTime     `json:"updatedAt"`
+}
+
+type File struct {
+	ID               string       `json:"id"`
+	OriginalName     string       `json:"originalName"`
+	StoragePath      string       `json:"storagePath"`
+	MimeType         string       `json:"mimeType"`
+	FileType         string       `json:"fileType"`
+	SizeBytes        int64        `json:"sizeBytes"`
+	Checksum         string       `json:"checksum"`
+	UploadedByUserID string       `json:"uploadedByUserId"`
+	IsDeleted        bool         `json:"isDeleted"`
+	DeletedAt        sql.NullTime `json:"deletedAt"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	UpdatedAt        time.Time    `json:"updatedAt"`
+}
+
+type FileEntityRef struct {
+	ID         int32     `json:"id"`
+	FileID     string    `json:"fileId"`
+	EntityType string    `json:"entityType"`
+	EntityID   string    `json:"entityId"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
 type WorkStandard struct {
 	ID            string         `json:"id"`
 	UserID        sql.NullString `json:"userId"`

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -10,29 +11,151 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"timetrack/internal/adapter/storage"
+	repo "timetrack/internal/adapter/mysql/sqlc"
+
+	"github.com/google/uuid"
 )
 
-// FileService представляет сервис для работы с файлами
+var ErrFileNotFound = errors.New("file not found")
+
 type FileService struct {
-	uploadDir string
+	repo    *repo.Queries
+	db      *sql.DB
+	storage *storage.DiskStorage
 }
 
-// NewFileService создает новый экземпляр FileService
-func NewFileService(uploadDir string) *FileService {
+func NewFileService(db *sql.DB, basePath string) *FileService {
 	return &FileService{
-		uploadDir: uploadDir,
+		repo:    repo.New(db),
+		db:      db,
+		storage: storage.NewDiskStorage(basePath),
 	}
 }
 
-// UploadFileParams содержит параметры для загрузки файла
 type UploadFileParams struct {
+	File       *multipart.FileHeader
+	EntityType string
+	EntityID   string
+	UploaderID string
+}
+
+func (s *FileService) Upload(ctx context.Context, p UploadFileParams) (repo.File, error) {
+	if p.File == nil {
+		return repo.File{}, errors.New("file is required")
+	}
+
+	src, err := p.File.Open()
+	if err != nil {
+		return repo.File{}, fmt.Errorf("open file: %w", err)
+	}
+	defer src.Close()
+
+	data, err := io.ReadAll(src)
+	if err != nil {
+		return repo.File{}, fmt.Errorf("read file: %w", err)
+	}
+
+	fileID := uuid.NewString()
+	storagePath, checksum, err := s.storage.Save(fileID, p.File.Filename, data)
+	if err != nil {
+		return repo.File{}, fmt.Errorf("save to disk: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		s.storage.Delete(storagePath)
+		return repo.File{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := s.repo.WithTx(tx)
+
+	if err = qtx.CreateFile(ctx, repo.CreateFileParams{
+		ID:               fileID,
+		OriginalName:     filepath.Base(p.File.Filename),
+		StoragePath:      storagePath,
+		MimeType:         p.File.Header.Get("Content-Type"),
+		FileType:         detectFileType(p.File.Header.Get("Content-Type")),
+		SizeBytes:        p.File.Size,
+		Checksum:         checksum,
+		UploadedByUserID: p.UploaderID,
+	}); err != nil {
+		s.storage.Delete(storagePath)
+		return repo.File{}, fmt.Errorf("create file record: %w", err)
+	}
+
+	if p.EntityType != "" && p.EntityID != "" {
+		if err = qtx.CreateFileEntityRef(ctx, repo.CreateFileEntityRefParams{
+			FileID:     fileID,
+			EntityType: p.EntityType,
+			EntityID:   p.EntityID,
+		}); err != nil {
+			s.storage.Delete(storagePath)
+			return repo.File{}, fmt.Errorf("create entity ref: %w", err)
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		s.storage.Delete(storagePath)
+		return repo.File{}, fmt.Errorf("commit tx: %w", err)
+	}
+
+	f, err := s.repo.GetFileByID(ctx, fileID)
+	if err != nil {
+		return repo.File{}, fmt.Errorf("get uploaded file: %w", err)
+	}
+	return f, nil
+}
+
+func (s *FileService) GetFile(ctx context.Context, id string) (repo.File, error) {
+	f, err := s.repo.GetFileByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return repo.File{}, ErrFileNotFound
+		}
+		return repo.File{}, fmt.Errorf("get file: %w", err)
+	}
+	return f, nil
+}
+
+func (s *FileService) Delete(ctx context.Context, id string) error {
+	f, err := s.repo.GetFileByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrFileNotFound
+		}
+		return fmt.Errorf("get file: %w", err)
+	}
+
+	if err = s.repo.SoftDeleteFile(ctx, id); err != nil {
+		return fmt.Errorf("soft delete: %w", err)
+	}
+
+	_ = s.storage.Delete(f.StoragePath)
+	return nil
+}
+
+func (s *FileService) ListByEntity(ctx context.Context, entityType, entityID string) ([]repo.File, error) {
+	files, err := s.repo.ListFilesByEntity(ctx, repo.ListFilesByEntityParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list files by entity: %w", err)
+	}
+	return files, nil
+}
+
+// --- backward-compat API used by VacationHandler ---
+
+type LegacyUploadFileParams struct {
 	File         *multipart.FileHeader
 	SubDirectory string
 	FileName     string
 }
 
-// UploadFileResult содержит результат загрузки файла
-type UploadFileResult struct {
+type LegacyUploadFileResult struct {
 	FilePath    string
 	FileName    string
 	FileSize    int64
@@ -40,118 +163,96 @@ type UploadFileResult struct {
 	UploadedAt  time.Time
 }
 
-// UploadFile загружает файл на сервер
-func (s *FileService) UploadFile(ctx context.Context, params UploadFileParams) (*UploadFileResult, error) {
-	// Проверяем, что файл существует
+func (s *FileService) UploadFile(ctx context.Context, params LegacyUploadFileParams) (*LegacyUploadFileResult, error) {
 	if params.File == nil {
 		return nil, errors.New("file is required")
 	}
 
-	// Открываем файл
 	src, err := params.File.Open()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	defer src.Close()
 
-	// Создаем директорию для загрузки, если она не существует
-	uploadPath := s.uploadDir
+	uploadPath := s.storage.BasePath()
 	if params.SubDirectory != "" {
-		uploadPath = filepath.Join(s.uploadDir, params.SubDirectory)
+		uploadPath = filepath.Join(uploadPath, params.SubDirectory)
 	}
 
-	if err := os.MkdirAll(uploadPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create upload directory: %w", err)
+	if err = os.MkdirAll(uploadPath, 0755); err != nil {
+		return nil, fmt.Errorf("create upload dir: %w", err)
 	}
 
-	// Генерируем имя файла
 	fileName := params.FileName
 	if fileName == "" {
-		// Используем оригинальное имя файла, но очищаем его от небезопасных символов
-		originalName := params.File.Filename
-		ext := filepath.Ext(originalName)
-		baseName := strings.TrimSuffix(originalName, ext)
-		baseName = sanitizeFileName(baseName)
-		fileName = fmt.Sprintf("%s_%d%s", baseName, time.Now().Unix(), ext)
+		orig := params.File.Filename
+		ext := filepath.Ext(orig)
+		base := sanitizeFileName(strings.TrimSuffix(orig, ext))
+		fileName = fmt.Sprintf("%s_%d%s", base, time.Now().Unix(), ext)
 	} else {
 		fileName = sanitizeFileName(fileName)
 	}
 
-	// Создаем полный путь к файлу
 	filePath := filepath.Join(uploadPath, fileName)
-
-	// Создаем файл на диске
 	dst, err := os.Create(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
+		return nil, fmt.Errorf("create file: %w", err)
 	}
 	defer dst.Close()
 
-	// Копируем содержимое файла
-	fileSize, err := io.Copy(dst, src)
-	if err != nil {
-		// Удаляем частично загруженный файл в случае ошибки
-		os.Remove(filePath)
-		return nil, fmt.Errorf("failed to save file: %w", err)
-	}
-
-	// Получаем информацию о файле
-	fileInfo, err := os.Stat(filePath)
+	size, err := io.Copy(dst, src)
 	if err != nil {
 		os.Remove(filePath)
-		return nil, fmt.Errorf("failed to get file info: %w", err)
+		return nil, fmt.Errorf("save file: %w", err)
 	}
 
-	return &UploadFileResult{
+	fi, _ := os.Stat(filePath)
+	uploadedAt := time.Now()
+	if fi != nil {
+		uploadedAt = fi.ModTime()
+	}
+
+	return &LegacyUploadFileResult{
 		FilePath:    filePath,
 		FileName:    fileName,
-		FileSize:    fileSize,
+		FileSize:    size,
 		ContentType: params.File.Header.Get("Content-Type"),
-		UploadedAt:  fileInfo.ModTime(),
+		UploadedAt:  uploadedAt,
 	}, nil
 }
 
-// DeleteFile удаляет файл с сервера
 func (s *FileService) DeleteFile(ctx context.Context, filePath string) error {
-	// Проверяем, что путь к файлу указан
 	if filePath == "" {
 		return errors.New("file path is required")
 	}
-
-	// Проверяем, что файл существует
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return errors.New("file not found")
 	}
-
-	// Удаляем файл
-	if err := os.Remove(filePath); err != nil {
-		return fmt.Errorf("failed to delete file: %w", err)
-	}
-
-	return nil
+	return os.Remove(filePath)
 }
 
-// sanitizeFileName очищает имя файла от небезопасных символов
-func sanitizeFileName(fileName string) string {
-	// Удаляем небезопасные символы
-	fileName = strings.ReplaceAll(fileName, "..", "")
-	fileName = strings.ReplaceAll(fileName, "/", "_")
-	fileName = strings.ReplaceAll(fileName, "\\", "_")
-	fileName = strings.ReplaceAll(fileName, ":", "_")
-	fileName = strings.ReplaceAll(fileName, "*", "_")
-	fileName = strings.ReplaceAll(fileName, "?", "_")
-	fileName = strings.ReplaceAll(fileName, "\"", "_")
-	fileName = strings.ReplaceAll(fileName, "<", "_")
-	fileName = strings.ReplaceAll(fileName, ">", "_")
-	fileName = strings.ReplaceAll(fileName, "|", "_")
-
-	// Удаляем начальные и конечные пробелы
-	fileName = strings.TrimSpace(fileName)
-
-	// Если имя файла пустое после очистки, используем дефолтное имя
-	if fileName == "" {
-		fileName = "file"
+func sanitizeFileName(name string) string {
+	for _, ch := range []string{"..", "/", "\\", ":", "*", "?", "\"", "<", ">", "|"} {
+		name = strings.ReplaceAll(name, ch, "_")
 	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "file"
+	}
+	return name
+}
 
-	return fileName
+// --- helpers ---
+
+func detectFileType(mimeType string) string {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return "image"
+	case strings.HasPrefix(mimeType, "video/"):
+		return "video"
+	case mimeType == "application/pdf":
+		return "document"
+	default:
+		return "other"
+	}
 }
