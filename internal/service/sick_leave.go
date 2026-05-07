@@ -15,7 +15,6 @@ type SickLeaveService interface {
 	GetSickLeaveByID(ctx context.Context, id string) (repo.GetSickLeaveByIDRow, error)
 	CreateSickLeave(ctx context.Context, p CreateSickLeaveParams) error
 	UpdateSickLeaveStatus(ctx context.Context, id string, status repo.SickLeavesStatus) error
-	UpdateSickLeaveFileName(ctx context.Context, id string, fileName string) error
 	DeleteSickLeave(ctx context.Context, id string) error
 }
 
@@ -84,7 +83,6 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 		EndDate:     p.EndDate,
 		TotalDays:   totalDays,
 		Description: desc,
-		DocFileName: sql.NullString{Valid: false},
 		Status:      status,
 	}); err != nil {
 		return fmt.Errorf("create sick leave: %w", err)
@@ -101,17 +99,6 @@ func (s *sickLeaveService) UpdateSickLeaveStatus(ctx context.Context, id string,
 	return s.repo.UpdateSickLeaveStatus(ctx, repo.UpdateSickLeaveStatusParams{
 		ID:     id,
 		Status: status,
-	})
-}
-
-func (s *sickLeaveService) UpdateSickLeaveFileName(ctx context.Context, id string, fileName string) error {
-	var fn sql.NullString
-	if fileName != "" {
-		fn = sql.NullString{String: fileName, Valid: true}
-	}
-	return s.repo.UpdateSickLeaveFileName(ctx, repo.UpdateSickLeaveFileNameParams{
-		DocFileName: fn,
-		ID:          id,
 	})
 }
 

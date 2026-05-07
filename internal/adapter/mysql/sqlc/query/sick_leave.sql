@@ -6,7 +6,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -29,7 +28,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -47,7 +45,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -57,8 +54,8 @@ WHERE YEAR(start_date) = YEAR(sqlc.arg(year))
 ORDER BY created_at DESC;
 
 -- name: CreateSickLeave :exec
-INSERT INTO sick_leaves (user_id, start_date, end_date, total_days, description, doc_file_name, status)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO sick_leaves (user_id, start_date, end_date, total_days, description, status)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: GetCountSickLeavesByStatus :one
 SELECT COALESCE(SUM(total_days), 0) as total_days
@@ -66,8 +63,3 @@ FROM sick_leaves
 WHERE user_id = ?
   AND status = ?
   AND YEAR(start_date) = YEAR(sqlc.arg(year));
-
--- name: UpdateSickLeaveFileName :exec
-UPDATE sick_leaves
-SET doc_file_name = ?
-WHERE id = ?;

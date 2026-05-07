@@ -107,13 +107,11 @@ func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID stri
 	return items, rows.Err()
 }
 
-const softDeleteFile = `-- name: SoftDeleteFile :exec
-UPDATE files
-SET is_deleted = TRUE, deleted_at = CURRENT_TIMESTAMP
-WHERE id = ? AND is_deleted = FALSE
+const hardDeleteFile = `-- name: HardDeleteFile :exec
+DELETE FROM files WHERE id = ?
 `
 
-func (q *Queries) SoftDeleteFile(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, softDeleteFile, id)
+func (q *Queries) HardDeleteFile(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, hardDeleteFile, id)
 	return err
 }

@@ -189,17 +189,10 @@ func (app *application) mount() *fiber.App {
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "edit"}),
 		sickLeaveHandler.UpdateSickLeaveStatus)
 
+	// permission sick_leaves:edit — загрузка файла; просмотр: GET /v1/files/entity/sick_leave/:id, удаление: DELETE /v1/files/:id
 	sickLeaveRouter.Post("/:id/file",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "edit"}),
 		sickLeaveHandler.UploadSickLeaveFile)
-
-	sickLeaveRouter.Get("/file",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "read"}),
-		sickLeaveHandler.GetSickLeaveFile)
-
-	sickLeaveRouter.Delete("/file",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "file_delete"}),
-		sickLeaveHandler.DeleteSickLeaveFile)
 
 	sickLeaveRouter.Delete("/:id",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "sick_leaves", Action: "delete"}),

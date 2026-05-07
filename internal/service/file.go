@@ -128,8 +128,8 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("get file: %w", err)
 	}
 
-	if err = s.repo.SoftDeleteFile(ctx, id); err != nil {
-		return fmt.Errorf("soft delete: %w", err)
+	if err = s.repo.HardDeleteFile(ctx, id); err != nil {
+		return fmt.Errorf("hard delete: %w", err)
 	}
 
 	_ = s.storage.Delete(f.StoragePath)

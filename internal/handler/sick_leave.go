@@ -2,8 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"os"
-	"strings"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/response"
@@ -23,11 +21,11 @@ func NewSickLeaveHandler(svc service.SickLeaveService, fileService *service.File
 
 func (h *SickLeaveHandler) CreateSickLeave(c *fiber.Ctx) error {
 	var body struct {
-		UserID      string           `json:"userId"`
-		StartDate   time.Time        `json:"startDate"`
-		EndDate     time.Time        `json:"endDate"`
-		Description string           `json:"description"`
-		Status      string           `json:"status"`
+		UserID      string    `json:"userId"`
+		StartDate   time.Time `json:"startDate"`
+		EndDate     time.Time `json:"endDate"`
+		Description string    `json:"description"`
+		Status      string    `json:"status"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.BadRequest(c)
@@ -119,78 +117,36 @@ func (h *SickLeaveHandler) DeleteSickLeave(c *fiber.Ctx) error {
 	return response.Deleted(c)
 }
 
+// UploadSickLeaveFile загружает файл и привязывает его к больничному через file_entity_refs.
+// Файлы доступны через GET /v1/files/open/:id и листаются через GET /v1/files/entity/sick_leave/:id.
 func (h *SickLeaveHandler) UploadSickLeaveFile(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "ID больничного не указан"))
 	}
 
-	file, err := c.FormFile("file")
+	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
 	}
 
-	result, err := h.fileService.UploadFile(c.Context(), service.LegacyUploadFileParams{
-		File:         file,
-		SubDirectory: "sick-leaves",
+	uploaderID, _ := c.Locals("user_id").(string)
+
+	f, err := h.fileService.Upload(c.Context(), service.UploadFileParams{
+		File:       fileHeader,
+		EntityType: "sick_leave",
+		EntityID:   id,
+		UploaderID: uploaderID,
 	})
 	if err != nil {
 		return response.ServerError(c)
 	}
 
-	if err := h.service.UpdateSickLeaveFileName(c.Context(), id, result.FileName); err != nil {
-		h.fileService.DeleteFile(c.Context(), result.FilePath)
-		return response.ServerError(c)
-	}
-
-	return response.Success(c, fiber.Map{
-		"fileName":   result.FileName,
-		"sickLeaveId": id,
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"id":           f.ID,
+		"originalName": f.OriginalName,
+		"mimeType":     f.MimeType,
+		"fileType":     f.FileType,
+		"sizeBytes":    f.SizeBytes,
 	})
-}
-
-func (h *SickLeaveHandler) GetSickLeaveFile(c *fiber.Ctx) error {
-	fileName := c.Query("fileName")
-	if fileName == "" {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "имя файла не указано"))
-	}
-	if strings.Contains(fileName, "..") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "некорректное имя файла"))
-	}
-
-	return c.SendFile("docs/sick-leaves/" + fileName)
-}
-
-func (h *SickLeaveHandler) DeleteSickLeaveFile(c *fiber.Ctx) error {
-	fileName := c.Query("fileName")
-	id := c.Query("sickLeaveId")
-
-	if fileName == "" || id == "" {
-		return response.BadRequest(c)
-	}
-	if strings.Contains(fileName, "..") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "некорректное имя файла"))
-	}
-
-	sl, err := h.service.GetSickLeaveByID(c.Context(), id)
-	if err != nil {
-		return response.ServerError(c)
-	}
-	if sl.DocFileName != fileName {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не принадлежит указанному больничному"))
-	}
-
-	filePath := "docs/sick-leaves/" + fileName
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "файл не найден"))
-	}
-
-	if err := h.fileService.DeleteFile(c.Context(), filePath); err != nil {
-		return response.ServerError(c)
-	}
-	if err := h.service.UpdateSickLeaveFileName(c.Context(), id, ""); err != nil {
-		return response.ServerError(c)
-	}
-
-	return response.Deleted(c)
 }

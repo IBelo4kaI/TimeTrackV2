@@ -12,8 +12,8 @@ import (
 )
 
 const createSickLeave = `-- name: CreateSickLeave :exec
-INSERT INTO sick_leaves (user_id, start_date, end_date, total_days, description, doc_file_name, status)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sick_leaves (user_id, start_date, end_date, total_days, description, status)
+VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateSickLeaveParams struct {
@@ -22,7 +22,6 @@ type CreateSickLeaveParams struct {
 	EndDate     time.Time        `json:"endDate"`
 	TotalDays   int32            `json:"totalDays"`
 	Description sql.NullString   `json:"description"`
-	DocFileName sql.NullString   `json:"docFileName"`
 	Status      SickLeavesStatus `json:"status"`
 }
 
@@ -33,7 +32,6 @@ func (q *Queries) CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams
 		arg.EndDate,
 		arg.TotalDays,
 		arg.Description,
-		arg.DocFileName,
 		arg.Status,
 	)
 	return err
@@ -47,7 +45,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -62,7 +59,6 @@ type GetSickLeaveByIDRow struct {
 	EndDate     time.Time        `json:"endDate"`
 	TotalDays   int32            `json:"totalDays"`
 	Description string           `json:"description"`
-	DocFileName string           `json:"docFileName"`
 	Status      SickLeavesStatus `json:"status"`
 	CreatedAt   sql.NullTime     `json:"createdAt"`
 	UpdatedAt   sql.NullTime     `json:"updatedAt"`
@@ -78,7 +74,6 @@ func (q *Queries) GetSickLeaveByID(ctx context.Context, id string) (GetSickLeave
 		&i.EndDate,
 		&i.TotalDays,
 		&i.Description,
-		&i.DocFileName,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -94,7 +89,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -117,7 +111,6 @@ type GetSickLeavesByYearRow struct {
 	EndDate     time.Time        `json:"endDate"`
 	TotalDays   int32            `json:"totalDays"`
 	Description string           `json:"description"`
-	DocFileName string           `json:"docFileName"`
 	Status      SickLeavesStatus `json:"status"`
 	CreatedAt   sql.NullTime     `json:"createdAt"`
 	UpdatedAt   sql.NullTime     `json:"updatedAt"`
@@ -139,7 +132,6 @@ func (q *Queries) GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYe
 			&i.EndDate,
 			&i.TotalDays,
 			&i.Description,
-			&i.DocFileName,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -162,7 +154,6 @@ SELECT
     end_date,
     total_days,
     COALESCE(description, '') as description,
-    COALESCE(doc_file_name, '') as doc_file_name,
     status,
     created_at,
     updated_at
@@ -183,7 +174,6 @@ type GetAllUsersSickLeavesByYearRow struct {
 	EndDate     time.Time        `json:"endDate"`
 	TotalDays   int32            `json:"totalDays"`
 	Description string           `json:"description"`
-	DocFileName string           `json:"docFileName"`
 	Status      SickLeavesStatus `json:"status"`
 	CreatedAt   sql.NullTime     `json:"createdAt"`
 	UpdatedAt   sql.NullTime     `json:"updatedAt"`
@@ -205,7 +195,6 @@ func (q *Queries) GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUse
 			&i.EndDate,
 			&i.TotalDays,
 			&i.Description,
-			&i.DocFileName,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -254,22 +243,6 @@ type UpdateSickLeaveStatusParams struct {
 
 func (q *Queries) UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateSickLeaveStatus, arg.Status, arg.ID)
-	return err
-}
-
-const updateSickLeaveFileName = `-- name: UpdateSickLeaveFileName :exec
-UPDATE sick_leaves
-SET doc_file_name = ?
-WHERE id = ?
-`
-
-type UpdateSickLeaveFileNameParams struct {
-	DocFileName sql.NullString `json:"docFileName"`
-	ID          string         `json:"id"`
-}
-
-func (q *Queries) UpdateSickLeaveFileName(ctx context.Context, arg UpdateSickLeaveFileNameParams) error {
-	_, err := q.db.ExecContext(ctx, updateSickLeaveFileName, arg.DocFileName, arg.ID)
 	return err
 }
 
