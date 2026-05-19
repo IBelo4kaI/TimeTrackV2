@@ -11,6 +11,92 @@ import (
 	"time"
 )
 
+type NotificationsType string
+
+const (
+	NotificationsTypeInfo    NotificationsType = "info"
+	NotificationsTypeSuccess NotificationsType = "success"
+	NotificationsTypeWarn    NotificationsType = "warn"
+	NotificationsTypeError   NotificationsType = "error"
+)
+
+func (e *NotificationsType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationsType(s)
+	case string:
+		*e = NotificationsType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationsType: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationsType struct {
+	NotificationsType NotificationsType `json:"notificationsType"`
+	Valid             bool              `json:"valid"` // Valid is true if NotificationsType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationsType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationsType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationsType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationsType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationsType), nil
+}
+
+type SickLeavesStatus string
+
+const (
+	SickLeavesStatusOfficial   SickLeavesStatus = "official"
+	SickLeavesStatusUnofficial SickLeavesStatus = "unofficial"
+)
+
+func (e *SickLeavesStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SickLeavesStatus(s)
+	case string:
+		*e = SickLeavesStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SickLeavesStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSickLeavesStatus struct {
+	SickLeavesStatus SickLeavesStatus `json:"sickLeavesStatus"`
+	Valid            bool             `json:"valid"` // Valid is true if SickLeavesStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSickLeavesStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SickLeavesStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SickLeavesStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSickLeavesStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SickLeavesStatus), nil
+}
+
 type SystemSettingsSettingType string
 
 const (
@@ -120,6 +206,53 @@ type DayType struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+type File struct {
+	ID               string       `json:"id"`
+	OriginalName     string       `json:"originalName"`
+	StoragePath      string       `json:"storagePath"`
+	MimeType         string       `json:"mimeType"`
+	FileType         string       `json:"fileType"`
+	SizeBytes        int64        `json:"sizeBytes"`
+	Checksum         string       `json:"checksum"`
+	UploadedByUserID string       `json:"uploadedByUserId"`
+	IsDeleted        bool         `json:"isDeleted"`
+	DeletedAt        sql.NullTime `json:"deletedAt"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	UpdatedAt        time.Time    `json:"updatedAt"`
+}
+
+type FileEntityRef struct {
+	ID         int32     `json:"id"`
+	FileID     string    `json:"fileId"`
+	EntityType string    `json:"entityType"`
+	EntityID   string    `json:"entityId"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type Notification struct {
+	ID         string                `json:"id"`
+	UserID     string                `json:"userId"`
+	Title      string                `json:"title"`
+	Message    string                `json:"message"`
+	Type       NullNotificationsType `json:"type"`
+	IsRead     sql.NullBool          `json:"isRead"`
+	EntityType sql.NullString        `json:"entityType"`
+	EntityID   sql.NullString        `json:"entityId"`
+	CreatedAt  sql.NullTime          `json:"createdAt"`
+}
+
+type SickLeafe struct {
+	ID          string           `json:"id"`
+	UserID      string           `json:"userId"`
+	StartDate   time.Time        `json:"startDate"`
+	EndDate     time.Time        `json:"endDate"`
+	TotalDays   int32            `json:"totalDays"`
+	Description sql.NullString   `json:"description"`
+	CreatedAt   sql.NullTime     `json:"createdAt"`
+	UpdatedAt   sql.NullTime     `json:"updatedAt"`
+	Status      SickLeavesStatus `json:"status"`
+}
+
 type SystemSetting struct {
 	ID           int32                         `json:"id"`
 	SettingKey   string                        `json:"settingKey"`
@@ -143,92 +276,18 @@ type UserTimeEntry struct {
 }
 
 type Vacation struct {
-	ID          string          `json:"id"`
-	UserID      string          `json:"userId"`
-	StartDate   time.Time       `json:"startDate"`
-	EndDate     time.Time       `json:"endDate"`
-	TotalDays   int32           `json:"totalDays"`
-	Description sql.NullString  `json:"description"`
-	DocFileName sql.NullString  `json:"docFileName"`
-	Status      VacationsStatus `json:"status"`
-	CreatedAt   sql.NullTime    `json:"createdAt"`
-	UpdatedAt   sql.NullTime    `json:"updatedAt"`
-}
-
-type SickLeavesStatus string
-
-const (
-	SickLeavesStatusOfficial   SickLeavesStatus = "official"
-	SickLeavesStatusUnofficial SickLeavesStatus = "unofficial"
-)
-
-func (e *SickLeavesStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = SickLeavesStatus(s)
-	case string:
-		*e = SickLeavesStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for SickLeavesStatus: %T", src)
-	}
-	return nil
-}
-
-type NullSickLeavesStatus struct {
-	SickLeavesStatus SickLeavesStatus `json:"sickLeavesStatus"`
-	Valid            bool             `json:"valid"`
-}
-
-func (ns *NullSickLeavesStatus) Scan(value interface{}) error {
-	if value == nil {
-		ns.SickLeavesStatus, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.SickLeavesStatus.Scan(value)
-}
-
-func (ns NullSickLeavesStatus) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.SickLeavesStatus), nil
-}
-
-type SickLeave struct {
-	ID          string           `json:"id"`
-	UserID      string           `json:"userId"`
-	StartDate   time.Time        `json:"startDate"`
-	EndDate     time.Time        `json:"endDate"`
-	TotalDays   int32            `json:"totalDays"`
-	Description sql.NullString   `json:"description"`
-	DocFileName sql.NullString   `json:"docFileName"`
-	Status      SickLeavesStatus `json:"status"`
-	CreatedAt   sql.NullTime     `json:"createdAt"`
-	UpdatedAt   sql.NullTime     `json:"updatedAt"`
-}
-
-type File struct {
-	ID               string       `json:"id"`
-	OriginalName     string       `json:"originalName"`
-	StoragePath      string       `json:"storagePath"`
-	MimeType         string       `json:"mimeType"`
-	FileType         string       `json:"fileType"`
-	SizeBytes        int64        `json:"sizeBytes"`
-	Checksum         string       `json:"checksum"`
-	UploadedByUserID string       `json:"uploadedByUserId"`
-	IsDeleted        bool         `json:"isDeleted"`
-	DeletedAt        sql.NullTime `json:"deletedAt"`
-	CreatedAt        time.Time    `json:"createdAt"`
-	UpdatedAt        time.Time    `json:"updatedAt"`
-}
-
-type FileEntityRef struct {
-	ID         int32     `json:"id"`
-	FileID     string    `json:"fileId"`
-	EntityType string    `json:"entityType"`
-	EntityID   string    `json:"entityId"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID              string          `json:"id"`
+	UserID          string          `json:"userId"`
+	StartDate       time.Time       `json:"startDate"`
+	EndDate         time.Time       `json:"endDate"`
+	TotalDays       int32           `json:"totalDays"`
+	Description     sql.NullString  `json:"description"`
+	DocFileName     sql.NullString  `json:"docFileName"`
+	CreatedAt       sql.NullTime    `json:"createdAt"`
+	UpdatedAt       sql.NullTime    `json:"updatedAt"`
+	ManagerComment  sql.NullString  `json:"managerComment"`
+	StatusUpdatedAt sql.NullTime    `json:"statusUpdatedAt"`
+	Status          VacationsStatus `json:"status"`
 }
 
 type WorkStandard struct {

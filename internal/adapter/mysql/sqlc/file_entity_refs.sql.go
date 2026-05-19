@@ -25,6 +25,15 @@ func (q *Queries) CreateFileEntityRef(ctx context.Context, arg CreateFileEntityR
 	return err
 }
 
+const deleteAllFileEntityRefsByFile = `-- name: DeleteAllFileEntityRefsByFile :exec
+DELETE FROM file_entity_refs WHERE file_id = ?
+`
+
+func (q *Queries) DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAllFileEntityRefsByFile, fileID)
+	return err
+}
+
 const listFilesByEntity = `-- name: ListFilesByEntity :many
 SELECT f.id, f.original_name, f.storage_path, f.mime_type, f.file_type, f.size_bytes, f.checksum,
        f.uploaded_by_user_id, f.is_deleted, f.deleted_at, f.created_at, f.updated_at
@@ -69,14 +78,8 @@ func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityPa
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	return items, rows.Err()
-}
-
-const deleteAllFileEntityRefsByFile = `-- name: DeleteAllFileEntityRefsByFile :exec
-DELETE FROM file_entity_refs WHERE file_id = ?
-`
-
-func (q *Queries) DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error {
-	_, err := q.db.ExecContext(ctx, deleteAllFileEntityRefsByFile, fileID)
-	return err
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

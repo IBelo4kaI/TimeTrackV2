@@ -13,17 +13,23 @@ import (
 type Querier interface {
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
 	CreateDayType(ctx context.Context, arg CreateDayTypeParams) error
+	CreateFile(ctx context.Context, arg CreateFileParams) error
+	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
+	CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error
 	CreateSystemSetting(ctx context.Context, arg CreateSystemSettingParams) error
 	CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error
 	CreateVacation(ctx context.Context, arg CreateVacationParams) error
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
+	DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
+	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
 	DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error
 	DeleteVacation(ctx context.Context, id string) error
 	DeleteWorkStandard(ctx context.Context, id string) error
+	GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error)
 	GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUsersVacationsByYearParams) ([]GetAllUsersVacationsByYearRow, error)
 	GetCalendarEventsByDate(ctx context.Context, eventDate time.Time) (GetCalendarEventsByDateRow, error)
 	GetCalendarEventsById(ctx context.Context, id string) (GetCalendarEventsByIdRow, error)
@@ -32,6 +38,7 @@ type Querier interface {
 	// ============================================
 	GetCalendarEventsForMonth(ctx context.Context, arg GetCalendarEventsForMonthParams) ([]GetCalendarEventsForMonthRow, error)
 	GetCalendarEventsForYear(ctx context.Context, year time.Time) ([]GetCalendarEventsForYearRow, error)
+	GetCountSickLeavesByStatus(ctx context.Context, arg GetCountSickLeavesByStatusParams) (interface{}, error)
 	GetCountVacationsByStatus(ctx context.Context, arg GetCountVacationsByStatusParams) (interface{}, error)
 	GetDayTypeByID(ctx context.Context, id string) (DayType, error)
 	GetDayTypeBySystemName(ctx context.Context, systemName string) (DayType, error)
@@ -39,8 +46,11 @@ type Querier interface {
 	// day_types queries
 	// ============================================
 	GetDayTypes(ctx context.Context) ([]DayType, error)
+	GetFileByID(ctx context.Context, id string) (File, error)
 	GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error)
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
+	GetSickLeaveByID(ctx context.Context, id string) (GetSickLeaveByIDRow, error)
+	GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYearParams) ([]GetSickLeavesByYearRow, error)
 	GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error)
 	GetSystemSettingByKeyAndCategory(ctx context.Context, arg GetSystemSettingByKeyAndCategoryParams) (SystemSetting, error)
 	// ============================================
@@ -71,6 +81,10 @@ type Querier interface {
 	GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdParams) (WorkStandard, error)
 	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
+	HardDeleteFile(ctx context.Context, id string) error
+	ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]File, error)
+	ListFilesByUploader(ctx context.Context, uploadedByUserID string) ([]File, error)
+	SoftDeleteFile(ctx context.Context, id string) error
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
 	UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCodeDayTypeParams) error
@@ -78,6 +92,7 @@ type Querier interface {
 	UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error
 	UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTypeParams) error
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
+	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error
 	UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error

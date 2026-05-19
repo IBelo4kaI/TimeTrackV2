@@ -10,8 +10,19 @@ import (
 )
 
 const createFile = `-- name: CreateFile :exec
-INSERT INTO files (id, original_name, storage_path, mime_type, file_type, size_bytes, checksum, uploaded_by_user_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO
+  files (
+    id,
+    original_name,
+    storage_path,
+    mime_type,
+    file_type,
+    size_bytes,
+    checksum,
+    uploaded_by_user_id
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateFileParams struct {
@@ -40,10 +51,24 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) error {
 }
 
 const getFileByID = `-- name: GetFileByID :one
-SELECT id, original_name, storage_path, mime_type, file_type, size_bytes, checksum,
-       uploaded_by_user_id, is_deleted, deleted_at, created_at, updated_at
-FROM files
-WHERE id = ? AND is_deleted = FALSE
+SELECT
+  id,
+  original_name,
+  storage_path,
+  mime_type,
+  file_type,
+  size_bytes,
+  checksum,
+  uploaded_by_user_id,
+  is_deleted,
+  deleted_at,
+  created_at,
+  updated_at
+FROM
+  files
+WHERE
+  id = ?
+  AND is_deleted = FALSE
 `
 
 func (q *Queries) GetFileByID(ctx context.Context, id string) (File, error) {
@@ -66,12 +91,38 @@ func (q *Queries) GetFileByID(ctx context.Context, id string) (File, error) {
 	return i, err
 }
 
+const hardDeleteFile = `-- name: HardDeleteFile :exec
+DELETE FROM files
+WHERE
+  id = ?
+`
+
+func (q *Queries) HardDeleteFile(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, hardDeleteFile, id)
+	return err
+}
+
 const listFilesByUploader = `-- name: ListFilesByUploader :many
-SELECT id, original_name, storage_path, mime_type, file_type, size_bytes, checksum,
-       uploaded_by_user_id, is_deleted, deleted_at, created_at, updated_at
-FROM files
-WHERE uploaded_by_user_id = ? AND is_deleted = FALSE
-ORDER BY created_at DESC
+SELECT
+  id,
+  original_name,
+  storage_path,
+  mime_type,
+  file_type,
+  size_bytes,
+  checksum,
+  uploaded_by_user_id,
+  is_deleted,
+  deleted_at,
+  created_at,
+  updated_at
+FROM
+  files
+WHERE
+  uploaded_by_user_id = ?
+  AND is_deleted = FALSE
+ORDER BY
+  created_at DESC
 `
 
 func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID string) ([]File, error) {
@@ -104,14 +155,23 @@ func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID stri
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const hardDeleteFile = `-- name: HardDeleteFile :exec
-DELETE FROM files WHERE id = ?
+const softDeleteFile = `-- name: SoftDeleteFile :exec
+UPDATE files
+SET
+  is_deleted = TRUE,
+  deleted_at = CURRENT_TIMESTAMP
+WHERE
+  id = ?
+  AND is_deleted = FALSE
 `
 
-func (q *Queries) HardDeleteFile(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, hardDeleteFile, id)
+func (q *Queries) SoftDeleteFile(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, softDeleteFile, id)
 	return err
 }

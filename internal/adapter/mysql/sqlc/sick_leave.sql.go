@@ -37,6 +37,102 @@ func (q *Queries) CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams
 	return err
 }
 
+const deleteSickLeave = `-- name: DeleteSickLeave :exec
+DELETE FROM sick_leaves WHERE id = ?
+`
+
+func (q *Queries) DeleteSickLeave(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteSickLeave, id)
+	return err
+}
+
+const getAllUsersSickLeavesByYear = `-- name: GetAllUsersSickLeavesByYear :many
+SELECT
+    id,
+    user_id,
+    start_date,
+    end_date,
+    total_days,
+    COALESCE(description, '') as description,
+    status,
+    created_at,
+    updated_at
+FROM sick_leaves
+WHERE YEAR(start_date) = YEAR(?)
+    AND YEAR(end_date) = YEAR(?)
+ORDER BY created_at DESC
+`
+
+type GetAllUsersSickLeavesByYearParams struct {
+	Year time.Time `json:"year"`
+}
+
+type GetAllUsersSickLeavesByYearRow struct {
+	ID          string           `json:"id"`
+	UserID      string           `json:"userId"`
+	StartDate   time.Time        `json:"startDate"`
+	EndDate     time.Time        `json:"endDate"`
+	TotalDays   int32            `json:"totalDays"`
+	Description string           `json:"description"`
+	Status      SickLeavesStatus `json:"status"`
+	CreatedAt   sql.NullTime     `json:"createdAt"`
+	UpdatedAt   sql.NullTime     `json:"updatedAt"`
+}
+
+func (q *Queries) GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllUsersSickLeavesByYear, arg.Year, arg.Year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllUsersSickLeavesByYearRow
+	for rows.Next() {
+		var i GetAllUsersSickLeavesByYearRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalDays,
+			&i.Description,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCountSickLeavesByStatus = `-- name: GetCountSickLeavesByStatus :one
+SELECT COALESCE(SUM(total_days), 0) as total_days
+FROM sick_leaves
+WHERE user_id = ?
+  AND status = ?
+  AND YEAR(start_date) = YEAR(?)
+`
+
+type GetCountSickLeavesByStatusParams struct {
+	UserID string           `json:"userId"`
+	Status SickLeavesStatus `json:"status"`
+	Year   time.Time        `json:"year"`
+}
+
+func (q *Queries) GetCountSickLeavesByStatus(ctx context.Context, arg GetCountSickLeavesByStatusParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getCountSickLeavesByStatus, arg.UserID, arg.Status, arg.Year)
+	var total_days interface{}
+	err := row.Scan(&total_days)
+	return total_days, err
+}
+
 const getSickLeaveByID = `-- name: GetSickLeaveByID :one
 SELECT
     id,
@@ -143,91 +239,10 @@ func (q *Queries) GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYe
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	return items, rows.Err()
-}
-
-const getAllUsersSickLeavesByYear = `-- name: GetAllUsersSickLeavesByYear :many
-SELECT
-    id,
-    user_id,
-    start_date,
-    end_date,
-    total_days,
-    COALESCE(description, '') as description,
-    status,
-    created_at,
-    updated_at
-FROM sick_leaves
-WHERE YEAR(start_date) = YEAR(?)
-    AND YEAR(end_date) = YEAR(?)
-ORDER BY created_at DESC
-`
-
-type GetAllUsersSickLeavesByYearParams struct {
-	Year time.Time `json:"year"`
-}
-
-type GetAllUsersSickLeavesByYearRow struct {
-	ID          string           `json:"id"`
-	UserID      string           `json:"userId"`
-	StartDate   time.Time        `json:"startDate"`
-	EndDate     time.Time        `json:"endDate"`
-	TotalDays   int32            `json:"totalDays"`
-	Description string           `json:"description"`
-	Status      SickLeavesStatus `json:"status"`
-	CreatedAt   sql.NullTime     `json:"createdAt"`
-	UpdatedAt   sql.NullTime     `json:"updatedAt"`
-}
-
-func (q *Queries) GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAllUsersSickLeavesByYear, arg.Year, arg.Year)
-	if err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var items []GetAllUsersSickLeavesByYearRow
-	for rows.Next() {
-		var i GetAllUsersSickLeavesByYearRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.StartDate,
-			&i.EndDate,
-			&i.TotalDays,
-			&i.Description,
-			&i.Status,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	return items, rows.Err()
-}
-
-const getCountSickLeavesByStatus = `-- name: GetCountSickLeavesByStatus :one
-SELECT COALESCE(SUM(total_days), 0) as total_days
-FROM sick_leaves
-WHERE user_id = ?
-  AND status = ?
-  AND YEAR(start_date) = YEAR(?)
-`
-
-type GetCountSickLeavesByStatusParams struct {
-	UserID string           `json:"userId"`
-	Status SickLeavesStatus `json:"status"`
-	Year   time.Time        `json:"year"`
-}
-
-func (q *Queries) GetCountSickLeavesByStatus(ctx context.Context, arg GetCountSickLeavesByStatusParams) (interface{}, error) {
-	row := q.db.QueryRowContext(ctx, getCountSickLeavesByStatus, arg.UserID, arg.Status, arg.Year)
-	var totalDays interface{}
-	err := row.Scan(&totalDays)
-	return totalDays, err
+	return items, nil
 }
 
 const updateSickLeaveStatus = `-- name: UpdateSickLeaveStatus :exec
@@ -243,14 +258,5 @@ type UpdateSickLeaveStatusParams struct {
 
 func (q *Queries) UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error {
 	_, err := q.db.ExecContext(ctx, updateSickLeaveStatus, arg.Status, arg.ID)
-	return err
-}
-
-const deleteSickLeave = `-- name: DeleteSickLeave :exec
-DELETE FROM sick_leaves WHERE id = ?
-`
-
-func (q *Queries) DeleteSickLeave(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteSickLeave, id)
 	return err
 }
