@@ -3,7 +3,7 @@ package middleware
 import (
 	grpcClient "timetrack/internal/adapter/grpc"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type Params struct {
@@ -18,7 +18,7 @@ func Require(
 	client *grpcClient.Client,
 	p Params,
 ) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 
 		// 1️⃣ достаём session_token
 		token := c.Cookies(SessionCookieName)
@@ -29,7 +29,7 @@ func Require(
 		userId := c.Params("userId")
 
 		// 3️⃣ gRPC запрос
-		resp, err := client.Validate(c.Context(), &grpcClient.PermissionRequest{
+		resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
 			SessionToken: token,
 			Service:      p.Service,
 			Entity:       p.Entity,
@@ -59,7 +59,7 @@ func RequireFromBody(
 	client *grpcClient.Client,
 	p Params,
 ) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		// 1️⃣ достаём session_token
 		token := c.Cookies(SessionCookieName)
 		if token == "" {
@@ -68,7 +68,7 @@ func RequireFromBody(
 
 		// 2️⃣ парсим body для получения userId
 		var bodyMap map[string]any
-		if err := c.BodyParser(&bodyMap); err != nil {
+		if err := c.Bind().Body(&bodyMap); err != nil {
 			return fiber.ErrBadRequest
 		}
 
@@ -87,7 +87,7 @@ func RequireFromBody(
 		}
 
 		// 4️⃣ gRPC запрос
-		resp, err := client.Validate(c.Context(), &grpcClient.PermissionRequest{
+		resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
 			SessionToken: token,
 			Service:      p.Service,
 			Entity:       p.Entity,
@@ -115,3 +115,5 @@ func RequireFromBody(
 	}
 
 }
+
+// fiber:context-methods migrated

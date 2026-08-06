@@ -6,7 +6,7 @@ import (
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type FileHandler struct {
@@ -20,7 +20,7 @@ func NewFileHandler(fileService *service.FileService) *FileHandler {
 // UploadFile godoc
 // POST /v1/files/upload
 // Form fields: file (required), entity_type (optional), entity_id (optional)
-func (h *FileHandler) UploadFile(c *fiber.Ctx) error {
+func (h *FileHandler) UploadFile(c fiber.Ctx) error {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
@@ -29,7 +29,7 @@ func (h *FileHandler) UploadFile(c *fiber.Ctx) error {
 	uploaderID := c.Locals("user_id")
 	uploaderIDStr, _ := uploaderID.(string)
 
-	f, err := h.service.Upload(c.Context(), service.UploadFileParams{
+	f, err := h.service.Upload(c.RequestCtx(), service.UploadFileParams{
 		File:       fileHeader,
 		EntityType: c.FormValue("entity_type"),
 		EntityID:   c.FormValue("entity_id"),
@@ -50,13 +50,13 @@ func (h *FileHandler) UploadFile(c *fiber.Ctx) error {
 
 // OpenFile godoc
 // GET /v1/files/open/:id
-func (h *FileHandler) OpenFile(c *fiber.Ctx) error {
+func (h *FileHandler) OpenFile(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.BadRequest(c)
 	}
 
-	f, err := h.service.GetFile(c.Context(), id)
+	f, err := h.service.GetFile(c.RequestCtx(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrFileNotFound) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "файл не найден"))
@@ -69,13 +69,13 @@ func (h *FileHandler) OpenFile(c *fiber.Ctx) error {
 
 // DeleteFile godoc
 // DELETE /v1/files/:id
-func (h *FileHandler) DeleteFile(c *fiber.Ctx) error {
+func (h *FileHandler) DeleteFile(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.BadRequest(c)
 	}
 
-	if err := h.service.Delete(c.Context(), id); err != nil {
+	if err := h.service.Delete(c.RequestCtx(), id); err != nil {
 		if errors.Is(err, service.ErrFileNotFound) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "файл не найден"))
 		}
@@ -87,7 +87,7 @@ func (h *FileHandler) DeleteFile(c *fiber.Ctx) error {
 
 // ListFilesByEntity godoc
 // GET /v1/files/entity/:entityType/:entityId
-func (h *FileHandler) ListFilesByEntity(c *fiber.Ctx) error {
+func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 	entityType := c.Params("entityType")
 	entityID := c.Params("entityId")
 
@@ -95,10 +95,12 @@ func (h *FileHandler) ListFilesByEntity(c *fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	files, err := h.service.ListByEntity(c.Context(), entityType, entityID)
+	files, err := h.service.ListByEntity(c.RequestCtx(), entityType, entityID)
 	if err != nil {
 		return response.ServerError(c)
 	}
 
 	return response.Success(c, files)
 }
+
+// fiber:context-methods migrated

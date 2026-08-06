@@ -9,7 +9,7 @@ import (
 	mysqladapter "timetrack/internal/adapter/mysql"
 	"timetrack/internal/env"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"		
 )
 
 func main() {
