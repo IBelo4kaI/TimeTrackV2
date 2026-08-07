@@ -30,7 +30,6 @@ type Service interface {
 	ApproveVacation(ctx context.Context, vacationID string) error
 	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error
 	DeleteVacation(ctx context.Context, vacationID string) error
-	UpdateVacationFileName(ctx context.Context, vacationID string, fileName string) error
 }
 
 func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service) Service {
@@ -606,37 +605,6 @@ func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string)
 	err = s.repo.DeleteVacation(ctx, vacationID)
 	if err != nil {
 		return fmt.Errorf("failed to delete vacation: %w", err)
-	}
-
-	return nil
-}
-
-func (s *vacationService) UpdateVacationFileName(ctx context.Context, vacationID string, fileName string) error {
-	// Сначала проверяем существование отпуска
-	_, err := s.repo.GetVacationByID(ctx, vacationID)
-	if err != nil {
-		// Если отпуск не найден, возвращаем ошибку
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("vacation not found")
-		}
-		return fmt.Errorf("failed to get vacation: %w", err)
-	}
-
-	// Создаем NullString для fileName
-	var fileNameNull sql.NullString
-	if fileName != "" {
-		fileNameNull = sql.NullString{String: fileName, Valid: true}
-	} else {
-		fileNameNull = sql.NullString{Valid: false}
-	}
-
-	// Обновляем поле doc_file_name в базе данных
-	err = s.repo.UpdateVacationFileName(ctx, repo.UpdateVacationFileNameParams{
-		DocFileName: fileNameNull,
-		ID:          vacationID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update vacation file name: %w", err)
 	}
 
 	return nil

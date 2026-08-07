@@ -1,10 +1,7 @@
 package vacation
 
 import (
-	"fmt"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/response"
@@ -199,123 +196,36 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 	})
 }
 
-// UploadVacationFile загружает файл для отпуска
+// UploadVacationFile загружает файл и привязывает его к отпуску через file_entity_refs.
+// Файлы доступны через GET /v1/files/open/:id и листаются через GET /v1/files/entity/vacation/:id.
 func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
-	vacationID := c.Params("id")
-	if vacationID == "" {
+	id := c.Params("id")
+	if id == "" {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "ID отпуска не указан"))
 	}
 
-	// Получаем файл из формы
-	file, err := c.FormFile("file")
+	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Файл не найден в запросе"))
+		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
 	}
 
-	// Загружаем файл через сервис
-	result, err := h.fileService.UploadFile(c.RequestCtx(), service.LegacyUploadFileParams{
-		File:         file,
-		SubDirectory: "vacations",
-		FileName:     "",
+	uploaderID, _ := c.Locals("user_id").(string)
+
+	f, err := h.fileService.Upload(c.RequestCtx(), service.UploadFileParams{
+		File:       fileHeader,
+		EntityType: "vacation",
+		EntityID:   id,
+		UploaderID: uploaderID,
 	})
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return response.ServerError(c)
 	}
 
-	// Обновляем поле doc_file_name в базе данных
-	err = h.service.UpdateVacationFileName(c.RequestCtx(), vacationID, result.FileName)
-	if err != nil {
-		// Если не удалось обновить базу данных, удаляем загруженный файл
-		h.fileService.DeleteFile(c.RequestCtx(), result.FilePath)
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	return response.Success(c, fiber.Map{
-		"message":    "Файл успешно загружен",
-		"fileName":   result.FileName,
-		"filePath":   result.FilePath,
-		"vacationId": vacationID,
-	})
-}
-
-// GetVacationFile возвращает файл отпуска
-func (h *Handler) GetVacationFile(c fiber.Ctx) error {
-	fileName := c.Query("fileName")
-	if fileName == "" {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Имя файла не указано"))
-	}
-
-	// Проверяем, что имя файла безопасное
-	if strings.Contains(fileName, "..") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Некорректное имя файла"))
-	}
-
-	// Формируем путь к файлу
-	filePath := "docs/vacations/" + fileName
-
-	// Отправляем файл клиенту
-	return c.SendFile(filePath)
-}
-
-// DeleteVacationFile удаляет файл отпуска
-func (h *Handler) DeleteVacationFile(c fiber.Ctx) error {
-	fileName := c.Query("fileName")
-	vacationID := c.Query("vacationId")
-
-	if fileName == "" {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Имя файла не указано"))
-	}
-
-	if vacationID == "" {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "ID отпуска не указан"))
-	}
-
-	// fmt.Printf("filename: %v id: %v", fileName, vacationID)
-
-	// Проверяем, что имя файла безопасное
-	if strings.Contains(fileName, "..") || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Некорректное имя файла"))
-	}
-
-	// Формируем путь к файлу
-	filePath := "docs/vacations/" + fileName
-
-	// Проверяем существование файла перед удалением
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "Файл не найден"))
-	}
-
-	// Проверяем, что файл принадлежит указанному отпуску
-	// Для этого нужно получить информацию об отпуске и сравнить имя файла
-	vacation, err := h.service.GetVacationByID(c.RequestCtx(), vacationID)
-	if err != nil {
-		fmt.Println("ERROR: GetVacationByID")
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Проверяем, что файл действительно принадлежит этому отпуску
-	// Сравниваем имя файла с doc_file_name в базе данных
-	if vacation.DocFileName != fileName {
-		fmt.Println("ERROR: vacation.DocFileName != fileName")
-
-		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "Файл не принадлежит указанному отпуску"))
-	}
-
-	// Удаляем файл через сервис
-	err = h.fileService.DeleteFile(c.RequestCtx(), filePath)
-	if err != nil {
-		fmt.Println("ERROR: DeleteFile")
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	// Очищаем поле doc_file_name в базе данных
-	err = h.service.UpdateVacationFileName(c.RequestCtx(), vacationID, "")
-	if err != nil {
-		fmt.Println("ERROR: UpdateVacationFileName")
-		return response.Error(c, http.StatusInternalServerError, err)
-	}
-
-	return response.Success(c, fiber.Map{
-		"message": "Файл успешно удален",
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"id":           f.ID,
+		"originalName": f.OriginalName,
+		"mimeType":     f.MimeType,
+		"fileType":     f.FileType,
+		"sizeBytes":    f.SizeBytes,
 	})
 }

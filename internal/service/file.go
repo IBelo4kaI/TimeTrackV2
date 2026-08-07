@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/adapter/storage"
 
@@ -145,101 +143,6 @@ func (s *FileService) ListByEntity(ctx context.Context, entityType, entityID str
 		return nil, fmt.Errorf("list files by entity: %w", err)
 	}
 	return files, nil
-}
-
-// --- backward-compat API used by VacationHandler ---
-
-type LegacyUploadFileParams struct {
-	File         *multipart.FileHeader
-	SubDirectory string
-	FileName     string
-}
-
-type LegacyUploadFileResult struct {
-	FilePath    string
-	FileName    string
-	FileSize    int64
-	ContentType string
-	UploadedAt  time.Time
-}
-
-func (s *FileService) UploadFile(ctx context.Context, params LegacyUploadFileParams) (*LegacyUploadFileResult, error) {
-	if params.File == nil {
-		return nil, errors.New("file is required")
-	}
-
-	src, err := params.File.Open()
-	if err != nil {
-		return nil, fmt.Errorf("open file: %w", err)
-	}
-	defer src.Close()
-
-	uploadPath := s.storage.BasePath()
-	if params.SubDirectory != "" {
-		uploadPath = filepath.Join(uploadPath, params.SubDirectory)
-	}
-
-	if err = os.MkdirAll(uploadPath, 0755); err != nil {
-		return nil, fmt.Errorf("create upload dir: %w", err)
-	}
-
-	fileName := params.FileName
-	if fileName == "" {
-		orig := params.File.Filename
-		ext := filepath.Ext(orig)
-		base := sanitizeFileName(strings.TrimSuffix(orig, ext))
-		fileName = fmt.Sprintf("%s_%d%s", base, time.Now().Unix(), ext)
-	} else {
-		fileName = sanitizeFileName(fileName)
-	}
-
-	filePath := filepath.Join(uploadPath, fileName)
-	dst, err := os.Create(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("create file: %w", err)
-	}
-	defer dst.Close()
-
-	size, err := io.Copy(dst, src)
-	if err != nil {
-		os.Remove(filePath)
-		return nil, fmt.Errorf("save file: %w", err)
-	}
-
-	fi, _ := os.Stat(filePath)
-	uploadedAt := time.Now()
-	if fi != nil {
-		uploadedAt = fi.ModTime()
-	}
-
-	return &LegacyUploadFileResult{
-		FilePath:    filePath,
-		FileName:    fileName,
-		FileSize:    size,
-		ContentType: params.File.Header.Get("Content-Type"),
-		UploadedAt:  uploadedAt,
-	}, nil
-}
-
-func (s *FileService) DeleteFile(ctx context.Context, filePath string) error {
-	if filePath == "" {
-		return errors.New("file path is required")
-	}
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return errors.New("file not found")
-	}
-	return os.Remove(filePath)
-}
-
-func sanitizeFileName(name string) string {
-	for _, ch := range []string{"..", "/", "\\", ":", "*", "?", "\"", "<", ">", "|"} {
-		name = strings.ReplaceAll(name, ch, "_")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "file"
-	}
-	return name
 }
 
 // --- helpers ---

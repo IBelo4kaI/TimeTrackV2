@@ -45,6 +45,7 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 ('d5e3c665-123d-11f1-b05d-4e4ba071d33f', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:work_standards:delete', 'Удаление рабочего норматива', 'Разрешение на удаление рабочих нормативов', '2026-02-25 11:33:41');
 
 ### work_standards on 2026
+
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES
 ('e6da8702-114a-11f1-a4c4-fa8bc1fb66f5', NULL, 1, 2026, 120, 15, 1, '2026-02-24 06:34:42', '2026-02-24 06:34:42'),
 ('e6da8fae-114a-11f1-a4c4-fa8bc1fb66f5', NULL, 2, 2026, 152, 19, 1, '2026-02-24 06:34:42', '2026-02-24 06:34:42'),
