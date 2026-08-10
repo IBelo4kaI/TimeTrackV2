@@ -9,7 +9,7 @@ import (
 )
 
 func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) {
-	handler := NewHandler(service, fileService)
+	handler := NewHandler(service, fileService, grpc, prefix)
 	router := fiber.Group("/vacation")
 
 	// расчёт дней отпуска — только авторизация
@@ -20,8 +20,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
 		handler.GetVacationStatistics)
 
+	// эндпоинт отдаёт отпуска ВСЕХ сотрудников — без RequireAll middleware
+	// проверил бы обычный "vacation:read" вместо "vacation.all:read" (в пути
+	// нет :userId, permission-сервис сам ".all" не добавит)
 	router.Get("/all/:year",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read", RequireAll: true}),
 		handler.GetAllUserVacationsByYear)
 
 	router.Get("/:userId/:year",

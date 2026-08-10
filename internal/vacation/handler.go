@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"time"
+	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -15,10 +17,12 @@ import (
 type Handler struct {
 	service     Service
 	fileService *service.FileService
+	grpc        *grpc.Client
+	prefix      string
 }
 
-func NewHandler(service Service, fileService *service.FileService) *Handler {
-	return &Handler{service: service, fileService: fileService}
+func NewHandler(service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) *Handler {
+	return &Handler{service: service, fileService: fileService, grpc: grpc, prefix: prefix}
 }
 
 func (h *Handler) CreateVacation(c fiber.Ctx) error {
@@ -54,6 +58,12 @@ func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
 
 // GetVacation godoc
 // GET /v1/vacation/:id — карточка отдельной заявки (для страницы заявления).
+//
+// Роут без :userId в пути (запись ищется по её собственному id), поэтому
+// middleware.Require на этот роут проверяет только базовое "vacation:read" —
+// permission-сервис не знает заранее, чья это заявка, и не может сам
+// подставить ".all". Владельца узнаём только после того, как достали запись
+// из БД, и если она чужая — довалидируем через middleware.RequireOwnerOrAll.
 func (h *Handler) GetVacation(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -66,6 +76,18 @@ func (h *Handler) GetVacation(c fiber.Ctx) error {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
 		}
 		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "read"},
+		callerID,
+		vacation.UserID,
+	)
+	if !allowed {
+		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "нет доступа к этой заявке"))
 	}
 
 	return response.Success(c, vacation)

@@ -300,7 +300,11 @@ GET /v1/vacation/calculate?userId=123e4567-e89b-12d3-a456-426614174000&startDate
 
 - `id` (string) - ID отпуска
 
-**Разрешение:** `time:vacation:read` или `time:vacation.all:read`
+**Разрешение:** `time:vacation:read` — если заявка принадлежит текущему
+пользователю; `time:vacation.all:read` — если заявка чужая. Роут без
+`:userId` в пути, поэтому владелец проверяется уже после получения записи
+из БД (см. `middleware.RequireOwnerOrAll`), а не автоматически на входе.
+Чужая заявка без `vacation.all:read` — `403`.
 
 **Ответ:** `404`, если заявка не найдена.
 
