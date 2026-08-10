@@ -26,6 +26,7 @@ WHERE
   r.entity_type = ?
   AND r.entity_id = ?
   AND f.is_deleted = FALSE
+  AND (sqlc.narg (year) IS NULL OR YEAR(f.created_at) = CAST(sqlc.narg (year) AS SIGNED))
 ORDER BY
   r.created_at DESC;
 
@@ -52,6 +53,7 @@ FROM
 WHERE
   r.entity_type = ?
   AND f.is_deleted = FALSE
+  AND (sqlc.narg (year) IS NULL OR YEAR(f.created_at) = CAST(sqlc.narg (year) AS SIGNED))
 ORDER BY
   r.created_at DESC;
 

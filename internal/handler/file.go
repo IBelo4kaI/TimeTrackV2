@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -89,7 +90,8 @@ func (h *FileHandler) DeleteFile(c fiber.Ctx) error {
 }
 
 // ListFilesByEntity godoc
-// GET /v1/files/entity/:entityType/:entityId
+// GET /v1/files/entity/:entityType/:entityId?year=2026
+// year — необязательный query-параметр; без него возвращаются файлы за все годы.
 func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 	entityType := c.Params("entityType")
 	entityID := c.Params("entityId")
@@ -98,7 +100,12 @@ func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	files, err := h.service.ListByEntity(c.RequestCtx(), entityType, entityID)
+	year, err := queryYear(c)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	files, err := h.service.ListByEntity(c.RequestCtx(), entityType, entityID, year)
 	if err != nil {
 		return response.ServerError(c)
 	}
@@ -107,7 +114,8 @@ func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 }
 
 // ListFilesByEntityType godoc
-// GET /v1/files/entity/:entityType
+// GET /v1/files/entity/:entityType?year=2026
+// year — необязательный query-параметр; без него возвращаются файлы за все годы.
 func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 	entityType := c.Params("entityType")
 
@@ -115,7 +123,12 @@ func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	files, err := h.service.ListByEntityType(c.RequestCtx(), entityType)
+	year, err := queryYear(c)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	files, err := h.service.ListByEntityType(c.RequestCtx(), entityType, year)
 	if err != nil {
 		return response.ServerError(c)
 	}
@@ -124,7 +137,8 @@ func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 }
 
 // ListFilesByCategory godoc
-// GET /v1/files/category/:categoryId
+// GET /v1/files/category/:categoryId?year=2026
+// year — необязательный query-параметр; без него возвращаются файлы за все годы.
 func (h *FileHandler) ListFilesByCategory(c fiber.Ctx) error {
 	categoryID := c.Params("categoryId")
 
@@ -132,12 +146,27 @@ func (h *FileHandler) ListFilesByCategory(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	files, err := h.service.ListByCategory(c.RequestCtx(), categoryID)
+	year, err := queryYear(c)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	files, err := h.service.ListByCategory(c.RequestCtx(), categoryID, year)
 	if err != nil {
 		return response.ServerError(c)
 	}
 
 	return response.Success(c, files)
+}
+
+// queryYear парсит необязательный query-параметр ?year=. Пустая строка (параметр
+// не передан) — это 0, «без фильтра». Непустое, но нечисловое значение — ошибка.
+func queryYear(c fiber.Ctx) (int, error) {
+	raw := c.Query("year")
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(raw)
 }
 
 // SetFileCategory godoc

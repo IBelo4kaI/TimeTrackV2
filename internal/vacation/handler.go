@@ -1,6 +1,8 @@
 package vacation
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
@@ -48,6 +50,25 @@ func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, vacations)
+}
+
+// GetVacation godoc
+// GET /v1/vacation/:id — карточка отдельной заявки (для страницы заявления).
+func (h *Handler) GetVacation(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	vacation, err := h.service.GetVacationByID(c.RequestCtx(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
+		}
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, vacation)
 }
 
 func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {

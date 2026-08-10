@@ -28,6 +28,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
 		handler.GetVacationsByYear)
 
+	// карточка отдельной заявки, по id отпуска (страница заявления)
+	router.Get("/:id",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
+		handler.GetVacation)
+
 	// permission vacation:create
 	router.Post("/create",
 		middleware.RequireFromBody(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "create"}),

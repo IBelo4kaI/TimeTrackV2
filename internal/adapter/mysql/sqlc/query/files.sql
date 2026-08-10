@@ -55,6 +55,7 @@ FROM
 WHERE
   uploaded_by_user_id = ?
   AND is_deleted = FALSE
+  AND (sqlc.narg (year) IS NULL OR YEAR(created_at) = CAST(sqlc.narg (year) AS SIGNED))
 ORDER BY
   created_at DESC;
 
@@ -78,6 +79,7 @@ FROM
 WHERE
   category_id = ?
   AND is_deleted = FALSE
+  AND (sqlc.narg (year) IS NULL OR YEAR(created_at) = CAST(sqlc.narg (year) AS SIGNED))
 ORDER BY
   created_at DESC;
 

@@ -145,9 +145,15 @@ FROM
 WHERE
   category_id = ?
   AND is_deleted = FALSE
+  AND (? IS NULL OR YEAR(created_at) = CAST(? AS SIGNED))
 ORDER BY
   created_at DESC
 `
+
+type ListFilesByCategoryParams struct {
+	CategoryID sql.NullString `json:"categoryId"`
+	Year       sql.NullInt64  `json:"year"`
+}
 
 type ListFilesByCategoryRow struct {
 	ID               string         `json:"id"`
@@ -165,8 +171,8 @@ type ListFilesByCategoryRow struct {
 	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
-func (q *Queries) ListFilesByCategory(ctx context.Context, categoryID sql.NullString) ([]ListFilesByCategoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesByCategory, categoryID)
+func (q *Queries) ListFilesByCategory(ctx context.Context, arg ListFilesByCategoryParams) ([]ListFilesByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByCategory, arg.CategoryID, arg.Year, arg.Year)
 	if err != nil {
 		return nil, err
 	}
@@ -222,9 +228,15 @@ FROM
 WHERE
   uploaded_by_user_id = ?
   AND is_deleted = FALSE
+  AND (? IS NULL OR YEAR(created_at) = CAST(? AS SIGNED))
 ORDER BY
   created_at DESC
 `
+
+type ListFilesByUploaderParams struct {
+	UploadedByUserID string        `json:"uploadedByUserId"`
+	Year             sql.NullInt64 `json:"year"`
+}
 
 type ListFilesByUploaderRow struct {
 	ID               string         `json:"id"`
@@ -242,8 +254,8 @@ type ListFilesByUploaderRow struct {
 	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
-func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID string) ([]ListFilesByUploaderRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesByUploader, uploadedByUserID)
+func (q *Queries) ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByUploader, arg.UploadedByUserID, arg.Year, arg.Year)
 	if err != nil {
 		return nil, err
 	}

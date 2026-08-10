@@ -62,13 +62,15 @@ WHERE
   r.entity_type = ?
   AND r.entity_id = ?
   AND f.is_deleted = FALSE
+  AND (? IS NULL OR YEAR(f.created_at) = CAST(? AS SIGNED))
 ORDER BY
   r.created_at DESC
 `
 
 type ListFilesByEntityParams struct {
-	EntityType string `json:"entityType"`
-	EntityID   string `json:"entityId"`
+	EntityType string        `json:"entityType"`
+	EntityID   string        `json:"entityId"`
+	Year       sql.NullInt64 `json:"year"`
 }
 
 type ListFilesByEntityRow struct {
@@ -88,7 +90,12 @@ type ListFilesByEntityRow struct {
 }
 
 func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesByEntity, arg.EntityType, arg.EntityID)
+	rows, err := q.db.QueryContext(ctx, listFilesByEntity,
+		arg.EntityType,
+		arg.EntityID,
+		arg.Year,
+		arg.Year,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -147,9 +154,15 @@ FROM
 WHERE
   r.entity_type = ?
   AND f.is_deleted = FALSE
+  AND (? IS NULL OR YEAR(f.created_at) = CAST(? AS SIGNED))
 ORDER BY
   r.created_at DESC
 `
+
+type ListFilesByEntityTypeParams struct {
+	EntityType string        `json:"entityType"`
+	Year       sql.NullInt64 `json:"year"`
+}
 
 type ListFilesByEntityTypeRow struct {
 	ID               string         `json:"id"`
@@ -169,8 +182,8 @@ type ListFilesByEntityTypeRow struct {
 	EntityID         string         `json:"entityId"`
 }
 
-func (q *Queries) ListFilesByEntityType(ctx context.Context, entityType string) ([]ListFilesByEntityTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFilesByEntityType, entityType)
+func (q *Queries) ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByEntityType, arg.EntityType, arg.Year, arg.Year)
 	if err != nil {
 		return nil, err
 	}

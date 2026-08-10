@@ -287,6 +287,23 @@ GET /v1/vacation/calculate?userId=123e4567-e89b-12d3-a456-426614174000&startDate
 
 **Разрешение:** `time:vacation:read` или `time:vacation.all:read`
 
+### 4.4a Получить заявку по ID
+
+**GET** `/vacation/:id`
+
+Карточка отдельной заявки на отпуск (для страницы заявления). Возвращает
+то же самое, что и элементы списков `4.3`/`4.4` — включая данные типа
+отпуска (`vacationTypeId`, `vacationTypeName`, `vacationTypeColor`,
+`vacationTypeAffectsBalance`).
+
+**Параметры пути:**
+
+- `id` (string) - ID отпуска
+
+**Разрешение:** `time:vacation:read` или `time:vacation.all:read`
+
+**Ответ:** `404`, если заявка не найдена.
+
 ### 4.5 Создать отпуск
 
 **POST** `/vacation/create`
@@ -830,6 +847,18 @@ GET /v1/system-settings/vacation_days_per_year
   (или убрать из категории, если `categoryId` — пустая строка). Тело:
   `{ "categoryId": "..." }`. Разрешение: `time:files:edit` или
   `time:files.all:edit`.
+
+### 8.6 Фильтр по году во всех списках файлов
+
+Все три GET-эндпоинта, возвращающие список файлов, принимают необязательный
+query-параметр `year` — фильтрует по году загрузки файла (`created_at`).
+Без параметра возвращаются файлы за все годы, как и раньше.
+
+- **GET** `/v1/files/entity/:entityType/:entityId?year=2026`
+- **GET** `/v1/files/entity/:entityType?year=2026`
+- **GET** `/v1/files/category/:categoryId?year=2026`
+
+Нечисловое значение `year` — `400 Bad Request`.
 
 ## Коды ответов
 

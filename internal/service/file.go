@@ -147,10 +147,14 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *FileService) ListByEntity(ctx context.Context, entityType, entityID string) ([]repo.ListFilesByEntityRow, error) {
+// ListByEntity возвращает файлы, привязанные к конкретной сущности.
+// year — необязательный фильтр по году загрузки файла (created_at); 0 означает
+// «без фильтра», возвращаются файлы за все годы.
+func (s *FileService) ListByEntity(ctx context.Context, entityType, entityID string, year int) ([]repo.ListFilesByEntityRow, error) {
 	files, err := s.repo.ListFilesByEntity(ctx, repo.ListFilesByEntityParams{
 		EntityType: entityType,
 		EntityID:   entityID,
+		Year:       nullYear(year),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list files by entity: %w", err)
@@ -158,17 +162,24 @@ func (s *FileService) ListByEntity(ctx context.Context, entityType, entityID str
 	return files, nil
 }
 
-func (s *FileService) ListByEntityType(ctx context.Context, entityType string) ([]repo.ListFilesByEntityTypeRow, error) {
-	files, err := s.repo.ListFilesByEntityType(ctx, entityType)
+// ListByEntityType возвращает файлы по типу сущности. year — см. ListByEntity.
+func (s *FileService) ListByEntityType(ctx context.Context, entityType string, year int) ([]repo.ListFilesByEntityTypeRow, error) {
+	files, err := s.repo.ListFilesByEntityType(ctx, repo.ListFilesByEntityTypeParams{
+		EntityType: entityType,
+		Year:       nullYear(year),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list files by entity: %w", err)
 	}
 	return files, nil
 }
 
-// ListByCategory возвращает файлы, привязанные к указанной категории.
-func (s *FileService) ListByCategory(ctx context.Context, categoryID string) ([]repo.ListFilesByCategoryRow, error) {
-	files, err := s.repo.ListFilesByCategory(ctx, sql.NullString{String: categoryID, Valid: true})
+// ListByCategory возвращает файлы, привязанные к указанной категории. year — см. ListByEntity.
+func (s *FileService) ListByCategory(ctx context.Context, categoryID string, year int) ([]repo.ListFilesByCategoryRow, error) {
+	files, err := s.repo.ListFilesByCategory(ctx, repo.ListFilesByCategoryParams{
+		CategoryID: sql.NullString{String: categoryID, Valid: true},
+		Year:       nullYear(year),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list files by category: %w", err)
 	}
@@ -221,6 +232,14 @@ func (s *FileService) resolveCategoryID(ctx context.Context, explicitCategoryID,
 }
 
 // --- helpers ---
+
+// nullYear превращает 0 (не указан) в отсутствие фильтра по году.
+func nullYear(year int) sql.NullInt64 {
+	if year == 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(year), Valid: true}
+}
 
 func detectFileType(mimeType string) string {
 	switch {
