@@ -11,6 +11,24 @@ import (
 	"time"
 )
 
+const assignVacationType = `-- name: AssignVacationType :exec
+UPDATE vacations
+SET
+  vacation_type_id = ?
+WHERE
+  id = ?
+`
+
+type AssignVacationTypeParams struct {
+	VacationTypeID sql.NullString `json:"vacationTypeId"`
+	ID             string         `json:"id"`
+}
+
+func (q *Queries) AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error {
+	_, err := q.db.ExecContext(ctx, assignVacationType, arg.VacationTypeID, arg.ID)
+	return err
+}
+
 const createVacation = `-- name: CreateVacation :exec
 INSERT INTO
   vacations (
@@ -19,19 +37,21 @@ INSERT INTO
     end_date,
     total_days,
     description,
-    status
+    status,
+    vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
-	UserID      string          `json:"userId"`
-	StartDate   time.Time       `json:"startDate"`
-	EndDate     time.Time       `json:"endDate"`
-	TotalDays   int32           `json:"totalDays"`
-	Description sql.NullString  `json:"description"`
-	Status      VacationsStatus `json:"status"`
+	UserID         string          `json:"userId"`
+	StartDate      time.Time       `json:"startDate"`
+	EndDate        time.Time       `json:"endDate"`
+	TotalDays      int32           `json:"totalDays"`
+	Description    sql.NullString  `json:"description"`
+	Status         VacationsStatus `json:"status"`
+	VacationTypeID sql.NullString  `json:"vacationTypeId"`
 }
 
 func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) error {
@@ -42,6 +62,7 @@ func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) 
 		arg.TotalDays,
 		arg.Description,
 		arg.Status,
+		arg.VacationTypeID,
 	)
 	return err
 }
@@ -59,22 +80,27 @@ func (q *Queries) DeleteVacation(ctx context.Context, id string) error {
 
 const getAllUsersVacationsByYear = `-- name: GetAllUsersVacationsByYear :many
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(start_date) = YEAR(?)
-  AND YEAR(end_date) = YEAR(?)
+  YEAR(v.start_date) = YEAR(?)
+  AND YEAR(v.end_date) = YEAR(?)
 ORDER BY
-  created_at DESC
+  v.created_at DESC
 `
 
 type GetAllUsersVacationsByYearParams struct {
@@ -82,15 +108,19 @@ type GetAllUsersVacationsByYearParams struct {
 }
 
 type GetAllUsersVacationsByYearRow struct {
-	ID          string          `json:"id"`
-	UserID      string          `json:"userId"`
-	StartDate   time.Time       `json:"startDate"`
-	EndDate     time.Time       `json:"endDate"`
-	TotalDays   int32           `json:"totalDays"`
-	Description string          `json:"description"`
-	Status      VacationsStatus `json:"status"`
-	CreatedAt   sql.NullTime    `json:"createdAt"`
-	UpdatedAt   sql.NullTime    `json:"updatedAt"`
+	ID                         string          `json:"id"`
+	UserID                     string          `json:"userId"`
+	StartDate                  time.Time       `json:"startDate"`
+	EndDate                    time.Time       `json:"endDate"`
+	TotalDays                  int32           `json:"totalDays"`
+	Description                string          `json:"description"`
+	Status                     VacationsStatus `json:"status"`
+	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
+	VacationTypeName           string          `json:"vacationTypeName"`
+	VacationTypeColor          string          `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime    `json:"createdAt"`
+	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
 }
 
 func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUsersVacationsByYearParams) ([]GetAllUsersVacationsByYearRow, error) {
@@ -110,6 +140,10 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 			&i.TotalDays,
 			&i.Description,
 			&i.Status,
+			&i.VacationTypeID,
+			&i.VacationTypeName,
+			&i.VacationTypeColor,
+			&i.VacationTypeAffectsBalance,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -128,13 +162,15 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 
 const getCountVacationsByStatus = `-- name: GetCountVacationsByStatus :one
 SELECT
-  COALESCE(SUM(total_days), 0) as total_days
+  COALESCE(SUM(v.total_days), 0) as total_days
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  user_id = ?
-  AND status = ?
-  AND YEAR(start_date) = YEAR(?)
+  v.user_id = ?
+  AND v.status = ?
+  AND YEAR(v.start_date) = YEAR(?)
+  AND COALESCE(t.affects_balance, TRUE) = TRUE
 `
 
 type GetCountVacationsByStatusParams struct {
@@ -152,31 +188,40 @@ func (q *Queries) GetCountVacationsByStatus(ctx context.Context, arg GetCountVac
 
 const getVacationByID = `-- name: GetVacationByID :one
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  id = ?
+  v.id = ?
 `
 
 type GetVacationByIDRow struct {
-	ID          string          `json:"id"`
-	UserID      string          `json:"userId"`
-	StartDate   time.Time       `json:"startDate"`
-	EndDate     time.Time       `json:"endDate"`
-	TotalDays   int32           `json:"totalDays"`
-	Description string          `json:"description"`
-	Status      VacationsStatus `json:"status"`
-	CreatedAt   sql.NullTime    `json:"createdAt"`
-	UpdatedAt   sql.NullTime    `json:"updatedAt"`
+	ID                         string          `json:"id"`
+	UserID                     string          `json:"userId"`
+	StartDate                  time.Time       `json:"startDate"`
+	EndDate                    time.Time       `json:"endDate"`
+	TotalDays                  int32           `json:"totalDays"`
+	Description                string          `json:"description"`
+	Status                     VacationsStatus `json:"status"`
+	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
+	VacationTypeName           string          `json:"vacationTypeName"`
+	VacationTypeColor          string          `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime    `json:"createdAt"`
+	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
 }
 
 func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error) {
@@ -190,6 +235,10 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.TotalDays,
 		&i.Description,
 		&i.Status,
+		&i.VacationTypeID,
+		&i.VacationTypeName,
+		&i.VacationTypeColor,
+		&i.VacationTypeAffectsBalance,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -198,23 +247,28 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 
 const getVacationsByYear = `-- name: GetVacationsByYear :many
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  user_id = ?
-  AND YEAR(start_date) = YEAR(?)
-  AND YEAR(end_date) = YEAR(?)
+  v.user_id = ?
+  AND YEAR(v.start_date) = YEAR(?)
+  AND YEAR(v.end_date) = YEAR(?)
 ORDER BY
-  created_at DESC
+  v.created_at DESC
 `
 
 type GetVacationsByYearParams struct {
@@ -223,15 +277,19 @@ type GetVacationsByYearParams struct {
 }
 
 type GetVacationsByYearRow struct {
-	ID          string          `json:"id"`
-	UserID      string          `json:"userId"`
-	StartDate   time.Time       `json:"startDate"`
-	EndDate     time.Time       `json:"endDate"`
-	TotalDays   int32           `json:"totalDays"`
-	Description string          `json:"description"`
-	Status      VacationsStatus `json:"status"`
-	CreatedAt   sql.NullTime    `json:"createdAt"`
-	UpdatedAt   sql.NullTime    `json:"updatedAt"`
+	ID                         string          `json:"id"`
+	UserID                     string          `json:"userId"`
+	StartDate                  time.Time       `json:"startDate"`
+	EndDate                    time.Time       `json:"endDate"`
+	TotalDays                  int32           `json:"totalDays"`
+	Description                string          `json:"description"`
+	Status                     VacationsStatus `json:"status"`
+	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
+	VacationTypeName           string          `json:"vacationTypeName"`
+	VacationTypeColor          string          `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime    `json:"createdAt"`
+	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
 }
 
 func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYearParams) ([]GetVacationsByYearRow, error) {
@@ -251,6 +309,10 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 			&i.TotalDays,
 			&i.Description,
 			&i.Status,
+			&i.VacationTypeID,
+			&i.VacationTypeName,
+			&i.VacationTypeColor,
+			&i.VacationTypeAffectsBalance,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

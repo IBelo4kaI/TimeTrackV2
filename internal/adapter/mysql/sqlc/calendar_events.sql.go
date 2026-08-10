@@ -12,8 +12,10 @@ import (
 )
 
 const createCalendarEvents = `-- name: CreateCalendarEvents :execresult
-INSERT INTO calendar_events (event_date, day_type_id, description)
-VALUES (?, ?, ?)
+INSERT INTO
+  calendar_events (event_date, day_type_id, description)
+VALUES
+  (?, ?, ?)
 `
 
 type CreateCalendarEventsParams struct {
@@ -27,7 +29,9 @@ func (q *Queries) CreateCalendarEvents(ctx context.Context, arg CreateCalendarEv
 }
 
 const deleteCalendarEvents = `-- name: DeleteCalendarEvents :exec
-DELETE FROM calendar_events WHERE id = ?
+DELETE FROM calendar_events
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteCalendarEvents(ctx context.Context, id string) error {
@@ -37,14 +41,16 @@ func (q *Queries) DeleteCalendarEvents(ctx context.Context, id string) error {
 
 const getCalendarEventsByDate = `-- name: GetCalendarEventsByDate :one
 SELECT
-    id,
-    event_date,
-    day_type_id,
-    COALESCE(description, '') as description,
-    created_at,
-    updated_at
-FROM calendar_events
-WHERE event_date = ?
+  id,
+  event_date,
+  day_type_id,
+  COALESCE(description, '') as description,
+  created_at,
+  updated_at
+FROM
+  calendar_events
+WHERE
+  event_date = ?
 `
 
 type GetCalendarEventsByDateRow struct {
@@ -72,14 +78,16 @@ func (q *Queries) GetCalendarEventsByDate(ctx context.Context, eventDate time.Ti
 
 const getCalendarEventsById = `-- name: GetCalendarEventsById :one
 SELECT
-    id,
-    event_date,
-    day_type_id,
-    COALESCE(description, '') as description,
-    created_at,
-    updated_at
-FROM calendar_events
-WHERE id = ?
+  id,
+  event_date,
+  day_type_id,
+  COALESCE(description, '') as description,
+  created_at,
+  updated_at
+FROM
+  calendar_events
+WHERE
+  id = ?
 `
 
 type GetCalendarEventsByIdRow struct {
@@ -106,17 +114,20 @@ func (q *Queries) GetCalendarEventsById(ctx context.Context, id string) (GetCale
 }
 
 const getCalendarEventsForMonth = `-- name: GetCalendarEventsForMonth :many
-
 SELECT
-    id,
-    event_date,
-    day_type_id,
-    COALESCE(description, '') as description,
-    created_at,
-    updated_at
-FROM calendar_events
-WHERE YEAR(event_date) = YEAR(?) AND MONTH(event_date) = MONTH(?)
-ORDER BY event_date
+  id,
+  event_date,
+  day_type_id,
+  COALESCE(description, '') as description,
+  created_at,
+  updated_at
+FROM
+  calendar_events
+WHERE
+  YEAR(event_date) = YEAR(?)
+  AND MONTH(event_date) = MONTH(?)
+ORDER BY
+  event_date
 `
 
 type GetCalendarEventsForMonthParams struct {
@@ -168,15 +179,18 @@ func (q *Queries) GetCalendarEventsForMonth(ctx context.Context, arg GetCalendar
 
 const getCalendarEventsForYear = `-- name: GetCalendarEventsForYear :many
 SELECT
-    id,
-    event_date,
-    day_type_id,
-    COALESCE(description, '') as description,
-    created_at,
-    updated_at
-FROM calendar_events
-WHERE YEAR(event_date) = YEAR(?)
-ORDER BY event_date
+  id,
+  event_date,
+  day_type_id,
+  COALESCE(description, '') as description,
+  created_at,
+  updated_at
+FROM
+  calendar_events
+WHERE
+  YEAR(event_date) = YEAR(?)
+ORDER BY
+  event_date
 `
 
 type GetCalendarEventsForYearRow struct {
@@ -221,10 +235,11 @@ func (q *Queries) GetCalendarEventsForYear(ctx context.Context, year time.Time) 
 const updateCalendarEvents = `-- name: UpdateCalendarEvents :exec
 UPDATE calendar_events
 SET
-    event_date = ?,
-    day_type_id = ?,
-    description = ?
-WHERE id = ?
+  event_date = ?,
+  day_type_id = ?,
+  description = ?
+WHERE
+  id = ?
 `
 
 type UpdateCalendarEventsParams struct {

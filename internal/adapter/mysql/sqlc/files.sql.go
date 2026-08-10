@@ -7,6 +7,8 @@ package repo
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const createFile = `-- name: CreateFile :exec
@@ -17,23 +19,25 @@ INSERT INTO
     storage_path,
     mime_type,
     file_type,
+    category_id,
     size_bytes,
     checksum,
     uploaded_by_user_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateFileParams struct {
-	ID               string `json:"id"`
-	OriginalName     string `json:"originalName"`
-	StoragePath      string `json:"storagePath"`
-	MimeType         string `json:"mimeType"`
-	FileType         string `json:"fileType"`
-	SizeBytes        int64  `json:"sizeBytes"`
-	Checksum         string `json:"checksum"`
-	UploadedByUserID string `json:"uploadedByUserId"`
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
 }
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) error {
@@ -43,6 +47,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) error {
 		arg.StoragePath,
 		arg.MimeType,
 		arg.FileType,
+		arg.CategoryID,
 		arg.SizeBytes,
 		arg.Checksum,
 		arg.UploadedByUserID,
@@ -57,6 +62,7 @@ SELECT
   storage_path,
   mime_type,
   file_type,
+  category_id,
   size_bytes,
   checksum,
   uploaded_by_user_id,
@@ -71,15 +77,32 @@ WHERE
   AND is_deleted = FALSE
 `
 
-func (q *Queries) GetFileByID(ctx context.Context, id string) (File, error) {
+type GetFileByIDRow struct {
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+}
+
+func (q *Queries) GetFileByID(ctx context.Context, id string) (GetFileByIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getFileByID, id)
-	var i File
+	var i GetFileByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.OriginalName,
 		&i.StoragePath,
 		&i.MimeType,
 		&i.FileType,
+		&i.CategoryID,
 		&i.SizeBytes,
 		&i.Checksum,
 		&i.UploadedByUserID,
@@ -102,6 +125,83 @@ func (q *Queries) HardDeleteFile(ctx context.Context, id string) error {
 	return err
 }
 
+const listFilesByCategory = `-- name: ListFilesByCategory :many
+SELECT
+  id,
+  original_name,
+  storage_path,
+  mime_type,
+  file_type,
+  category_id,
+  size_bytes,
+  checksum,
+  uploaded_by_user_id,
+  is_deleted,
+  deleted_at,
+  created_at,
+  updated_at
+FROM
+  files
+WHERE
+  category_id = ?
+  AND is_deleted = FALSE
+ORDER BY
+  created_at DESC
+`
+
+type ListFilesByCategoryRow struct {
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+}
+
+func (q *Queries) ListFilesByCategory(ctx context.Context, categoryID sql.NullString) ([]ListFilesByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByCategory, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFilesByCategoryRow
+	for rows.Next() {
+		var i ListFilesByCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalName,
+			&i.StoragePath,
+			&i.MimeType,
+			&i.FileType,
+			&i.CategoryID,
+			&i.SizeBytes,
+			&i.Checksum,
+			&i.UploadedByUserID,
+			&i.IsDeleted,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFilesByUploader = `-- name: ListFilesByUploader :many
 SELECT
   id,
@@ -109,6 +209,7 @@ SELECT
   storage_path,
   mime_type,
   file_type,
+  category_id,
   size_bytes,
   checksum,
   uploaded_by_user_id,
@@ -125,21 +226,38 @@ ORDER BY
   created_at DESC
 `
 
-func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID string) ([]File, error) {
+type ListFilesByUploaderRow struct {
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+}
+
+func (q *Queries) ListFilesByUploader(ctx context.Context, uploadedByUserID string) ([]ListFilesByUploaderRow, error) {
 	rows, err := q.db.QueryContext(ctx, listFilesByUploader, uploadedByUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []File
+	var items []ListFilesByUploaderRow
 	for rows.Next() {
-		var i File
+		var i ListFilesByUploaderRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OriginalName,
 			&i.StoragePath,
 			&i.MimeType,
 			&i.FileType,
+			&i.CategoryID,
 			&i.SizeBytes,
 			&i.Checksum,
 			&i.UploadedByUserID,
@@ -173,5 +291,24 @@ WHERE
 
 func (q *Queries) SoftDeleteFile(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, softDeleteFile, id)
+	return err
+}
+
+const updateFileCategoryAssignment = `-- name: UpdateFileCategoryAssignment :exec
+UPDATE files
+SET
+  category_id = ?
+WHERE
+  id = ?
+  AND is_deleted = FALSE
+`
+
+type UpdateFileCategoryAssignmentParams struct {
+	CategoryID sql.NullString `json:"categoryId"`
+	ID         string         `json:"id"`
+}
+
+func (q *Queries) UpdateFileCategoryAssignment(ctx context.Context, arg UpdateFileCategoryAssignmentParams) error {
+	_, err := q.db.ExecContext(ctx, updateFileCategoryAssignment, arg.CategoryID, arg.ID)
 	return err
 }

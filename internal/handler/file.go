@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"timetrack/internal/response"
@@ -33,6 +34,7 @@ func (h *FileHandler) UploadFile(c fiber.Ctx) error {
 		File:       fileHeader,
 		EntityType: c.FormValue("entity_type"),
 		EntityID:   c.FormValue("entity_id"),
+		CategoryID: c.FormValue("category_id"),
 		UploaderID: uploaderIDStr,
 	})
 	if err != nil {
@@ -44,6 +46,7 @@ func (h *FileHandler) UploadFile(c fiber.Ctx) error {
 		"originalName": f.OriginalName,
 		"mimeType":     f.MimeType,
 		"fileType":     f.FileType,
+		"categoryId":   nullableString(f.CategoryID),
 		"sizeBytes":    f.SizeBytes,
 	})
 }
@@ -101,6 +104,73 @@ func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, files)
+}
+
+// ListFilesByEntityType godoc
+// GET /v1/files/entity/:entityType
+func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
+	entityType := c.Params("entityType")
+
+	if entityType == "" {
+		return response.BadRequest(c)
+	}
+
+	files, err := h.service.ListByEntityType(c.RequestCtx(), entityType)
+	if err != nil {
+		return response.ServerError(c)
+	}
+
+	return response.Success(c, files)
+}
+
+// ListFilesByCategory godoc
+// GET /v1/files/category/:categoryId
+func (h *FileHandler) ListFilesByCategory(c fiber.Ctx) error {
+	categoryID := c.Params("categoryId")
+
+	if categoryID == "" {
+		return response.BadRequest(c)
+	}
+
+	files, err := h.service.ListByCategory(c.RequestCtx(), categoryID)
+	if err != nil {
+		return response.ServerError(c)
+	}
+
+	return response.Success(c, files)
+}
+
+// SetFileCategory godoc
+// PUT /v1/files/:id/category
+// Body: { "categoryId": "..." } — пустая строка убирает файл из категории.
+func (h *FileHandler) SetFileCategory(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	var body struct {
+		CategoryID string `json:"categoryId"`
+	}
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	if err := h.service.SetCategory(c.RequestCtx(), id, body.CategoryID); err != nil {
+		if errors.Is(err, service.ErrFileNotFound) {
+			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "файл не найден"))
+		}
+		return response.ServerError(c)
+	}
+
+	return response.Updated(c)
+}
+
+func nullableString(v sql.NullString) *string {
+	if !v.Valid {
+		return nil
+	}
+	return &v.String
 }
 
 // fiber:context-methods migrated

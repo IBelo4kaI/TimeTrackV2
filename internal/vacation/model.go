@@ -29,9 +29,10 @@ type VacationStats struct {
 }
 
 type VacationCreateRequest struct {
-	UserID      string               `json:"userId"`
-	StartDate   time.Time            `json:"startDate"`
-	EndDate     time.Time            `json:"endDate"`
-	Description string               `json:"description"`
-	Status      repo.VacationsStatus `json:"status"`
+	UserID         string               `json:"userId"`
+	StartDate      time.Time            `json:"startDate"`
+	EndDate        time.Time            `json:"endDate"`
+	Description    string               `json:"description"`
+	Status         repo.VacationsStatus `json:"status"`
+	VacationTypeID string               `json:"vacationTypeId"`
 }

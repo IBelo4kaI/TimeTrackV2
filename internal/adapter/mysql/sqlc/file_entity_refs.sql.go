@@ -7,11 +7,15 @@ package repo
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const createFileEntityRef = `-- name: CreateFileEntityRef :exec
-INSERT INTO file_entity_refs (file_id, entity_type, entity_id)
-VALUES (?, ?, ?)
+INSERT INTO
+  file_entity_refs (file_id, entity_type, entity_id)
+VALUES
+  (?, ?, ?)
 `
 
 type CreateFileEntityRefParams struct {
@@ -26,7 +30,9 @@ func (q *Queries) CreateFileEntityRef(ctx context.Context, arg CreateFileEntityR
 }
 
 const deleteAllFileEntityRefsByFile = `-- name: DeleteAllFileEntityRefsByFile :exec
-DELETE FROM file_entity_refs WHERE file_id = ?
+DELETE FROM file_entity_refs
+WHERE
+  file_id = ?
 `
 
 func (q *Queries) DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error {
@@ -35,12 +41,29 @@ func (q *Queries) DeleteAllFileEntityRefsByFile(ctx context.Context, fileID stri
 }
 
 const listFilesByEntity = `-- name: ListFilesByEntity :many
-SELECT f.id, f.original_name, f.storage_path, f.mime_type, f.file_type, f.size_bytes, f.checksum,
-       f.uploaded_by_user_id, f.is_deleted, f.deleted_at, f.created_at, f.updated_at
-FROM files f
-INNER JOIN file_entity_refs r ON r.file_id = f.id
-WHERE r.entity_type = ? AND r.entity_id = ? AND f.is_deleted = FALSE
-ORDER BY r.created_at DESC
+SELECT
+  f.id,
+  f.original_name,
+  f.storage_path,
+  f.mime_type,
+  f.file_type,
+  f.category_id,
+  f.size_bytes,
+  f.checksum,
+  f.uploaded_by_user_id,
+  f.is_deleted,
+  f.deleted_at,
+  f.created_at,
+  f.updated_at
+FROM
+  files f
+  INNER JOIN file_entity_refs r ON r.file_id = f.id
+WHERE
+  r.entity_type = ?
+  AND r.entity_id = ?
+  AND f.is_deleted = FALSE
+ORDER BY
+  r.created_at DESC
 `
 
 type ListFilesByEntityParams struct {
@@ -48,21 +71,38 @@ type ListFilesByEntityParams struct {
 	EntityID   string `json:"entityId"`
 }
 
-func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]File, error) {
+type ListFilesByEntityRow struct {
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+}
+
+func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error) {
 	rows, err := q.db.QueryContext(ctx, listFilesByEntity, arg.EntityType, arg.EntityID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []File
+	var items []ListFilesByEntityRow
 	for rows.Next() {
-		var i File
+		var i ListFilesByEntityRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OriginalName,
 			&i.StoragePath,
 			&i.MimeType,
 			&i.FileType,
+			&i.CategoryID,
 			&i.SizeBytes,
 			&i.Checksum,
 			&i.UploadedByUserID,
@@ -70,6 +110,90 @@ func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityPa
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFilesByEntityType = `-- name: ListFilesByEntityType :many
+SELECT
+  f.id,
+  f.original_name,
+  f.storage_path,
+  f.mime_type,
+  f.file_type,
+  f.category_id,
+  f.size_bytes,
+  f.checksum,
+  f.uploaded_by_user_id,
+  f.is_deleted,
+  f.deleted_at,
+  f.created_at,
+  f.updated_at,
+  r.entity_type,
+  r.entity_id
+FROM
+  files f
+  INNER JOIN file_entity_refs r ON r.file_id = f.id
+WHERE
+  r.entity_type = ?
+  AND f.is_deleted = FALSE
+ORDER BY
+  r.created_at DESC
+`
+
+type ListFilesByEntityTypeRow struct {
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	CategoryID       sql.NullString `json:"categoryId"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+	EntityType       string         `json:"entityType"`
+	EntityID         string         `json:"entityId"`
+}
+
+func (q *Queries) ListFilesByEntityType(ctx context.Context, entityType string) ([]ListFilesByEntityTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFilesByEntityType, entityType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFilesByEntityTypeRow
+	for rows.Next() {
+		var i ListFilesByEntityTypeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalName,
+			&i.StoragePath,
+			&i.MimeType,
+			&i.FileType,
+			&i.CategoryID,
+			&i.SizeBytes,
+			&i.Checksum,
+			&i.UploadedByUserID,
+			&i.IsDeleted,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.EntityType,
+			&i.EntityID,
 		); err != nil {
 			return nil, err
 		}

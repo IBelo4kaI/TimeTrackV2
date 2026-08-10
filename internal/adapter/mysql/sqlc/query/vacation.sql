@@ -1,23 +1,35 @@
 -- name: GetVacationByID :one
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  id = ?;
+  v.id = ?;
 
 -- name: UpdateVacationStatus :exec
 UPDATE vacations
 SET
   status = ?
+WHERE
+  id = ?;
+
+-- name: AssignVacationType :exec
+UPDATE vacations
+SET
+  vacation_type_id = ?
 WHERE
   id = ?;
 
@@ -28,42 +40,52 @@ WHERE
 
 -- name: GetVacationsByYear :many
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  user_id = sqlc.arg (user_id)
-  AND YEAR(start_date) = YEAR(sqlc.arg (year))
-  AND YEAR(end_date) = YEAR(sqlc.arg (year))
+  v.user_id = sqlc.arg (user_id)
+  AND YEAR(v.start_date) = YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
 ORDER BY
-  created_at DESC;
+  v.created_at DESC;
 
 -- name: GetAllUsersVacationsByYear :many
 SELECT
-  id,
-  user_id,
-  start_date,
-  end_date,
-  total_days,
-  COALESCE(description, '') as description,
-  status,
-  created_at,
-  updated_at
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  COALESCE(v.description, '') as description,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color,
+  COALESCE(t.affects_balance, TRUE) as vacation_type_affects_balance,
+  v.created_at,
+  v.updated_at
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(start_date) = YEAR(sqlc.arg (year))
-  AND YEAR(end_date) = YEAR(sqlc.arg (year))
+  YEAR(v.start_date) = YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
 ORDER BY
-  created_at DESC;
+  v.created_at DESC;
 
 -- name: CreateVacation :exec
 INSERT INTO
@@ -73,17 +95,20 @@ INSERT INTO
     end_date,
     total_days,
     description,
-    status
+    status,
+    vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountVacationsByStatus :one
 SELECT
-  COALESCE(SUM(total_days), 0) as total_days
+  COALESCE(SUM(v.total_days), 0) as total_days
 FROM
-  vacations
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  user_id = ?
-  AND status = ?
-  AND YEAR(start_date) = YEAR(sqlc.arg (year));
+  v.user_id = ?
+  AND v.status = ?
+  AND YEAR(v.start_date) = YEAR(sqlc.arg (year))
+  AND COALESCE(t.affects_balance, TRUE) = TRUE;

@@ -42,6 +42,10 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
 		handler.UpdateVacationStatus)
 
+	router.Put("/:id/type",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
+		handler.UpdateVacationType)
+
 	// загрузка файла; просмотр: GET /v1/files/entity/vacation/:id, удаление: DELETE /v1/files/:id
 	router.Post("/:id/file",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),

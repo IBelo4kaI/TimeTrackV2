@@ -8,6 +8,7 @@ import (
 	"timetrack/internal/calendar"
 	calendarevent "timetrack/internal/calendar_event"
 	daytype "timetrack/internal/day_type"
+	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
 	"timetrack/internal/middleware"
 	"timetrack/internal/service"
@@ -15,6 +16,7 @@ import (
 	systemsetting "timetrack/internal/system_setting"
 	usertimeentry "timetrack/internal/user_time_entry"
 	vacation "timetrack/internal/vacation"
+	vacationtype "timetrack/internal/vacation_type"
 	workstandard "timetrack/internal/work_standard"
 
 	"github.com/gofiber/fiber/v3"
@@ -94,10 +96,33 @@ func (app *application) mount() *fiber.App {
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
 		fileHandler.ListFilesByEntity)
 
+	// permission files:read
+	fileRouter.Get("/entity/:entityType",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		fileHandler.ListFilesByEntityType)
+
+	// permission files:read
+	fileRouter.Get("/category/:categoryId",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		fileHandler.ListFilesByCategory)
+
+	// permission files:edit
+	fileRouter.Put("/:id/category",
+		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "edit"}),
+		fileHandler.SetFileCategory)
+
 	// permission files:delete
 	fileRouter.Delete("/:id",
 		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "delete"}),
 		fileHandler.DeleteFile)
+
+	// File category routes (дерево категорий файлов)
+	fileCategoryService := filecategory.NewService(repo.New(app.db))
+	filecategory.SetupRoutes(v1, fileCategoryService, app.grpcClient, app.config.prefix)
+
+	// Vacation type routes
+	vacationTypeService := vacationtype.NewService(repo.New(app.db))
+	vacationtype.SetupRoutes(v1, vacationTypeService, app.grpcClient, app.config.prefix)
 
 	// System settings routes
 	systemSettingService := systemsetting.NewService(repo.New(app.db))

@@ -3,6 +3,7 @@ package vacation
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -29,8 +30,12 @@ type Service interface {
 	CreateVacationReport(ctx context.Context, vacation VacationCreateRequest) error
 	ApproveVacation(ctx context.Context, vacationID string) error
 	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error
+	UpdateVacationType(ctx context.Context, vacationID string, vacationTypeID string) error
 	DeleteVacation(ctx context.Context, vacationID string) error
 }
+
+// defaultVacationTypeSystemName — тип отпуска, назначаемый по умолчанию, если клиент его не указал.
+const defaultVacationTypeSystemName = "paid"
 
 func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service) Service {
 	return &vacationService{repo: repo, db: db, userTimeEntryService: userTimeEntryService}
@@ -77,14 +82,20 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		desc = sql.NullString{Valid: false}
 	}
 
+	vacationTypeID, err := s.resolveVacationTypeID(ctx, vacation.VacationTypeID)
+	if err != nil {
+		return err
+	}
+
 	// Создаем отпуск в базе данных
 	err = s.repo.CreateVacation(ctx, repo.CreateVacationParams{
-		UserID:      vacation.UserID,
-		StartDate:   vacation.StartDate,
-		EndDate:     vacation.EndDate,
-		TotalDays:   int32(totalDays.TotalVacationDays),
-		Description: desc,
-		Status:      vacation.Status,
+		UserID:         vacation.UserID,
+		StartDate:      vacation.StartDate,
+		EndDate:        vacation.EndDate,
+		TotalDays:      int32(totalDays.TotalVacationDays),
+		Description:    desc,
+		Status:         vacation.Status,
+		VacationTypeID: vacationTypeID,
 	})
 	if err != nil {
 		return err
@@ -253,6 +264,48 @@ func (s *vacationService) GetVacationsStats(ctx context.Context, userId string, 
 		Pending: parser.InterfaceToInt(pendings),
 		Free:    int(remainingVacationDays),
 	}, nil
+}
+
+// resolveVacationTypeID возвращает sql.NullString с ID типа отпуска. Если типа явно не
+// передали, подставляется тип по умолчанию (system_name = "paid"); если такого типа
+// в базе ещё нет (например, миграция не накатилась), отпуск создаётся без типа.
+func (s *vacationService) resolveVacationTypeID(ctx context.Context, vacationTypeID string) (sql.NullString, error) {
+	if vacationTypeID != "" {
+		if _, err := s.repo.GetVacationTypeByID(ctx, vacationTypeID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return sql.NullString{}, fmt.Errorf("тип отпуска не найден")
+			}
+			return sql.NullString{}, err
+		}
+		return sql.NullString{String: vacationTypeID, Valid: true}, nil
+	}
+
+	defaultType, err := s.repo.GetVacationTypeBySystemName(ctx, defaultVacationTypeSystemName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.NullString{}, nil
+		}
+		return sql.NullString{}, err
+	}
+	return sql.NullString{String: defaultType.ID, Valid: true}, nil
+}
+
+func (s *vacationService) UpdateVacationType(ctx context.Context, vacationID string, vacationTypeID string) error {
+	typeID, err := s.resolveVacationTypeID(ctx, vacationTypeID)
+	if err != nil {
+		return err
+	}
+	if !typeID.Valid {
+		return fmt.Errorf("тип отпуска не найден")
+	}
+
+	if err := s.repo.AssignVacationType(ctx, repo.AssignVacationTypeParams{
+		VacationTypeID: typeID,
+		ID:             vacationID,
+	}); err != nil {
+		return fmt.Errorf("failed to update vacation type: %w", err)
+	}
+	return nil
 }
 
 // Вспомогательный метод — логика определения типа дня (вынесена из оригинала)

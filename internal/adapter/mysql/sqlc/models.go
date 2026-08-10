@@ -207,18 +207,30 @@ type DayType struct {
 }
 
 type File struct {
-	ID               string       `json:"id"`
-	OriginalName     string       `json:"originalName"`
-	StoragePath      string       `json:"storagePath"`
-	MimeType         string       `json:"mimeType"`
-	FileType         string       `json:"fileType"`
-	SizeBytes        int64        `json:"sizeBytes"`
-	Checksum         string       `json:"checksum"`
-	UploadedByUserID string       `json:"uploadedByUserId"`
-	IsDeleted        bool         `json:"isDeleted"`
-	DeletedAt        sql.NullTime `json:"deletedAt"`
-	CreatedAt        time.Time    `json:"createdAt"`
-	UpdatedAt        time.Time    `json:"updatedAt"`
+	ID               string         `json:"id"`
+	OriginalName     string         `json:"originalName"`
+	StoragePath      string         `json:"storagePath"`
+	MimeType         string         `json:"mimeType"`
+	FileType         string         `json:"fileType"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Checksum         string         `json:"checksum"`
+	UploadedByUserID string         `json:"uploadedByUserId"`
+	IsDeleted        bool           `json:"isDeleted"`
+	DeletedAt        sql.NullTime   `json:"deletedAt"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+	CategoryID       sql.NullString `json:"categoryId"`
+}
+
+type FileCategory struct {
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	ParentID   sql.NullString `json:"parentId"`
+	ColorCode  sql.NullString `json:"colorCode"`
+	SortOrder  int32          `json:"sortOrder"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
+	SystemName sql.NullString `json:"systemName"`
 }
 
 type FileEntityRef struct {
@@ -287,6 +299,19 @@ type Vacation struct {
 	ManagerComment  sql.NullString  `json:"managerComment"`
 	StatusUpdatedAt sql.NullTime    `json:"statusUpdatedAt"`
 	Status          VacationsStatus `json:"status"`
+	VacationTypeID  sql.NullString  `json:"vacationTypeId"`
+}
+
+type VacationType struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	SystemName     string    `json:"systemName"`
+	ColorCode      string    `json:"colorCode"`
+	AffectsBalance bool      `json:"affectsBalance"`
+	IsActive       bool      `json:"isActive"`
+	SortOrder      int32     `json:"sortOrder"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type WorkStandard struct {

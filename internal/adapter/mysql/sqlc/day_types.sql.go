@@ -10,7 +10,17 @@ import (
 )
 
 const createDayType = `-- name: CreateDayType :exec
-INSERT INTO day_types (name, system_name, is_work_day, affects_vacation, is_user_select, color_code) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO
+  day_types (
+    name,
+    system_name,
+    is_work_day,
+    affects_vacation,
+    is_user_select,
+    color_code
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?)
 `
 
 type CreateDayTypeParams struct {
@@ -35,7 +45,9 @@ func (q *Queries) CreateDayType(ctx context.Context, arg CreateDayTypeParams) er
 }
 
 const deleteDayType = `-- name: DeleteDayType :exec
-DELETE FROM day_types WHERE id = ?
+DELETE FROM day_types
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteDayType(ctx context.Context, id string) error {
@@ -44,7 +56,12 @@ func (q *Queries) DeleteDayType(ctx context.Context, id string) error {
 }
 
 const getDayTypeByID = `-- name: GetDayTypeByID :one
-SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types WHERE id = ?
+SELECT
+  id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at
+FROM
+  day_types
+WHERE
+  id = ?
 `
 
 func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error) {
@@ -65,7 +82,12 @@ func (q *Queries) GetDayTypeByID(ctx context.Context, id string) (DayType, error
 }
 
 const getDayTypeBySystemName = `-- name: GetDayTypeBySystemName :one
-SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types WHERE system_name = ?
+SELECT
+  id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at
+FROM
+  day_types
+WHERE
+  system_name = ?
 `
 
 func (q *Queries) GetDayTypeBySystemName(ctx context.Context, systemName string) (DayType, error) {
@@ -86,8 +108,10 @@ func (q *Queries) GetDayTypeBySystemName(ctx context.Context, systemName string)
 }
 
 const getDayTypes = `-- name: GetDayTypes :many
-
-SELECT id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at FROM day_types
+SELECT
+  id, name, system_name, is_work_day, affects_vacation, is_user_select, color_code, created_at, updated_at
+FROM
+  day_types
 `
 
 // ============================================
@@ -127,7 +151,11 @@ func (q *Queries) GetDayTypes(ctx context.Context) ([]DayType, error) {
 }
 
 const updateAffectsVacationDayType = `-- name: UpdateAffectsVacationDayType :exec
-UPDATE day_types SET affects_vacation = ? WHERE id = ?
+UPDATE day_types
+SET
+  affects_vacation = ?
+WHERE
+  id = ?
 `
 
 type UpdateAffectsVacationDayTypeParams struct {
@@ -141,7 +169,11 @@ func (q *Queries) UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAf
 }
 
 const updateColorCodeDayType = `-- name: UpdateColorCodeDayType :exec
-UPDATE day_types SET color_code = ? WHERE id = ?
+UPDATE day_types
+SET
+  color_code = ?
+WHERE
+  id = ?
 `
 
 type UpdateColorCodeDayTypeParams struct {
@@ -155,7 +187,16 @@ func (q *Queries) UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCod
 }
 
 const updateDayType = `-- name: UpdateDayType :exec
-UPDATE day_types SET name = ?, system_name = ?, is_work_day = ?, affects_vacation = ?, is_user_select = ?, color_code = ? WHERE id = ?
+UPDATE day_types
+SET
+  name = ?,
+  system_name = ?,
+  is_work_day = ?,
+  affects_vacation = ?,
+  is_user_select = ?,
+  color_code = ?
+WHERE
+  id = ?
 `
 
 type UpdateDayTypeParams struct {
@@ -182,7 +223,11 @@ func (q *Queries) UpdateDayType(ctx context.Context, arg UpdateDayTypeParams) er
 }
 
 const updateIsUserSelectDayType = `-- name: UpdateIsUserSelectDayType :exec
-UPDATE day_types SET is_user_select = ? WHERE id = ?
+UPDATE day_types
+SET
+  is_user_select = ?
+WHERE
+  id = ?
 `
 
 type UpdateIsUserSelectDayTypeParams struct {
@@ -196,7 +241,11 @@ func (q *Queries) UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUse
 }
 
 const updateIsWorkDayType = `-- name: UpdateIsWorkDayType :exec
-UPDATE day_types SET is_work_day = ? WHERE id = ?
+UPDATE day_types
+SET
+  is_work_day = ?
+WHERE
+  id = ?
 `
 
 type UpdateIsWorkDayTypeParams struct {
@@ -210,7 +259,11 @@ func (q *Queries) UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTy
 }
 
 const updateNameDayType = `-- name: UpdateNameDayType :exec
-UPDATE day_types SET name = ? WHERE id = ?
+UPDATE day_types
+SET
+  name = ?
+WHERE
+  id = ?
 `
 
 type UpdateNameDayTypeParams struct {
@@ -224,7 +277,11 @@ func (q *Queries) UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypePa
 }
 
 const updateSystemNameDayType = `-- name: UpdateSystemNameDayType :exec
-UPDATE day_types SET system_name = ? WHERE id = ?
+UPDATE day_types
+SET
+  system_name = ?
+WHERE
+  id = ?
 `
 
 type UpdateSystemNameDayTypeParams struct {

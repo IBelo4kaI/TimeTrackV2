@@ -12,8 +12,10 @@ import (
 )
 
 const createUserTimeEntry = `-- name: CreateUserTimeEntry :exec
-INSERT INTO user_time_entries (user_id, entry_date, day_type_id, hours_worked)
-VALUES (?, ?, ?, ?)
+INSERT INTO
+  user_time_entries (user_id, entry_date, day_type_id, hours_worked)
+VALUES
+  (?, ?, ?, ?)
 `
 
 type CreateUserTimeEntryParams struct {
@@ -34,7 +36,10 @@ func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEnt
 }
 
 const deleteUserTimeEntries = `-- name: DeleteUserTimeEntries :exec
-DELETE FROM user_time_entries WHERE entry_date IN (/*SLICE:entry_date*/?) AND user_id = ?
+DELETE FROM user_time_entries
+WHERE
+  entry_date IN (/*SLICE:entry_date*/?)
+  AND user_id = ?
 `
 
 type DeleteUserTimeEntriesParams struct {
@@ -59,7 +64,10 @@ func (q *Queries) DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeE
 }
 
 const deleteUserTimeEntry = `-- name: DeleteUserTimeEntry :exec
-DELETE FROM user_time_entries WHERE entry_date = ? AND user_id = ?
+DELETE FROM user_time_entries
+WHERE
+  entry_date = ?
+  AND user_id = ?
 `
 
 type DeleteUserTimeEntryParams struct {
@@ -74,17 +82,39 @@ func (q *Queries) DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEnt
 
 const getMonthlyStatistics = `-- name: GetMonthlyStatistics :one
 SELECT
-    COALESCE(SUM(ute.hours_worked), 0)                                         AS total_hours,
-    COUNT(DISTINCT CASE WHEN ute.hours_worked > 0 THEN ute.entry_date END)     AS work_days,
-    COUNT(CASE WHEN dt.system_name = 'vacation'  THEN 1 END)                   AS vacation_days,
-    COUNT(CASE WHEN dt.system_name = 'medical'   THEN 1 END)                   AS medical_days,
-    COUNT(CASE WHEN dt.system_name = 'time-off'  THEN 1 END)                   AS time_off_days,
-    COUNT(CASE WHEN dt.system_name = 'decree'    THEN 1 END)                   AS decree_days
-FROM user_time_entries ute
-LEFT JOIN day_types dt ON ute.day_type_id = dt.id
-WHERE ute.user_id = ?
-    AND YEAR(ute.entry_date) = YEAR(?)
-    AND MONTH(ute.entry_date) = MONTH(?)
+  COALESCE(SUM(ute.hours_worked), 0) AS total_hours,
+  COUNT(
+    DISTINCT CASE
+      WHEN ute.hours_worked > 0 THEN ute.entry_date
+    END
+  ) AS work_days,
+  COUNT(
+    CASE
+      WHEN dt.system_name = 'vacation' THEN 1
+    END
+  ) AS vacation_days,
+  COUNT(
+    CASE
+      WHEN dt.system_name = 'medical' THEN 1
+    END
+  ) AS medical_days,
+  COUNT(
+    CASE
+      WHEN dt.system_name = 'time-off' THEN 1
+    END
+  ) AS time_off_days,
+  COUNT(
+    CASE
+      WHEN dt.system_name = 'decree' THEN 1
+    END
+  ) AS decree_days
+FROM
+  user_time_entries ute
+  LEFT JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE
+  ute.user_id = ?
+  AND YEAR(ute.entry_date) = YEAR(?)
+  AND MONTH(ute.entry_date) = MONTH(?)
 `
 
 type GetMonthlyStatisticsParams struct {
@@ -118,13 +148,15 @@ func (q *Queries) GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatis
 
 const getTotalDaysByMonthWithSystemName = `-- name: GetTotalDaysByMonthWithSystemName :one
 SELECT
-    COALESCE(COUNT(ute.entry_date), 0) as total_days
-FROM user_time_entries ute
-JOIN day_types dt ON ute.day_type_id = dt.id
-WHERE ute.user_id = ?
-    AND YEAR(ute.entry_date) = YEAR(?)
-    AND MONTH(ute.entry_date) = MONTH(?)
-    AND dt.system_name = ?
+  COALESCE(COUNT(ute.entry_date), 0) as total_days
+FROM
+  user_time_entries ute
+  JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE
+  ute.user_id = ?
+  AND YEAR(ute.entry_date) = YEAR(?)
+  AND MONTH(ute.entry_date) = MONTH(?)
+  AND dt.system_name = ?
 `
 
 type GetTotalDaysByMonthWithSystemNameParams struct {
@@ -148,12 +180,14 @@ func (q *Queries) GetTotalDaysByMonthWithSystemName(ctx context.Context, arg Get
 
 const getTotalDaysByYearWithSystemName = `-- name: GetTotalDaysByYearWithSystemName :one
 SELECT
-    COALESCE(COUNT(ute.entry_date), 0) as total_days
-FROM user_time_entries ute
-JOIN day_types dt ON ute.day_type_id = dt.id
-WHERE ute.user_id = ?
-    AND YEAR(ute.entry_date) = YEAR(?)
-    AND dt.system_name = ?
+  COALESCE(COUNT(ute.entry_date), 0) as total_days
+FROM
+  user_time_entries ute
+  JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE
+  ute.user_id = ?
+  AND YEAR(ute.entry_date) = YEAR(?)
+  AND dt.system_name = ?
 `
 
 type GetTotalDaysByYearWithSystemNameParams struct {
@@ -171,9 +205,13 @@ func (q *Queries) GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetT
 
 const getTotalHoursByMonth = `-- name: GetTotalHoursByMonth :one
 SELECT
-    COALESCE(SUM(hours_worked), 0) as total_hours
-FROM user_time_entries
-WHERE user_id = ? AND YEAR(entry_date) = YEAR(?) AND MONTH(entry_date) = MONTH(?)
+  COALESCE(SUM(hours_worked), 0) as total_hours
+FROM
+  user_time_entries
+WHERE
+  user_id = ?
+  AND YEAR(entry_date) = YEAR(?)
+  AND MONTH(entry_date) = MONTH(?)
 `
 
 type GetTotalHoursByMonthParams struct {
@@ -191,9 +229,12 @@ func (q *Queries) GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByM
 
 const getTotalHoursByYear = `-- name: GetTotalHoursByYear :one
 SELECT
-    COALESCE(SUM(hours_worked), 0) as total_hours
-FROM user_time_entries
-WHERE user_id = ? AND YEAR(entry_date) = YEAR(?)
+  COALESCE(SUM(hours_worked), 0) as total_hours
+FROM
+  user_time_entries
+WHERE
+  user_id = ?
+  AND YEAR(entry_date) = YEAR(?)
 `
 
 type GetTotalHoursByYearParams struct {
@@ -209,11 +250,16 @@ func (q *Queries) GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYe
 }
 
 const getUserTimeEntriesForMonth = `-- name: GetUserTimeEntriesForMonth :many
-
-SELECT id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
-FROM user_time_entries
-WHERE user_id = ? AND YEAR(entry_date) = YEAR(?) AND MONTH(entry_date) = MONTH(?)
-ORDER BY entry_date
+SELECT
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+FROM
+  user_time_entries
+WHERE
+  user_id = ?
+  AND YEAR(entry_date) = YEAR(?)
+  AND MONTH(entry_date) = MONTH(?)
+ORDER BY
+  entry_date
 `
 
 type GetUserTimeEntriesForMonthParams struct {
@@ -257,9 +303,12 @@ func (q *Queries) GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTim
 }
 
 const getUserTimeEntryById = `-- name: GetUserTimeEntryById :one
-SELECT id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
-FROM user_time_entries
-WHERE id = ?
+SELECT
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+FROM
+  user_time_entries
+WHERE
+  id = ?
 `
 
 func (q *Queries) GetUserTimeEntryById(ctx context.Context, id string) (UserTimeEntry, error) {
@@ -278,9 +327,12 @@ func (q *Queries) GetUserTimeEntryById(ctx context.Context, id string) (UserTime
 }
 
 const getUserTimeEntryByIds = `-- name: GetUserTimeEntryByIds :many
-SELECT id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
-FROM user_time_entries
-WHERE id IN (/*SLICE:ids*/?)
+SELECT
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+FROM
+  user_time_entries
+WHERE
+  id IN (/*SLICE:ids*/?)
 `
 
 func (q *Queries) GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]UserTimeEntry, error) {
@@ -326,13 +378,15 @@ func (q *Queries) GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]Us
 
 const getVacationDaysByMonth = `-- name: GetVacationDaysByMonth :one
 SELECT
-    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
-FROM user_time_entries ute
-JOIN day_types dt ON ute.day_type_id = dt.id
-WHERE ute.user_id = ?
-    AND YEAR(ute.entry_date) = YEAR(?)
-    AND MONTH(ute.entry_date) = MONTH(?)
-    AND dt.system_name = 'vacation'
+  COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM
+  user_time_entries ute
+  JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE
+  ute.user_id = ?
+  AND YEAR(ute.entry_date) = YEAR(?)
+  AND MONTH(ute.entry_date) = MONTH(?)
+  AND dt.system_name = 'vacation'
 `
 
 type GetVacationDaysByMonthParams struct {
@@ -350,12 +404,14 @@ func (q *Queries) GetVacationDaysByMonth(ctx context.Context, arg GetVacationDay
 
 const getVacationDaysByYear = `-- name: GetVacationDaysByYear :one
 SELECT
-    COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
-FROM user_time_entries ute
-JOIN day_types dt ON ute.day_type_id = dt.id
-WHERE ute.user_id = ?
-    AND YEAR(ute.entry_date) = YEAR(?)
-    AND dt.system_name = 'vacation'
+  COALESCE(COUNT(ute.entry_date), 0) as used_vacation_days
+FROM
+  user_time_entries ute
+  JOIN day_types dt ON ute.day_type_id = dt.id
+WHERE
+  ute.user_id = ?
+  AND YEAR(ute.entry_date) = YEAR(?)
+  AND dt.system_name = 'vacation'
 `
 
 type GetVacationDaysByYearParams struct {
@@ -372,12 +428,14 @@ func (q *Queries) GetVacationDaysByYear(ctx context.Context, arg GetVacationDays
 
 const getWorkDaysByMonth = `-- name: GetWorkDaysByMonth :one
 SELECT
-    COALESCE(COUNT(DISTINCT entry_date), 0) as total_days
-FROM user_time_entries
-WHERE user_id = ?
-    AND YEAR(entry_date) = YEAR(?)
-    AND MONTH(entry_date) = MONTH(?)
-    AND hours_worked > 0
+  COALESCE(COUNT(DISTINCT entry_date), 0) as total_days
+FROM
+  user_time_entries
+WHERE
+  user_id = ?
+  AND YEAR(entry_date) = YEAR(?)
+  AND MONTH(entry_date) = MONTH(?)
+  AND hours_worked > 0
 `
 
 type GetWorkDaysByMonthParams struct {
@@ -396,9 +454,11 @@ func (q *Queries) GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonth
 const updateUserTimeEntries = `-- name: UpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
-    day_type_id = ?,
-    hours_worked = ?
-WHERE entry_date IN (/*SLICE:entry_date*/?) AND user_id = ?
+  day_type_id = ?,
+  hours_worked = ?
+WHERE
+  entry_date IN (/*SLICE:entry_date*/?)
+  AND user_id = ?
 `
 
 type UpdateUserTimeEntriesParams struct {
@@ -429,9 +489,11 @@ func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeE
 const updateUserTimeEntry = `-- name: UpdateUserTimeEntry :exec
 UPDATE user_time_entries
 SET
-    day_type_id = ?,
-    hours_worked = ?
-WHERE entry_date = ? AND user_id = ?
+  day_type_id = ?,
+  hours_worked = ?
+WHERE
+  entry_date = ?
+  AND user_id = ?
 `
 
 type UpdateUserTimeEntryParams struct {

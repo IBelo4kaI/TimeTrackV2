@@ -179,6 +179,36 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 	})
 }
 
+func (h *Handler) UpdateVacationType(c fiber.Ctx) error {
+	vacationID := c.Params("id")
+
+	if vacationID == "" {
+		return response.BadRequest(c)
+	}
+
+	var body struct {
+		VacationTypeID string `json:"vacationTypeId"`
+	}
+
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	if body.VacationTypeID == "" {
+		return response.Error(c, http.StatusBadRequest,
+			fiber.NewError(http.StatusBadRequest, "vacationTypeId обязателен"))
+	}
+
+	err := h.service.UpdateVacationType(c.RequestCtx(), vacationID, body.VacationTypeID)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, fiber.Map{
+		"message": "Тип отпуска обновлён",
+	})
+}
+
 func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 	vacationID := c.Params("id")
 

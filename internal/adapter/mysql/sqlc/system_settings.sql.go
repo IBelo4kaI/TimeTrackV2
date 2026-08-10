@@ -11,8 +11,17 @@ import (
 )
 
 const createSystemSetting = `-- name: CreateSystemSetting :exec
-INSERT INTO system_settings (setting_key, setting_value, setting_type, category, description, is_public)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO
+  system_settings (
+    setting_key,
+    setting_value,
+    setting_type,
+    category,
+    description,
+    is_public
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?)
 `
 
 type CreateSystemSettingParams struct {
@@ -37,7 +46,9 @@ func (q *Queries) CreateSystemSetting(ctx context.Context, arg CreateSystemSetti
 }
 
 const deleteSystemSetting = `-- name: DeleteSystemSetting :exec
-DELETE FROM system_settings WHERE setting_key = ?
+DELETE FROM system_settings
+WHERE
+  setting_key = ?
 `
 
 func (q *Queries) DeleteSystemSetting(ctx context.Context, settingKey string) error {
@@ -46,7 +57,12 @@ func (q *Queries) DeleteSystemSetting(ctx context.Context, settingKey string) er
 }
 
 const getPublicSystemSettings = `-- name: GetPublicSystemSettings :many
-SELECT id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at FROM system_settings WHERE is_public = 1
+SELECT
+  id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at
+FROM
+  system_settings
+WHERE
+  is_public = 1
 `
 
 func (q *Queries) GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error) {
@@ -83,7 +99,12 @@ func (q *Queries) GetPublicSystemSettings(ctx context.Context) ([]SystemSetting,
 }
 
 const getSystemSettingByKey = `-- name: GetSystemSettingByKey :one
-SELECT id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at FROM system_settings WHERE setting_key = ?
+SELECT
+  id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at
+FROM
+  system_settings
+WHERE
+  setting_key = ?
 `
 
 func (q *Queries) GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error) {
@@ -104,7 +125,13 @@ func (q *Queries) GetSystemSettingByKey(ctx context.Context, settingKey string) 
 }
 
 const getSystemSettingByKeyAndCategory = `-- name: GetSystemSettingByKeyAndCategory :one
-SELECT id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at FROM system_settings WHERE setting_key = ? AND category = ?
+SELECT
+  id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at
+FROM
+  system_settings
+WHERE
+  setting_key = ?
+  AND category = ?
 `
 
 type GetSystemSettingByKeyAndCategoryParams struct {
@@ -130,8 +157,10 @@ func (q *Queries) GetSystemSettingByKeyAndCategory(ctx context.Context, arg GetS
 }
 
 const getSystemSettings = `-- name: GetSystemSettings :many
-
-SELECT id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at FROM system_settings
+SELECT
+  id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at
+FROM
+  system_settings
 `
 
 // ============================================
@@ -171,7 +200,12 @@ func (q *Queries) GetSystemSettings(ctx context.Context) ([]SystemSetting, error
 }
 
 const getSystemSettingsByCategory = `-- name: GetSystemSettingsByCategory :many
-SELECT id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at FROM system_settings WHERE category = ?
+SELECT
+  id, setting_key, setting_value, setting_type, category, description, is_public, created_at, updated_at
+FROM
+  system_settings
+WHERE
+  category = ?
 `
 
 func (q *Queries) GetSystemSettingsByCategory(ctx context.Context, category sql.NullString) ([]SystemSetting, error) {
@@ -209,8 +243,15 @@ func (q *Queries) GetSystemSettingsByCategory(ctx context.Context, category sql.
 
 const updateSystemSetting = `-- name: UpdateSystemSetting :exec
 UPDATE system_settings
-SET setting_value = ?, setting_type = ?, category = ?, description = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP
-WHERE setting_key = ?
+SET
+  setting_value = ?,
+  setting_type = ?,
+  category = ?,
+  description = ?,
+  is_public = ?,
+  updated_at = CURRENT_TIMESTAMP
+WHERE
+  setting_key = ?
 `
 
 type UpdateSystemSettingParams struct {
@@ -236,8 +277,10 @@ func (q *Queries) UpdateSystemSetting(ctx context.Context, arg UpdateSystemSetti
 
 const updateValueSystemSetting = `-- name: UpdateValueSystemSetting :exec
 UPDATE system_settings
-SET setting_value = ?
-WHERE setting_key = ?
+SET
+  setting_value = ?
+WHERE
+  setting_key = ?
 `
 
 type UpdateValueSystemSettingParams struct {

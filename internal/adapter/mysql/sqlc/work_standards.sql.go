@@ -11,8 +11,17 @@ import (
 )
 
 const createWorkStandard = `-- name: CreateWorkStandard :exec
-INSERT INTO work_standards (user_id, month, year, standard_hours, standard_days, gender)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO
+  work_standards (
+    user_id,
+    month,
+    year,
+    standard_hours,
+    standard_days,
+    gender
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?)
 `
 
 type CreateWorkStandardParams struct {
@@ -37,7 +46,9 @@ func (q *Queries) CreateWorkStandard(ctx context.Context, arg CreateWorkStandard
 }
 
 const deleteWorkStandard = `-- name: DeleteWorkStandard :exec
-DELETE FROM work_standards WHERE id = ?
+DELETE FROM work_standards
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteWorkStandard(ctx context.Context, id string) error {
@@ -46,10 +57,12 @@ func (q *Queries) DeleteWorkStandard(ctx context.Context, id string) error {
 }
 
 const getWorkStandardsById = `-- name: GetWorkStandardsById :one
-
-SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
-FROM work_standards
-WHERE id = ?
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  id = ?
 `
 
 // ============================================
@@ -73,10 +86,16 @@ func (q *Queries) GetWorkStandardsById(ctx context.Context, id string) (WorkStan
 }
 
 const getWorkStandardsByMonth = `-- name: GetWorkStandardsByMonth :many
-SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
-FROM work_standards
-WHERE month = ? AND year = ?
-ORDER BY gender, user_id
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  month = ?
+  AND year = ?
+ORDER BY
+  gender,
+  user_id
 `
 
 type GetWorkStandardsByMonthParams struct {
@@ -118,9 +137,15 @@ func (q *Queries) GetWorkStandardsByMonth(ctx context.Context, arg GetWorkStanda
 }
 
 const getWorkStandardsByMonthAndGenderId = `-- name: GetWorkStandardsByMonthAndGenderId :one
-SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
-FROM work_standards
-WHERE month = ? AND year = ? AND gender = ? AND user_id IS NULL
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  month = ?
+  AND year = ?
+  AND gender = ?
+  AND user_id IS NULL
 `
 
 type GetWorkStandardsByMonthAndGenderIdParams struct {
@@ -147,9 +172,15 @@ func (q *Queries) GetWorkStandardsByMonthAndGenderId(ctx context.Context, arg Ge
 }
 
 const getWorkStandardsByMonthAndGenderIdAndUserId = `-- name: GetWorkStandardsByMonthAndGenderIdAndUserId :one
-SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
-FROM work_standards
-WHERE month = ? AND year = ? AND gender = ? AND user_id = ?
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  month = ?
+  AND year = ?
+  AND gender = ?
+  AND user_id = ?
 `
 
 type GetWorkStandardsByMonthAndGenderIdAndUserIdParams struct {
@@ -182,10 +213,16 @@ func (q *Queries) GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Contex
 }
 
 const getWorkStandardsByYear = `-- name: GetWorkStandardsByYear :many
-SELECT id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
-FROM work_standards
-WHERE year = ?
-ORDER BY month, gender, user_id
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  year = ?
+ORDER BY
+  month,
+  gender,
+  user_id
 `
 
 func (q *Queries) GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error) {
@@ -224,9 +261,10 @@ func (q *Queries) GetWorkStandardsByYear(ctx context.Context, year int32) ([]Wor
 const updateWorkStandard = `-- name: UpdateWorkStandard :exec
 UPDATE work_standards
 SET
-    standard_hours = ?,
-    standard_days = ?
-WHERE id = ?
+  standard_hours = ?,
+  standard_days = ?
+WHERE
+  id = ?
 `
 
 type UpdateWorkStandardParams struct {

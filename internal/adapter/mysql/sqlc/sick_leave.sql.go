@@ -12,8 +12,17 @@ import (
 )
 
 const createSickLeave = `-- name: CreateSickLeave :exec
-INSERT INTO sick_leaves (user_id, start_date, end_date, total_days, description, status)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO
+  sick_leaves (
+    user_id,
+    start_date,
+    end_date,
+    total_days,
+    description,
+    status
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?)
 `
 
 type CreateSickLeaveParams struct {
@@ -38,7 +47,9 @@ func (q *Queries) CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams
 }
 
 const deleteSickLeave = `-- name: DeleteSickLeave :exec
-DELETE FROM sick_leaves WHERE id = ?
+DELETE FROM sick_leaves
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteSickLeave(ctx context.Context, id string) error {
@@ -48,19 +59,22 @@ func (q *Queries) DeleteSickLeave(ctx context.Context, id string) error {
 
 const getAllUsersSickLeavesByYear = `-- name: GetAllUsersSickLeavesByYear :many
 SELECT
-    id,
-    user_id,
-    start_date,
-    end_date,
-    total_days,
-    COALESCE(description, '') as description,
-    status,
-    created_at,
-    updated_at
-FROM sick_leaves
-WHERE YEAR(start_date) = YEAR(?)
-    AND YEAR(end_date) = YEAR(?)
-ORDER BY created_at DESC
+  id,
+  user_id,
+  start_date,
+  end_date,
+  total_days,
+  COALESCE(description, '') as description,
+  status,
+  created_at,
+  updated_at
+FROM
+  sick_leaves
+WHERE
+  YEAR(start_date) = YEAR(?)
+  AND YEAR(end_date) = YEAR(?)
+ORDER BY
+  created_at DESC
 `
 
 type GetAllUsersSickLeavesByYearParams struct {
@@ -113,9 +127,12 @@ func (q *Queries) GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUse
 }
 
 const getCountSickLeavesByStatus = `-- name: GetCountSickLeavesByStatus :one
-SELECT COALESCE(SUM(total_days), 0) as total_days
-FROM sick_leaves
-WHERE user_id = ?
+SELECT
+  COALESCE(SUM(total_days), 0) as total_days
+FROM
+  sick_leaves
+WHERE
+  user_id = ?
   AND status = ?
   AND YEAR(start_date) = YEAR(?)
 `
@@ -135,17 +152,19 @@ func (q *Queries) GetCountSickLeavesByStatus(ctx context.Context, arg GetCountSi
 
 const getSickLeaveByID = `-- name: GetSickLeaveByID :one
 SELECT
-    id,
-    user_id,
-    start_date,
-    end_date,
-    total_days,
-    COALESCE(description, '') as description,
-    status,
-    created_at,
-    updated_at
-FROM sick_leaves
-WHERE id = ?
+  id,
+  user_id,
+  start_date,
+  end_date,
+  total_days,
+  COALESCE(description, '') as description,
+  status,
+  created_at,
+  updated_at
+FROM
+  sick_leaves
+WHERE
+  id = ?
 `
 
 type GetSickLeaveByIDRow struct {
@@ -179,20 +198,23 @@ func (q *Queries) GetSickLeaveByID(ctx context.Context, id string) (GetSickLeave
 
 const getSickLeavesByYear = `-- name: GetSickLeavesByYear :many
 SELECT
-    id,
-    user_id,
-    start_date,
-    end_date,
-    total_days,
-    COALESCE(description, '') as description,
-    status,
-    created_at,
-    updated_at
-FROM sick_leaves
-WHERE user_id = ?
-    AND YEAR(start_date) = YEAR(?)
-    AND YEAR(end_date) = YEAR(?)
-ORDER BY created_at DESC
+  id,
+  user_id,
+  start_date,
+  end_date,
+  total_days,
+  COALESCE(description, '') as description,
+  status,
+  created_at,
+  updated_at
+FROM
+  sick_leaves
+WHERE
+  user_id = ?
+  AND YEAR(start_date) = YEAR(?)
+  AND YEAR(end_date) = YEAR(?)
+ORDER BY
+  created_at DESC
 `
 
 type GetSickLeavesByYearParams struct {
@@ -247,8 +269,10 @@ func (q *Queries) GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYe
 
 const updateSickLeaveStatus = `-- name: UpdateSickLeaveStatus :exec
 UPDATE sick_leaves
-SET status = ?
-WHERE id = ?
+SET
+  status = ?
+WHERE
+  id = ?
 `
 
 type UpdateSickLeaveStatusParams struct {

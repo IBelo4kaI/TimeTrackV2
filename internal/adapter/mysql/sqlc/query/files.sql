@@ -6,12 +6,13 @@ INSERT INTO
     storage_path,
     mime_type,
     file_type,
+    category_id,
     size_bytes,
     checksum,
     uploaded_by_user_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetFileByID :one
 SELECT
@@ -20,6 +21,7 @@ SELECT
   storage_path,
   mime_type,
   file_type,
+  category_id,
   size_bytes,
   checksum,
   uploaded_by_user_id,
@@ -40,6 +42,7 @@ SELECT
   storage_path,
   mime_type,
   file_type,
+  category_id,
   size_bytes,
   checksum,
   uploaded_by_user_id,
@@ -54,6 +57,37 @@ WHERE
   AND is_deleted = FALSE
 ORDER BY
   created_at DESC;
+
+-- name: ListFilesByCategory :many
+SELECT
+  id,
+  original_name,
+  storage_path,
+  mime_type,
+  file_type,
+  category_id,
+  size_bytes,
+  checksum,
+  uploaded_by_user_id,
+  is_deleted,
+  deleted_at,
+  created_at,
+  updated_at
+FROM
+  files
+WHERE
+  category_id = ?
+  AND is_deleted = FALSE
+ORDER BY
+  created_at DESC;
+
+-- name: UpdateFileCategoryAssignment :exec
+UPDATE files
+SET
+  category_id = ?
+WHERE
+  id = ?
+  AND is_deleted = FALSE;
 
 -- name: SoftDeleteFile :exec
 UPDATE files
