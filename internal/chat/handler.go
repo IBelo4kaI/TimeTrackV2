@@ -173,23 +173,51 @@ func (h Handler) SendMessage(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	message, err := h.service.SendMessage(c.RequestCtx(), c.Params("id"), callerID(c), body.Body)
+	ref, err := entityRefFromRequest(body)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	message, err := h.service.SendMessage(c.RequestCtx(), c.Params("id"), callerID(c), body.Body, ref)
 	if err != nil {
 		return mapError(c, err)
 	}
 	return response.Success(c, message)
 }
 
+// entityRefFromRequest достаёт *EntityRef из плоских полей запроса. Type/ID
+// должны быть заданы вместе — либо ссылки нет вообще (nil, обычное
+// сообщение), либо она полная.
+func entityRefFromRequest(body SendMessageRequest) (*EntityRef, error) {
+	if body.EntityType == "" && body.EntityID == "" {
+		return nil, nil
+	}
+	if body.EntityType == "" || body.EntityID == "" {
+		return nil, ErrBadEntityRef
+	}
+	return &EntityRef{
+		Type:     body.EntityType,
+		ID:       body.EntityID,
+		Title:    body.EntityTitle,
+		Subtitle: body.EntitySubtitle,
+	}, nil
+}
+
 // SendFileMessage godoc
 // POST /chats/:id/messages/file
-// multipart form: file (required), body (optional caption)
+// multipart form: file (required, можно несколько полей "file"), body (optional caption)
 func (h Handler) SendFileMessage(c fiber.Ctx) error {
-	fileHeader, err := c.FormFile("file")
+	form, err := c.MultipartForm()
 	if err != nil {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
 	}
 
-	message, err := h.service.SendFileMessage(c.RequestCtx(), c.Params("id"), callerID(c), c.FormValue("body"), fileHeader)
+	files := form.File["file"]
+	if len(files) == 0 {
+		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
+	}
+
+	message, err := h.service.SendFileMessage(c.RequestCtx(), c.Params("id"), callerID(c), c.FormValue("body"), files)
 	if err != nil {
 		return mapError(c, err)
 	}
@@ -270,7 +298,8 @@ func mapError(c fiber.Ctx, err error) error {
 	case errors.Is(err, ErrNotParticipant), errors.Is(err, ErrNotOwnMessage), errors.Is(err, ErrNotAllowed):
 		return response.Error(c, http.StatusForbidden, err)
 	case errors.Is(err, ErrBadChatType), errors.Is(err, ErrNoParticipants),
-		errors.Is(err, ErrEmptyBody), errors.Is(err, ErrDirectTwoUsers):
+		errors.Is(err, ErrEmptyBody), errors.Is(err, ErrDirectTwoUsers),
+		errors.Is(err, ErrBadEntityRef):
 		return response.Error(c, http.StatusBadRequest, err)
 	default:
 		return response.Error(c, http.StatusInternalServerError, err)

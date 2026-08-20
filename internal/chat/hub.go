@@ -17,6 +17,11 @@ const (
 	// попросить фронт перезапросить список, чем гонять персонализированный
 	// снапшот через один и тот же ивент на всех.
 	EventChatCreated EventType = "chat_created"
+	// EventParticipantRemoved — из группового чата убрали участника (или он
+	// вышел сам). Шлётся ОСТАВШИМСЯ участникам, чтобы обновить состав в уже
+	// открытом треде; самому удалённому вместо этого уходит EventChatDeleted
+	// (чат у него просто пропадает — RemoveParticipant в service.go).
+	EventParticipantRemoved EventType = "participant_removed"
 )
 
 // Event — конверт события для одного SSE-сообщения.

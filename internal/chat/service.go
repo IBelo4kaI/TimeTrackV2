@@ -24,6 +24,7 @@ var (
 	ErrNoParticipants  = errors.New("нужен хотя бы один участник, кроме себя")
 	ErrEmptyBody       = errors.New("сообщение не может быть пустым")
 	ErrDirectTwoUsers  = errors.New("в личном чате ровно два участника")
+	ErrBadEntityRef    = errors.New("entityType и entityId должны быть заданы вместе")
 )
 
 const defaultMessagesPageSize = 50
@@ -39,8 +40,8 @@ type Service interface {
 
 	// Сообщения
 	ListMessages(ctx context.Context, chatID, callerUserID string, beforeID *uint64, limit int32) ([]ChatMessageDTO, error)
-	SendMessage(ctx context.Context, chatID, callerUserID, body string) (ChatMessageDTO, error)
-	SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, file *multipart.FileHeader) (ChatMessageDTO, error)
+	SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (ChatMessageDTO, error)
+	SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader) (ChatMessageDTO, error)
 	DeleteMessage(ctx context.Context, messageID uint64, callerUserID string) error
 	MarkRead(ctx context.Context, chatID, callerUserID string, messageID uint64) error
 	Typing(ctx context.Context, chatID, callerUserID string) error
@@ -359,15 +360,15 @@ func (s *service) ListMessages(ctx context.Context, chatID, callerUserID string,
 	return result, nil
 }
 
-func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body string) (ChatMessageDTO, error) {
+func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (ChatMessageDTO, error) {
 	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
 		return ChatMessageDTO{}, err
 	}
-	if body == "" {
+	if body == "" && ref == nil {
 		return ChatMessageDTO{}, ErrEmptyBody
 	}
 
-	message, err := s.createMessageRow(ctx, chatID, callerUserID, body)
+	message, err := s.createMessageRow(ctx, chatID, callerUserID, body, ref)
 	if err != nil {
 		return ChatMessageDTO{}, err
 	}
@@ -378,57 +379,78 @@ func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body st
 	return dto, nil
 }
 
-// SendFileMessage — сообщение с вложением. Файл привязывается к message.id
-// через file_entity_refs (entity_type=chat_message), поэтому сначала
-// создаётся сама строка сообщения (тело — необязательная подпись, может
-// быть пустым), а уже потом грузится файл на её id.
-func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, file *multipart.FileHeader) (ChatMessageDTO, error) {
+// maxAttachmentsPerMessage — защита от одного запроса с сотней файлов;
+// разумного продуктового ограничения (в т.ч. на фронте) для чата достаточно.
+const maxAttachmentsPerMessage = 10
+
+// SendFileMessage — сообщение с одним или несколькими вложениями. Каждый
+// файл привязывается к message.id через file_entity_refs
+// (entity_type=chat_message), поэтому сначала создаётся сама строка
+// сообщения (тело — необязательная подпись, может быть пустым), а уже потом
+// по очереди грузятся файлы на её id. Если какой-то файл не загрузился —
+// возвращаем ошибку сразу; сообщение и уже успевшие загрузиться до него
+// вложения при этом остаются (не роллбэчим предыдущие — редкий edge case,
+// не стоит городить ради него распределённую транзакцию по нескольким
+// независимым upload'ам).
+func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader) (ChatMessageDTO, error) {
 	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
 		return ChatMessageDTO{}, err
 	}
-	if file == nil {
+	if len(files) == 0 {
 		return ChatMessageDTO{}, errors.New("файл не найден в запросе")
 	}
+	if len(files) > maxAttachmentsPerMessage {
+		return ChatMessageDTO{}, fmt.Errorf("не более %d файлов за раз", maxAttachmentsPerMessage)
+	}
 
-	message, err := s.createMessageRow(ctx, chatID, callerUserID, caption)
+	message, err := s.createMessageRow(ctx, chatID, callerUserID, caption, nil)
 	if err != nil {
 		return ChatMessageDTO{}, err
 	}
 
-	uploaded, err := s.fileService.Upload(ctx, fileservice.UploadFileParams{
-		File:       file,
-		EntityType: entityTypeChatMessage,
-		EntityID:   strconv.FormatUint(message.ID, 10),
-		UploaderID: callerUserID,
-	})
-	if err != nil {
-		return ChatMessageDTO{}, fmt.Errorf("upload attachment: %w", err)
-	}
-
-	dto := ChatMessageDTO{
-		ChatMessage: message,
-		Attachments: []MessageAttachment{{
+	attachments := make([]MessageAttachment, 0, len(files))
+	for _, file := range files {
+		uploaded, err := s.fileService.Upload(ctx, fileservice.UploadFileParams{
+			File:       file,
+			EntityType: entityTypeChatMessage,
+			EntityID:   strconv.FormatUint(message.ID, 10),
+			UploaderID: callerUserID,
+		})
+		if err != nil {
+			return ChatMessageDTO{}, fmt.Errorf("upload attachment %q: %w", file.Filename, err)
+		}
+		attachments = append(attachments, MessageAttachment{
 			ID:           uploaded.ID,
 			OriginalName: uploaded.OriginalName,
 			MimeType:     uploaded.MimeType,
 			FileType:     uploaded.FileType,
 			SizeBytes:    uploaded.SizeBytes,
-		}},
+		})
 	}
 
+	dto := ChatMessageDTO{ChatMessage: message, Attachments: attachments}
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
 
 	return dto, nil
 }
 
 // createMessageRow — общая часть SendMessage/SendFileMessage: вставка строки
-// сообщения, чтение её обратно и обновление chats.last_message_at.
-func (s *service) createMessageRow(ctx context.Context, chatID, callerUserID, body string) (repo.ChatMessage, error) {
-	res, err := s.repo.CreateChatMessage(ctx, repo.CreateChatMessageParams{
+// сообщения, чтение её обратно и обновление chats.last_message_at. ref может
+// быть nil (обычное сообщение без ссылки на сущность).
+func (s *service) createMessageRow(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (repo.ChatMessage, error) {
+	params := repo.CreateChatMessageParams{
 		ChatID:       chatID,
 		SenderUserID: callerUserID,
 		Body:         body,
-	})
+	}
+	if ref != nil {
+		params.EntityType = sql.NullString{String: ref.Type, Valid: true}
+		params.EntityID = sql.NullString{String: ref.ID, Valid: true}
+		params.EntityTitle = sql.NullString{String: ref.Title, Valid: ref.Title != ""}
+		params.EntitySubtitle = sql.NullString{String: ref.Subtitle, Valid: ref.Subtitle != ""}
+	}
+
+	res, err := s.repo.CreateChatMessage(ctx, params)
 	if err != nil {
 		return repo.ChatMessage{}, fmt.Errorf("create chat message: %w", err)
 	}
@@ -555,14 +577,59 @@ func (s *service) AddParticipant(ctx context.Context, chatID, callerUserID, newU
 	return nil
 }
 
+// RemoveParticipant удаляет участника из группового чата. Себя может убрать
+// любой участник — это и есть «выйти из чата». Убрать кого-то ДРУГОГО может
+// только создатель чата или участник с ролью admin — та же авторизация, что
+// и у DeleteChat; раньше её тут не было вовсе (любой участник мог выкинуть
+// кого угодно, включая админа) — это и есть баг, который фиксит этот метод.
+// В личном чате (ровно два участника) удалять по одному смысла нет — там
+// для этого есть DeleteChat.
 func (s *service) RemoveParticipant(ctx context.Context, chatID, callerUserID, targetUserID string) error {
-	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
+	participant, err := s.ensureParticipant(ctx, chatID, callerUserID)
+	if err != nil {
 		return err
 	}
-	return s.repo.RemoveChatParticipant(ctx, repo.RemoveChatParticipantParams{
+
+	if callerUserID != targetUserID {
+		c, err := s.repo.GetChatByID(ctx, chatID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrChatNotFound
+			}
+			return err
+		}
+		if c.Type != repo.ChatsTypeGroup {
+			return ErrNotAllowed
+		}
+		if c.CreatedByUserID != callerUserID && participant.Role != repo.ChatParticipantsRoleAdmin {
+			return ErrNotAllowed
+		}
+	}
+
+	if err := s.repo.RemoveChatParticipant(ctx, repo.RemoveChatParticipantParams{
 		ChatID: chatID,
 		UserID: targetUserID,
+	}); err != nil {
+		return err
+	}
+
+	if callerUserID != targetUserID {
+		// Удалённому — чат у него просто пропадает, как при DeleteChat.
+		s.hub.SendToUser(targetUserID, Event{
+			Type: EventChatDeleted,
+			Data: map[string]any{"chatId": chatID},
+		})
+	}
+
+	// Оставшимся участникам — обновить состав в уже открытом треде.
+	// broadcastToParticipants сам читает участников УЖЕ ПОСЛЕ удаления, так
+	// что targetUserID среди адресатов не будет.
+	s.broadcastToParticipants(ctx, chatID, Event{
+		Type: EventParticipantRemoved,
+		Data: map[string]any{"chatId": chatID, "userId": targetUserID},
 	})
+
+	return nil
 }
 
 // ============================================

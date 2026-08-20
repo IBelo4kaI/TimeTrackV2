@@ -291,13 +291,17 @@ type Chat struct {
 }
 
 type ChatMessage struct {
-	ID           uint64       `json:"id"`
-	ChatID       string       `json:"chatId"`
-	SenderUserID string       `json:"senderUserId"`
-	Body         string       `json:"body"`
-	IsDeleted    bool         `json:"isDeleted"`
-	DeletedAt    sql.NullTime `json:"deletedAt"`
-	CreatedAt    time.Time    `json:"createdAt"`
+	ID             uint64         `json:"id"`
+	ChatID         string         `json:"chatId"`
+	SenderUserID   string         `json:"senderUserId"`
+	Body           string         `json:"body"`
+	IsDeleted      bool           `json:"isDeleted"`
+	DeletedAt      sql.NullTime   `json:"deletedAt"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	EntityType     sql.NullString `json:"entityType"`
+	EntityID       sql.NullString `json:"entityId"`
+	EntityTitle    sql.NullString `json:"entityTitle"`
+	EntitySubtitle sql.NullString `json:"entitySubtitle"`
 }
 
 type ChatParticipant struct {

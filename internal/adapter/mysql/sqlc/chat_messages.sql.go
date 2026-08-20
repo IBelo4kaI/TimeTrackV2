@@ -12,27 +12,47 @@ import (
 
 const createChatMessage = `-- name: CreateChatMessage :execresult
 INSERT INTO
-  chat_messages (chat_id, sender_user_id, body)
+  chat_messages (
+    chat_id,
+    sender_user_id,
+    body,
+    entity_type,
+    entity_id,
+    entity_title,
+    entity_subtitle
+  )
 VALUES
-  (?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateChatMessageParams struct {
-	ChatID       string `json:"chatId"`
-	SenderUserID string `json:"senderUserId"`
-	Body         string `json:"body"`
+	ChatID         string         `json:"chatId"`
+	SenderUserID   string         `json:"senderUserId"`
+	Body           string         `json:"body"`
+	EntityType     sql.NullString `json:"entityType"`
+	EntityID       sql.NullString `json:"entityId"`
+	EntityTitle    sql.NullString `json:"entityTitle"`
+	EntitySubtitle sql.NullString `json:"entitySubtitle"`
 }
 
 // ============================================
 // chat_messages queries
 // ============================================
 func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (sql.Result, error) {
-	return q.db.ExecContext(ctx, createChatMessage, arg.ChatID, arg.SenderUserID, arg.Body)
+	return q.db.ExecContext(ctx, createChatMessage,
+		arg.ChatID,
+		arg.SenderUserID,
+		arg.Body,
+		arg.EntityType,
+		arg.EntityID,
+		arg.EntityTitle,
+		arg.EntitySubtitle,
+	)
 }
 
 const getChatMessageByID = `-- name: GetChatMessageByID :one
 SELECT
-  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at
+  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at, entity_type, entity_id, entity_title, entity_subtitle
 FROM
   chat_messages
 WHERE
@@ -50,13 +70,17 @@ func (q *Queries) GetChatMessageByID(ctx context.Context, id uint64) (ChatMessag
 		&i.IsDeleted,
 		&i.DeletedAt,
 		&i.CreatedAt,
+		&i.EntityType,
+		&i.EntityID,
+		&i.EntityTitle,
+		&i.EntitySubtitle,
 	)
 	return i, err
 }
 
 const listChatMessages = `-- name: ListChatMessages :many
 SELECT
-  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at
+  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at, entity_type, entity_id, entity_title, entity_subtitle
 FROM
   chat_messages
 WHERE
@@ -97,6 +121,10 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 			&i.IsDeleted,
 			&i.DeletedAt,
 			&i.CreatedAt,
+			&i.EntityType,
+			&i.EntityID,
+			&i.EntityTitle,
+			&i.EntitySubtitle,
 		); err != nil {
 			return nil, err
 		}

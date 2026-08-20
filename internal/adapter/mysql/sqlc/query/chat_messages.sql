@@ -3,9 +3,17 @@
 -- ============================================
 -- name: CreateChatMessage :execresult
 INSERT INTO
-  chat_messages (chat_id, sender_user_id, body)
+  chat_messages (
+    chat_id,
+    sender_user_id,
+    body,
+    entity_type,
+    entity_id,
+    entity_title,
+    entity_subtitle
+  )
 VALUES
-  (?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetChatMessageByID :one
 SELECT

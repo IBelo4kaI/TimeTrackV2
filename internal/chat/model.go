@@ -14,6 +14,23 @@ type CreateChatRequest struct {
 
 type SendMessageRequest struct {
 	Body string `json:"body"`
+	// Необязательная ссылка на сущность (например, заявку на отпуск) —
+	// EntityType/EntityID должны быть заданы вместе или не заданы вовсе.
+	// Title/Subtitle — готовый для отображения снимок с фронта (бэк
+	// содержимое сущности не проверяет и не резолвит, см. миграцию 012).
+	EntityType     string `json:"entityType"`
+	EntityID       string `json:"entityId"`
+	EntityTitle    string `json:"entityTitle"`
+	EntitySubtitle string `json:"entitySubtitle"`
+}
+
+// EntityRef — распарсенная и провалидированная ссылка на сущность из
+// SendMessageRequest, что удобнее гонять по service, чем 4 голые строки.
+type EntityRef struct {
+	Type     string
+	ID       string
+	Title    string
+	Subtitle string
 }
 
 type MarkReadRequest struct {

@@ -337,6 +337,37 @@
 					]
 				},
 				{
+					"name": "Send message with entity reference",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"body\": \"Посмотри, пожалуйста, эту заявку\",\n  \"entityType\": \"vacation\",\n  \"entityId\": \"{{vacationId}}\",\n  \"entityTitle\": \"Заявка на отпуск\",\n  \"entitySubtitle\": \"01.08–15.08.2026 · На рассмотрении\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/messages",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"messages"
+							]
+						}
+					}
+				},
+				{
 					"name": "Send file message",
 					"request": {
 						"method": "POST",
@@ -355,8 +386,13 @@
 									"src": []
 								},
 								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
 									"key": "body",
-									"value": "Подпись к файлу (необязательно)",
+									"value": "Подпись к файлам (необязательно)",
 									"type": "text"
 								}
 							]
