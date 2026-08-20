@@ -11,11 +11,24 @@ import (
 )
 
 type Querier interface {
+	// ============================================
+	// chat_participants queries
+	// ============================================
+	AddChatParticipant(ctx context.Context, arg AddChatParticipantParams) error
 	AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
+	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
+	// ============================================
+	// chats queries
+	// ============================================
+	CreateChat(ctx context.Context, arg CreateChatParams) error
+	// ============================================
+	// chat_messages queries
+	// ============================================
+	CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (sql.Result, error)
 	CreateDayType(ctx context.Context, arg CreateDayTypeParams) error
 	CreateFile(ctx context.Context, arg CreateFileParams) error
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
@@ -28,6 +41,9 @@ type Querier interface {
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
 	DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
+	// Каскадно удаляет chat_participants и chat_messages (ON DELETE CASCADE,
+	// см. миграцию 011_add_chats.sql).
+	DeleteChat(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
 	DeleteFileCategory(ctx context.Context, id string) error
 	DeleteSickLeave(ctx context.Context, id string) error
@@ -47,6 +63,10 @@ type Querier interface {
 	// ============================================
 	GetCalendarEventsForMonth(ctx context.Context, arg GetCalendarEventsForMonthParams) ([]GetCalendarEventsForMonthRow, error)
 	GetCalendarEventsForYear(ctx context.Context, year time.Time) ([]GetCalendarEventsForYearRow, error)
+	GetChatByEntity(ctx context.Context, arg GetChatByEntityParams) (Chat, error)
+	GetChatByID(ctx context.Context, id string) (Chat, error)
+	GetChatMessageByID(ctx context.Context, id uint64) (ChatMessage, error)
+	GetChatParticipant(ctx context.Context, arg GetChatParticipantParams) (ChatParticipant, error)
 	GetCountSickLeavesByStatus(ctx context.Context, arg GetCountSickLeavesByStatusParams) (interface{}, error)
 	GetCountVacationsByStatus(ctx context.Context, arg GetCountVacationsByStatusParams) (interface{}, error)
 	GetDayTypeByID(ctx context.Context, id string) (DayType, error)
@@ -104,13 +124,26 @@ type Querier interface {
 	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	HardDeleteFile(ctx context.Context, id string) error
+	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
+	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
+	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
 	ListFilesByCategory(ctx context.Context, arg ListFilesByCategoryParams) ([]ListFilesByCategoryRow, error)
 	ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error)
+	// Вложения сразу для НЕСКОЛЬКИХ сущностей одного типа за один запрос —
+	// нужно, чтобы отдать список сообщений чата со вложениями без N+1
+	// (см. internal/chat/service.go, attachmentsForMessages).
+	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
+	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
+	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
+	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
+	UpdateChatName(ctx context.Context, arg UpdateChatNameParams) error
+	UpdateChatParticipantRole(ctx context.Context, arg UpdateChatParticipantRoleParams) error
 	UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCodeDayTypeParams) error
 	UpdateDayType(ctx context.Context, arg UpdateDayTypeParams) error
 	UpdateFileCategory(ctx context.Context, arg UpdateFileCategoryParams) error

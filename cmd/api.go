@@ -7,6 +7,7 @@ import (
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/calendar"
 	calendarevent "timetrack/internal/calendar_event"
+	"timetrack/internal/chat"
 	daytype "timetrack/internal/day_type"
 	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
@@ -132,9 +133,21 @@ func (app *application) mount() *fiber.App {
 	workStandardService := workstandard.NewService(repo.New(app.db))
 	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
 
+	// Chat routes (SSE — требует единственного процесса, см. run() и
+	// internal/chat/hub.go про отключённый prefork)
+	chatHub := chat.NewHub()
+	chatService := chat.NewService(repo.New(app.db), chatHub, fileService)
+	chat.SetupRoutes(v1, chatService, app.grpcClient, app.config.prefix)
+
 	return fiberApp
 }
 
 func (app *application) run(f *fiber.App) error {
-	return f.Listen(app.config.addr, fiber.ListenConfig{EnablePrefork: true})
+	// Prefork отключён: чаты держат долгоживущие SSE-соединения в памяти
+	// процесса (см. internal/chat/hub.go). При prefork'е сервер работает как
+	// несколько ОС-процессов, разделяющих порт через SO_REUSEPORT — у каждого
+	// процесса своя память, и хаб одного процесса не видит соединения,
+	// принятые другим. Без единого процесса сообщение может просто не
+	// дойти до части участников чата.
+	return f.Listen(app.config.addr, fiber.ListenConfig{EnablePrefork: false})
 }

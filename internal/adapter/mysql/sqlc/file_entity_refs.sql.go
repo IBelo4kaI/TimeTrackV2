@@ -8,6 +8,7 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -117,6 +118,83 @@ func (q *Queries) ListFilesByEntity(ctx context.Context, arg ListFilesByEntityPa
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFilesByEntityIDs = `-- name: ListFilesByEntityIDs :many
+SELECT
+  f.id,
+  f.original_name,
+  f.mime_type,
+  f.file_type,
+  f.size_bytes,
+  r.entity_id
+FROM
+  files f
+  INNER JOIN file_entity_refs r ON r.file_id = f.id
+WHERE
+  r.entity_type = ?
+  AND r.entity_id IN (/*SLICE:entity_ids*/?)
+  AND f.is_deleted = FALSE
+ORDER BY
+  r.created_at
+`
+
+type ListFilesByEntityIDsParams struct {
+	EntityType string   `json:"entityType"`
+	EntityIds  []string `json:"entityIds"`
+}
+
+type ListFilesByEntityIDsRow struct {
+	ID           string `json:"id"`
+	OriginalName string `json:"originalName"`
+	MimeType     string `json:"mimeType"`
+	FileType     string `json:"fileType"`
+	SizeBytes    int64  `json:"sizeBytes"`
+	EntityID     string `json:"entityId"`
+}
+
+// Вложения сразу для НЕСКОЛЬКИХ сущностей одного типа за один запрос —
+// нужно, чтобы отдать список сообщений чата со вложениями без N+1
+// (см. internal/chat/service.go, attachmentsForMessages).
+func (q *Queries) ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error) {
+	query := listFilesByEntityIDs
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.EntityType)
+	if len(arg.EntityIds) > 0 {
+		for _, v := range arg.EntityIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:entity_ids*/?", strings.Repeat(",?", len(arg.EntityIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:entity_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFilesByEntityIDsRow
+	for rows.Next() {
+		var i ListFilesByEntityIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalName,
+			&i.MimeType,
+			&i.FileType,
+			&i.SizeBytes,
+			&i.EntityID,
 		); err != nil {
 			return nil, err
 		}

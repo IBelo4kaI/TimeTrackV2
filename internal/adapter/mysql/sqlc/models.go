@@ -11,6 +11,90 @@ import (
 	"time"
 )
 
+type ChatParticipantsRole string
+
+const (
+	ChatParticipantsRoleMember ChatParticipantsRole = "member"
+	ChatParticipantsRoleAdmin  ChatParticipantsRole = "admin"
+)
+
+func (e *ChatParticipantsRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ChatParticipantsRole(s)
+	case string:
+		*e = ChatParticipantsRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ChatParticipantsRole: %T", src)
+	}
+	return nil
+}
+
+type NullChatParticipantsRole struct {
+	ChatParticipantsRole ChatParticipantsRole `json:"chatParticipantsRole"`
+	Valid                bool                 `json:"valid"` // Valid is true if ChatParticipantsRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullChatParticipantsRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.ChatParticipantsRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ChatParticipantsRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullChatParticipantsRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ChatParticipantsRole), nil
+}
+
+type ChatsType string
+
+const (
+	ChatsTypeDirect ChatsType = "direct"
+	ChatsTypeGroup  ChatsType = "group"
+)
+
+func (e *ChatsType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ChatsType(s)
+	case string:
+		*e = ChatsType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ChatsType: %T", src)
+	}
+	return nil
+}
+
+type NullChatsType struct {
+	ChatsType ChatsType `json:"chatsType"`
+	Valid     bool      `json:"valid"` // Valid is true if ChatsType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullChatsType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ChatsType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ChatsType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullChatsType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ChatsType), nil
+}
+
 type NotificationsType string
 
 const (
@@ -192,6 +276,37 @@ type CalendarEvent struct {
 	Description sql.NullString `json:"description"`
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
+}
+
+type Chat struct {
+	ID              string         `json:"id"`
+	Type            ChatsType      `json:"type"`
+	Name            sql.NullString `json:"name"`
+	EntityType      sql.NullString `json:"entityType"`
+	EntityID        sql.NullString `json:"entityId"`
+	CreatedByUserID string         `json:"createdByUserId"`
+	LastMessageAt   sql.NullTime   `json:"lastMessageAt"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
+type ChatMessage struct {
+	ID           uint64       `json:"id"`
+	ChatID       string       `json:"chatId"`
+	SenderUserID string       `json:"senderUserId"`
+	Body         string       `json:"body"`
+	IsDeleted    bool         `json:"isDeleted"`
+	DeletedAt    sql.NullTime `json:"deletedAt"`
+	CreatedAt    time.Time    `json:"createdAt"`
+}
+
+type ChatParticipant struct {
+	ChatID            string               `json:"chatId"`
+	UserID            string               `json:"userId"`
+	Role              ChatParticipantsRole `json:"role"`
+	LastReadMessageID sql.NullInt64        `json:"lastReadMessageId"`
+	LastReadAt        sql.NullTime         `json:"lastReadAt"`
+	JoinedAt          time.Time            `json:"joinedAt"`
 }
 
 type DayType struct {

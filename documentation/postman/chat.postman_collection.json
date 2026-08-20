@@ -1,0 +1,587 @@
+{
+	"info": {
+		"name": "TimeTrack — Chats",
+		"description": "Ручное тестирование internal/chat/ (SSE-чаты). Перед запуском см. переменные окружения в chat.postman_environment.json — особенно sessionCookie: session cookie авторизации нужно взять из браузера (DevTools -> Application -> Cookies -> session) после логина через SSO, сервис прав отдельного эндпоинта логина не имеет.\n\nПорядок для happy-path проверки:\n1. Chats -> Create direct chat (или Get or create entity chat)\n2. Chats -> List my chats / Get chat by id\n3. Messages -> Send message (пару раз)\n4. Messages -> List messages\n5. Messages -> Mark read\n6. Stream -> Subscribe (SSE) — открыть в отдельной вкладке Postman, потом из другого запроса/окна отправить сообщение и увидеть message_created в потоке",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080/v1"
+		},
+		{
+			"key": "sessionCookie",
+			"value": ""
+		},
+		{
+			"key": "chatId",
+			"value": ""
+		},
+		{
+			"key": "messageId",
+			"value": ""
+		},
+		{
+			"key": "otherUserId",
+			"value": ""
+		},
+		{
+			"key": "entityType",
+			"value": "vacation"
+		},
+		{
+			"key": "entityId",
+			"value": ""
+		}
+	],
+	"auth": {
+		"type": "noauth"
+	},
+	"item": [
+		{
+			"name": "Chats",
+			"item": [
+				{
+					"name": "List my chats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create direct chat",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"direct\",\n  \"participantIds\": [\"{{otherUserId}}\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  const body = pm.response.json();",
+									"  pm.collectionVariables.set('chatId', body.id);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Create group chat",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"group\",\n  \"name\": \"Тестовая группа\",\n  \"participantIds\": [\"{{otherUserId}}\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get or create entity chat (заявка)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"otherUserIds\": [\"{{otherUserId}}\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/entity/{{entityType}}/{{entityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"entity",
+								"{{entityType}}",
+								"{{entityId}}"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  const body = pm.response.json();",
+									"  pm.collectionVariables.set('chatId', body.id);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Get chat by id",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Rename chat",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Новое название\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/name",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"name"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete chat",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Messages",
+			"item": [
+				{
+					"name": "List messages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/messages?limit=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"messages"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "beforeId",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Send message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"body\": \"Привет, это тестовое сообщение\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/messages",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"messages"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  const body = pm.response.json();",
+									"  pm.collectionVariables.set('messageId', body.id);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Send file message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "body",
+									"value": "Подпись к файлу (необязательно)",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/messages/file",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"messages",
+								"file"
+							]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"  const body = pm.response.json();",
+									"  pm.collectionVariables.set('messageId', body.id);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete message",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/messages/{{messageId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"messages",
+								"{{messageId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Mark read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messageId\": {{messageId}}\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/read",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"read"
+							]
+						}
+					}
+				},
+				{
+					"name": "Typing ping",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/typing",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"typing"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Participants",
+			"item": [
+				{
+					"name": "List participants",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"participants"
+							]
+						}
+					}
+				},
+				{
+					"name": "Add participant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{otherUserId}}\",\n  \"role\": \"member\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"participants"
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove participant",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/participants/{{otherUserId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"participants",
+								"{{otherUserId}}"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Stream",
+			"item": [
+				{
+					"name": "Subscribe (SSE)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/chats/stream",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"stream"
+							]
+						},
+						"description": "Postman показывает SSE-события в реальном времени во вкладке ответа (нужна не совсем древняя версия Postman — Send и оставить открытым). Если не поддерживается — проверить через:\ncurl -N -H \"Cookie: session=...\" http://localhost:8080/v1/chats/stream"
+					}
+				}
+			]
+		}
+	]
+}

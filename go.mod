@@ -3,30 +3,30 @@ module timetrack
 go 1.25.4
 
 require (
-	github.com/go-sql-driver/mysql v1.9.3
-	github.com/gofiber/fiber/v3 v3.2.0
+	github.com/go-sql-driver/mysql v1.10.0
+	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	golang.org/x/sync v0.20.0
-	google.golang.org/grpc v1.78.0
-	google.golang.org/protobuf v1.36.11
+	golang.org/x/sync v0.22.0
+	google.golang.org/grpc v1.83.1
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
-	github.com/gofiber/schema v1.7.1 // indirect
-	github.com/gofiber/utils/v2 v2.0.4 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.21 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/andybalholm/brotli v1.2.2 // indirect
+	github.com/gofiber/schema v1.8.4 // indirect
+	github.com/gofiber/utils/v2 v2.4.1 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.70.0 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
+	github.com/valyala/fasthttp v1.73.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 )

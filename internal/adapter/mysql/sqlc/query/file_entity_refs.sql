@@ -61,3 +61,24 @@ ORDER BY
 DELETE FROM file_entity_refs
 WHERE
   file_id = ?;
+
+-- name: ListFilesByEntityIDs :many
+-- Вложения сразу для НЕСКОЛЬКИХ сущностей одного типа за один запрос —
+-- нужно, чтобы отдать список сообщений чата со вложениями без N+1
+-- (см. internal/chat/service.go, attachmentsForMessages).
+SELECT
+  f.id,
+  f.original_name,
+  f.mime_type,
+  f.file_type,
+  f.size_bytes,
+  r.entity_id
+FROM
+  files f
+  INNER JOIN file_entity_refs r ON r.file_id = f.id
+WHERE
+  r.entity_type = ?
+  AND r.entity_id IN (sqlc.slice ('entity_ids'))
+  AND f.is_deleted = FALSE
+ORDER BY
+  r.created_at;
