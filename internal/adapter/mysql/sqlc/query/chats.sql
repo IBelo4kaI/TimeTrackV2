@@ -3,9 +3,9 @@
 -- ============================================
 -- name: CreateChat :exec
 INSERT INTO
-  chats (id, type, name, entity_type, entity_id, created_by_user_id)
+  chats (id, type, name, entity_type, entity_id, created_by_user_id, created_at)
 VALUES
-  (?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP());
 
 -- name: GetChatByID :one
 SELECT

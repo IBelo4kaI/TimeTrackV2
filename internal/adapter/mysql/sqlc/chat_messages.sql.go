@@ -19,10 +19,11 @@ INSERT INTO
     entity_type,
     entity_id,
     entity_title,
-    entity_subtitle
+    entity_subtitle,
+    created_at
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())
 `
 
 type CreateChatMessageParams struct {
@@ -52,7 +53,7 @@ func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessagePa
 
 const getChatMessageByID = `-- name: GetChatMessageByID :one
 SELECT
-  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at, entity_type, entity_id, entity_title, entity_subtitle
+  id, chat_id, sender_user_id, body, is_deleted, entity_type, entity_id, entity_title, entity_subtitle, deleted_at, created_at
 FROM
   chat_messages
 WHERE
@@ -68,19 +69,19 @@ func (q *Queries) GetChatMessageByID(ctx context.Context, id uint64) (ChatMessag
 		&i.SenderUserID,
 		&i.Body,
 		&i.IsDeleted,
-		&i.DeletedAt,
-		&i.CreatedAt,
 		&i.EntityType,
 		&i.EntityID,
 		&i.EntityTitle,
 		&i.EntitySubtitle,
+		&i.DeletedAt,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listChatMessages = `-- name: ListChatMessages :many
 SELECT
-  id, chat_id, sender_user_id, body, is_deleted, deleted_at, created_at, entity_type, entity_id, entity_title, entity_subtitle
+  id, chat_id, sender_user_id, body, is_deleted, entity_type, entity_id, entity_title, entity_subtitle, deleted_at, created_at
 FROM
   chat_messages
 WHERE
@@ -119,12 +120,12 @@ func (q *Queries) ListChatMessages(ctx context.Context, arg ListChatMessagesPara
 			&i.SenderUserID,
 			&i.Body,
 			&i.IsDeleted,
-			&i.DeletedAt,
-			&i.CreatedAt,
 			&i.EntityType,
 			&i.EntityID,
 			&i.EntityTitle,
 			&i.EntitySubtitle,
+			&i.DeletedAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -143,7 +144,7 @@ const softDeleteChatMessage = `-- name: SoftDeleteChatMessage :exec
 UPDATE chat_messages
 SET
   is_deleted = TRUE,
-  deleted_at = CURRENT_TIMESTAMP
+  deleted_at = UTC_TIMESTAMP()
 WHERE
   id = ?
 `

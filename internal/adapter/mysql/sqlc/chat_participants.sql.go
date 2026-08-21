@@ -12,9 +12,9 @@ import (
 
 const addChatParticipant = `-- name: AddChatParticipant :exec
 INSERT INTO
-  chat_participants (chat_id, user_id, role)
+  chat_participants (chat_id, user_id, role, joined_at)
 VALUES
-  (?, ?, ?)
+  (?, ?, ?, UTC_TIMESTAMP())
 `
 
 type AddChatParticipantParams struct {
@@ -130,7 +130,7 @@ const markChatRead = `-- name: MarkChatRead :exec
 UPDATE chat_participants
 SET
   last_read_message_id = ?,
-  last_read_at = CURRENT_TIMESTAMP
+  last_read_at = UTC_TIMESTAMP()
 WHERE
   chat_id = ?
   AND user_id = ?

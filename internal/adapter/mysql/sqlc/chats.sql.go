@@ -13,9 +13,9 @@ import (
 
 const createChat = `-- name: CreateChat :exec
 INSERT INTO
-  chats (id, type, name, entity_type, entity_id, created_by_user_id)
+  chats (id, type, name, entity_type, entity_id, created_by_user_id, created_at)
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())
 `
 
 type CreateChatParams struct {
@@ -57,7 +57,7 @@ func (q *Queries) DeleteChat(ctx context.Context, id string) error {
 
 const getChatByEntity = `-- name: GetChatByEntity :one
 SELECT
-  id, type, name, entity_type, entity_id, created_by_user_id, last_message_at, created_at, updated_at
+  id, type, name, entity_type, entity_id, created_by_user_id, updated_at, last_message_at, created_at
 FROM
   chats
 WHERE
@@ -80,16 +80,16 @@ func (q *Queries) GetChatByEntity(ctx context.Context, arg GetChatByEntityParams
 		&i.EntityType,
 		&i.EntityID,
 		&i.CreatedByUserID,
+		&i.UpdatedAt,
 		&i.LastMessageAt,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getChatByID = `-- name: GetChatByID :one
 SELECT
-  id, type, name, entity_type, entity_id, created_by_user_id, last_message_at, created_at, updated_at
+  id, type, name, entity_type, entity_id, created_by_user_id, updated_at, last_message_at, created_at
 FROM
   chats
 WHERE
@@ -106,9 +106,9 @@ func (q *Queries) GetChatByID(ctx context.Context, id string) (Chat, error) {
 		&i.EntityType,
 		&i.EntityID,
 		&i.CreatedByUserID,
+		&i.UpdatedAt,
 		&i.LastMessageAt,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }

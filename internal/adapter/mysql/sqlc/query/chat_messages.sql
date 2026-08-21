@@ -10,10 +10,11 @@ INSERT INTO
     entity_type,
     entity_id,
     entity_title,
-    entity_subtitle
+    entity_subtitle,
+    created_at
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP());
 
 -- name: GetChatMessageByID :one
 SELECT
@@ -41,6 +42,6 @@ LIMIT
 UPDATE chat_messages
 SET
   is_deleted = TRUE,
-  deleted_at = CURRENT_TIMESTAMP
+  deleted_at = UTC_TIMESTAMP()
 WHERE
   id = ?;
