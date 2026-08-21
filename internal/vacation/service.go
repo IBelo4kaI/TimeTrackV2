@@ -25,6 +25,11 @@ type Service interface {
 	GetCountVacationsByStatus(ctx context.Context, prm repo.GetCountVacationsByStatusParams) (int, error)
 	GetVacationsStats(ctx context.Context, userId string, year int) (*VacationStats, error)
 	GetAllUserVacationsByYear(ctx context.Context, year int) (*[]repo.GetAllUsersVacationsByYearRow, error)
+	// ListVacationCalendarByYear — то же самое, но без description, для
+	// виджета "отпуска коллег" (см. ту же ручку/разрешение
+	// time:vacation_calendar:read в route.go — специально отдельно от
+	// vacation.all:read).
+	ListVacationCalendarByYear(ctx context.Context, year int) (*[]repo.ListVacationCalendarByYearRow, error)
 	GetVacationsByYear(ctx context.Context, userId string, year int) (*[]repo.GetVacationsByYearRow, error)
 	GetVacationByID(ctx context.Context, vacationID string) (*repo.GetVacationByIDRow, error)
 	CreateVacationReport(ctx context.Context, vacation VacationCreateRequest) error
@@ -52,6 +57,15 @@ func (s *vacationService) GetVacationsByYear(ctx context.Context, userId string,
 
 func (s *vacationService) GetAllUserVacationsByYear(ctx context.Context, year int) (*[]repo.GetAllUsersVacationsByYearRow, error) {
 	vacations, err := s.repo.GetAllUsersVacationsByYear(ctx, repo.GetAllUsersVacationsByYearParams{Year: date.FirstDayOfMonth(1, year)})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vacations, nil
+}
+
+func (s *vacationService) ListVacationCalendarByYear(ctx context.Context, year int) (*[]repo.ListVacationCalendarByYearRow, error) {
+	vacations, err := s.repo.ListVacationCalendarByYear(ctx, repo.ListVacationCalendarByYearParams{Year: date.FirstDayOfMonth(1, year)})
 	if err != nil {
 		return nil, err
 	}

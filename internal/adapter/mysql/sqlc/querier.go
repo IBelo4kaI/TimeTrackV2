@@ -135,6 +135,15 @@ type Querier interface {
 	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	// Урезанный набор полей отпусков ВСЕХ сотрудников для виджета "отпуска
+	// коллег" (internal/vacation/service.go ListVacationCalendarByYear) — без
+	// description: это личная причина отпуска, её не должен видеть весь
+	// коллектив, в отличие от самого факта и дат отпуска. Отдельная ручка
+	// (GET /vacation/calendar/:year) с отдельным разрешением
+	// time:vacation_calendar:read — специально, чтобы НЕ приходилось выдавать
+	// всем сотрудникам time:vacation.all:read (тот открывает куда более
+	// чувствительный полный список + доступ к менеджерским действиям).
+	ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error)
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error

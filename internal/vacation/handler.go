@@ -108,6 +108,25 @@ func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {
 	return response.Success(c, vacations)
 }
 
+// ListVacationCalendar godoc
+// GET /vacation/calendar/:year
+// Урезанный (без description) список отпусков ВСЕХ сотрудников — для
+// виджета "отпуска коллег". Отдельное разрешение time:vacation_calendar:read,
+// см. комментарий в route.go.
+func (h *Handler) ListVacationCalendar(c fiber.Ctx) error {
+	year, err := fiber.Params[int](c, "year"), error(nil)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	vacations, err := h.service.ListVacationCalendarByYear(c.RequestCtx(), year)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, vacations)
+}
+
 func (h *Handler) CalculateVacationDays(c fiber.Ctx) error {
 	// Получаем параметры из query string
 	startDateStr := c.Query("startDate")

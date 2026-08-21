@@ -57,6 +57,19 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 -- (middleware.RequireOwnerOrAll), только для действия "link".
 ('5eb76fa2-c29e-47ae-848c-0a284edb2e7a', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vacation.all:link', 'Ссылка на чужие заявки на отпуск в чате', 'Разрешение прикреплять к сообщению в чате заявку на отпуск другого сотрудника', NOW());
 
+### vacation calendar permission
+
+-- Отдельно от time:vacation.all:read — то разрешение открывает полные
+-- данные ВСЕХ заявок (включая description) и de-facto означает "админ/
+-- руководитель" (см. VacationList.vue: вкладка "Все заявки" теперь
+-- проверяет vacation.all:edit, не read). Раньше vacation.all:read
+-- по ошибке раздавали всем сотрудникам ради этого виджета — из-за этого
+-- любой сотрудник видел вкладку "Все заявки" в таблице отпусков.
+-- time:vacation_calendar:read — можно (и нужно) выдать всем сотрудникам:
+-- отдаёт только даты/статус/тип отпуска коллег, без description.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('a7682c92-43af-400a-9413-ab130f51dc2b', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vacation_calendar:read', 'Просмотр календаря отпусков коллег', 'Разрешение видеть даты и статусы отпусков всех сотрудников (без причины/описания) в общем календаре', NOW());
+
 ### work_standards on 2026
 
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES

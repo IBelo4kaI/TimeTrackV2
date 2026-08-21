@@ -329,6 +329,84 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 	return items, nil
 }
 
+const listVacationCalendarByYear = `-- name: ListVacationCalendarByYear :many
+SELECT
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color
+FROM
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
+WHERE
+  YEAR(v.start_date) = YEAR(?)
+  AND YEAR(v.end_date) = YEAR(?)
+ORDER BY
+  v.created_at DESC
+`
+
+type ListVacationCalendarByYearParams struct {
+	Year time.Time `json:"year"`
+}
+
+type ListVacationCalendarByYearRow struct {
+	ID                string          `json:"id"`
+	UserID            string          `json:"userId"`
+	StartDate         time.Time       `json:"startDate"`
+	EndDate           time.Time       `json:"endDate"`
+	TotalDays         int32           `json:"totalDays"`
+	Status            VacationsStatus `json:"status"`
+	VacationTypeID    sql.NullString  `json:"vacationTypeId"`
+	VacationTypeName  string          `json:"vacationTypeName"`
+	VacationTypeColor string          `json:"vacationTypeColor"`
+}
+
+// Урезанный набор полей отпусков ВСЕХ сотрудников для виджета "отпуска
+// коллег" (internal/vacation/service.go ListVacationCalendarByYear) — без
+// description: это личная причина отпуска, её не должен видеть весь
+// коллектив, в отличие от самого факта и дат отпуска. Отдельная ручка
+// (GET /vacation/calendar/:year) с отдельным разрешением
+// time:vacation_calendar:read — специально, чтобы НЕ приходилось выдавать
+// всем сотрудникам time:vacation.all:read (тот открывает куда более
+// чувствительный полный список + доступ к менеджерским действиям).
+func (q *Queries) ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVacationCalendarByYear, arg.Year, arg.Year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVacationCalendarByYearRow
+	for rows.Next() {
+		var i ListVacationCalendarByYearRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.TotalDays,
+			&i.Status,
+			&i.VacationTypeID,
+			&i.VacationTypeName,
+			&i.VacationTypeColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateVacationStatus = `-- name: UpdateVacationStatus :exec
 UPDATE vacations
 SET

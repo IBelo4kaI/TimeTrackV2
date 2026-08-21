@@ -27,6 +27,16 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read", RequireAll: true}),
 		handler.GetAllUserVacationsByYear)
 
+	// Урезанный (без description) список отпусков всех сотрудников — для
+	// виджета "отпуска коллег" на дашборде. Специально ОТДЕЛЬНОЕ разрешение
+	// (time:vacation_calendar:read), а не vacation.all:read: последнее даёт
+	// доступ к полным данным заявок + предполагает менеджерские права
+	// (approve/reject), его нельзя было раздавать всем сотрудникам просто
+	// чтобы они видели календарь коллег — см. историю в readme.md.
+	router.Get("/calendar/:year",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation_calendar", Action: "read"}),
+		handler.ListVacationCalendar)
+
 	router.Get("/:userId/:year",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
 		handler.GetVacationsByYear)

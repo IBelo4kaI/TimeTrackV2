@@ -87,6 +87,34 @@ WHERE
 ORDER BY
   v.created_at DESC;
 
+-- name: ListVacationCalendarByYear :many
+-- Урезанный набор полей отпусков ВСЕХ сотрудников для виджета "отпуска
+-- коллег" (internal/vacation/service.go ListVacationCalendarByYear) — без
+-- description: это личная причина отпуска, её не должен видеть весь
+-- коллектив, в отличие от самого факта и дат отпуска. Отдельная ручка
+-- (GET /vacation/calendar/:year) с отдельным разрешением
+-- time:vacation_calendar:read — специально, чтобы НЕ приходилось выдавать
+-- всем сотрудникам time:vacation.all:read (тот открывает куда более
+-- чувствительный полный список + доступ к менеджерским действиям).
+SELECT
+  v.id,
+  v.user_id,
+  v.start_date,
+  v.end_date,
+  v.total_days,
+  v.status,
+  v.vacation_type_id,
+  COALESCE(t.name, '') as vacation_type_name,
+  COALESCE(t.color_code, '') as vacation_type_color
+FROM
+  vacations v
+  LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
+WHERE
+  YEAR(v.start_date) = YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
+ORDER BY
+  v.created_at DESC;
+
 -- name: CreateVacation :exec
 INSERT INTO
   vacations (
