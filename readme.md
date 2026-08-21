@@ -44,6 +44,19 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 ('d5ddc6be-123d-11f1-b05d-4e4ba071d33f', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:work_standards:edit', 'Редактирование рабочего норматива', 'Разрешение на редактирование рабочих нормативов', '2026-02-25 11:33:41'),
 ('d5e3c665-123d-11f1-b05d-4e4ba071d33f', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:work_standards:delete', 'Удаление рабочего норматива', 'Разрешение на удаление рабочих нормативов', '2026-02-25 11:33:41');
 
+### chat permissions
+
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('703fc72a-a4d5-45f2-a52f-b22f494eee6e', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:chat:read', 'Чтение чатов', 'Разрешение на чтение чатов и сообщений', NOW()),
+('94707fde-098c-486d-9ecd-e6ff059b610b', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:chat:create', 'Создание чатов', 'Разрешение на создание чатов и отправку сообщений', NOW()),
+('540f49b0-0482-41be-850a-9a48f898d4f4', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:chat:edit', 'Редактирование чатов', 'Разрешение на переименование чата и отметку сообщений прочитанными', NOW()),
+('00795848-424d-45bb-b02c-102c2d7eaea9', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:chat:delete', 'Удаление чатов', 'Разрешение на удаление сообщений, чатов и участников', NOW()),
+-- Ссылка на ЧУЖУЮ заявку на отпуск в сообщении чата (своя — всегда можно,
+-- достаточно обычного time:vacation:read). См. internal/chat/handler.go
+-- checkEntityRefAccess — та же логика, что у time:vacation.all:read
+-- (middleware.RequireOwnerOrAll), только для действия "link".
+('5eb76fa2-c29e-47ae-848c-0a284edb2e7a', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vacation.all:link', 'Ссылка на чужие заявки на отпуск в чате', 'Разрешение прикреплять к сообщению в чате заявку на отпуск другого сотрудника', NOW());
+
 ### work_standards on 2026
 
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES

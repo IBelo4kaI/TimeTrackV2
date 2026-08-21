@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 
 	"github.com/gofiber/fiber/v3"
@@ -12,10 +14,12 @@ import (
 
 type Handler struct {
 	service Service
+	grpc    *grpc.Client
+	prefix  string
 }
 
-func NewHandler(service Service) Handler {
-	return Handler{service: service}
+func NewHandler(service Service, grpcClient *grpc.Client, prefix string) Handler {
+	return Handler{service: service, grpc: grpcClient, prefix: prefix}
 }
 
 // callerID достаёт user_id, положенный middleware.Require в Locals после
@@ -178,6 +182,12 @@ func (h Handler) SendMessage(c fiber.Ctx) error {
 		return mapError(c, err)
 	}
 
+	if ref != nil {
+		if err := h.checkEntityRefAccess(c, ref); err != nil {
+			return mapError(c, err)
+		}
+	}
+
 	message, err := h.service.SendMessage(c.RequestCtx(), c.Params("id"), callerID(c), body.Body, ref)
 	if err != nil {
 		return mapError(c, err)
@@ -201,6 +211,33 @@ func entityRefFromRequest(body SendMessageRequest) (*EntityRef, error) {
 		Title:    body.EntityTitle,
 		Subtitle: body.EntitySubtitle,
 	}, nil
+}
+
+// checkEntityRefAccess — вложение title/subtitle в запросе ничего не
+// доказывает (это просто текст с фронта), поэтому доступ проверяем по
+// РЕАЛЬНОМУ владельцу сущности из БД (ResolveEntityRefOwner), а не по тому,
+// что написал клиент. На свою сущность может сослаться любой (то же самое
+// право, что уже нужно, чтобы её увидеть и выбрать в пикере, например
+// vacation:read). На чужую — только с отдельным <entityType>.all:link
+// (см. readme.md, permission time:vacation.all:link) — без него обычный
+// пользователь не может сослаться на чужую заявку.
+func (h Handler) checkEntityRefAccess(c fiber.Ctx, ref *EntityRef) error {
+	ownerID, err := h.service.ResolveEntityRefOwner(c.RequestCtx(), ref.Type, ref.ID)
+	if err != nil {
+		return err
+	}
+
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: ref.Type, Action: "link"},
+		callerID(c),
+		ownerID,
+	)
+	if !allowed {
+		return ErrEntityRefForbidden
+	}
+	return nil
 }
 
 // SendFileMessage godoc
@@ -293,9 +330,10 @@ func (h Handler) RemoveParticipant(c fiber.Ctx) error {
 
 func mapError(c fiber.Ctx, err error) error {
 	switch {
-	case errors.Is(err, ErrChatNotFound), errors.Is(err, ErrMessageNotFound):
+	case errors.Is(err, ErrChatNotFound), errors.Is(err, ErrMessageNotFound), errors.Is(err, ErrEntityRefNotFound):
 		return response.Error(c, http.StatusNotFound, err)
-	case errors.Is(err, ErrNotParticipant), errors.Is(err, ErrNotOwnMessage), errors.Is(err, ErrNotAllowed):
+	case errors.Is(err, ErrNotParticipant), errors.Is(err, ErrNotOwnMessage), errors.Is(err, ErrNotAllowed),
+		errors.Is(err, ErrEntityRefForbidden):
 		return response.Error(c, http.StatusForbidden, err)
 	case errors.Is(err, ErrBadChatType), errors.Is(err, ErrNoParticipants),
 		errors.Is(err, ErrEmptyBody), errors.Is(err, ErrDirectTwoUsers),

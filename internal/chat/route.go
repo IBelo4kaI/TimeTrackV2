@@ -9,7 +9,7 @@ import (
 )
 
 func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string) {
-	handler := NewHandler(service)
+	handler := NewHandler(service, grpcClient, prefix)
 	router := f.Group("/chats")
 
 	require := func(action string) fiber.Handler {

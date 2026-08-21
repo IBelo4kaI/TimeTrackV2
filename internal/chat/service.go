@@ -24,7 +24,12 @@ var (
 	ErrNoParticipants  = errors.New("нужен хотя бы один участник, кроме себя")
 	ErrEmptyBody       = errors.New("сообщение не может быть пустым")
 	ErrDirectTwoUsers  = errors.New("в личном чате ровно два участника")
-	ErrBadEntityRef    = errors.New("entityType и entityId должны быть заданы вместе")
+	// ErrBadEntityRef — исторически "entityType/entityId заданы не вместе",
+	// теперь ещё и "неизвестный/неподдерживаемый entityType" (см.
+	// ResolveEntityRefOwner) — в обоих случаях это 400, ссылка невалидна.
+	ErrBadEntityRef       = errors.New("entityType и entityId должны быть заданы вместе")
+	ErrEntityRefNotFound  = errors.New("сущность, на которую ссылается сообщение, не найдена")
+	ErrEntityRefForbidden = errors.New("нет доступа, чтобы сослаться на эту заявку")
 )
 
 const defaultMessagesPageSize = 50
@@ -42,6 +47,12 @@ type Service interface {
 	ListMessages(ctx context.Context, chatID, callerUserID string, beforeID *uint64, limit int32) ([]ChatMessageDTO, error)
 	SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (ChatMessageDTO, error)
 	SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader) (ChatMessageDTO, error)
+	// ResolveEntityRefOwner — userID владельца сущности, на которую
+	// ссылается сообщение (сейчас только "vacation"), нужен хендлеру для
+	// авторизации ссылки (см. handler.go checkEntityRefAccess): на СВОЮ
+	// заявку сослаться может любой, на ЧУЖУЮ — только с отдельным
+	// <entityType>.all:link. Неизвестный entityType — ErrBadEntityRef.
+	ResolveEntityRefOwner(ctx context.Context, entityType, entityID string) (string, error)
 	DeleteMessage(ctx context.Context, messageID uint64, callerUserID string) error
 	MarkRead(ctx context.Context, chatID, callerUserID string, messageID uint64) error
 	Typing(ctx context.Context, chatID, callerUserID string) error
@@ -377,6 +388,26 @@ func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body st
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
 
 	return dto, nil
+}
+
+// ResolveEntityRefOwner — см. комментарий в интерфейсе Service. Единственный
+// сейчас поддерживаемый entityType — "vacation"; расширять на sick_leave и
+// т.п. — добавлением case сюда, никаких других изменений не потребуется
+// (хендлер уже проверяет <entityType>.all:link дженерик).
+func (s *service) ResolveEntityRefOwner(ctx context.Context, entityType, entityID string) (string, error) {
+	switch entityType {
+	case "vacation":
+		v, err := s.repo.GetVacationByID(ctx, entityID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", ErrEntityRefNotFound
+			}
+			return "", err
+		}
+		return v.UserID, nil
+	default:
+		return "", ErrBadEntityRef
+	}
 }
 
 // maxAttachmentsPerMessage — защита от одного запроса с сотней файлов;
