@@ -1,8 +1,8 @@
 -- name: CreateNotification :exec
 INSERT INTO
-  notifications (user_id, title, message, type, entity_type, entity_id)
+  notifications (id, user_id, title, message, type, entity_type, entity_id)
 VALUES
-  (?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListNotificationsByUser :many
 SELECT

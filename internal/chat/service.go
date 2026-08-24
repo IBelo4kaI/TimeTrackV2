@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/notification"
 	fileservice "timetrack/internal/service"
 	"timetrack/internal/vk"
 
@@ -50,8 +51,10 @@ type Service interface {
 
 	// Сообщения
 	ListMessages(ctx context.Context, chatID, callerUserID string, beforeID *uint64, limit int32) ([]ChatMessageDTO, error)
-	SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (ChatMessageDTO, error)
-	SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader) (ChatMessageDTO, error)
+	// senderName — см. SendMessageRequest.SenderName, только для текста
+	// уведомления, в БД не пишется.
+	SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef, senderName string) (ChatMessageDTO, error)
+	SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader, senderName string) (ChatMessageDTO, error)
 	// ResolveEntityRefOwner — userID владельца сущности, на которую
 	// ссылается сообщение (сейчас только "vacation"), нужен хендлеру для
 	// авторизации ссылки (см. handler.go checkEntityRefAccess): на СВОЮ
@@ -84,15 +87,16 @@ type Service interface {
 const entityTypeChatMessage = "chat_message"
 
 type service struct {
-	repo        repo.Querier
-	hub         *Hub
-	fileService *fileservice.FileService
-	vk          vk.Service
-	frontendURL string
+	repo                repo.Querier
+	hub                 *Hub
+	fileService         *fileservice.FileService
+	vk                  vk.Service
+	notificationService notification.Service
+	frontendURL         string
 }
 
-func NewService(r repo.Querier, hub *Hub, fileService *fileservice.FileService, vkService vk.Service, frontendURL string) Service {
-	return &service{repo: r, hub: hub, fileService: fileService, vk: vkService, frontendURL: frontendURL}
+func NewService(r repo.Querier, hub *Hub, fileService *fileservice.FileService, vkService vk.Service, notificationService notification.Service, frontendURL string) Service {
+	return &service{repo: r, hub: hub, fileService: fileService, vk: vkService, notificationService: notificationService, frontendURL: frontendURL}
 }
 
 // ============================================
@@ -137,7 +141,9 @@ func (s *service) CreateChat(ctx context.Context, callerUserID string, req Creat
 		Type: EventChatCreated,
 		Data: map[string]any{"chatId": chatID},
 	}, callerUserID)
-	s.notifyVK(ctx, chatID, vkNewChatText(s.chatLabel(ctx, chatID)), callerUserID)
+	label := s.chatLabel(ctx, chatID)
+	s.notifyApp(ctx, chatID, appChatTitle(label), appChatMessage(label), callerUserID)
+	s.notifyVK(ctx, chatID, vkNewChatText(label), callerUserID)
 
 	return s.GetChat(ctx, chatID, callerUserID)
 }
@@ -176,7 +182,9 @@ func (s *service) GetOrCreateEntityChat(ctx context.Context, entityType, entityI
 				Type: EventChatCreated,
 				Data: map[string]any{"chatId": existing.ID},
 			}, callerUserID)
-			s.notifyVK(ctx, existing.ID, vkNewChatText(s.chatLabel(ctx, existing.ID)), callerUserID)
+			existingLabel := s.chatLabel(ctx, existing.ID)
+			s.notifyApp(ctx, existing.ID, appChatTitle(existingLabel), appChatMessage(existingLabel), callerUserID)
+			s.notifyVK(ctx, existing.ID, vkNewChatText(existingLabel), callerUserID)
 		}
 		return s.GetChat(ctx, existing.ID, callerUserID)
 	}
@@ -212,7 +220,9 @@ func (s *service) GetOrCreateEntityChat(ctx context.Context, entityType, entityI
 		Type: EventChatCreated,
 		Data: map[string]any{"chatId": chatID},
 	}, callerUserID)
-	s.notifyVK(ctx, chatID, vkNewChatText(s.chatLabel(ctx, chatID)), callerUserID)
+	newLabel := s.chatLabel(ctx, chatID)
+	s.notifyApp(ctx, chatID, appChatTitle(newLabel), appChatMessage(newLabel), callerUserID)
+	s.notifyVK(ctx, chatID, vkNewChatText(newLabel), callerUserID)
 
 	return s.GetChat(ctx, chatID, callerUserID)
 }
@@ -415,7 +425,7 @@ func (s *service) ListMessages(ctx context.Context, chatID, callerUserID string,
 	return result, nil
 }
 
-func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef) (ChatMessageDTO, error) {
+func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body string, ref *EntityRef, senderName string) (ChatMessageDTO, error) {
 	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
 		return ChatMessageDTO{}, err
 	}
@@ -430,7 +440,9 @@ func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body st
 
 	dto := ChatMessageDTO{ChatMessage: message, Attachments: []MessageAttachment{}}
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
-	s.notifyVK(ctx, chatID, vkNewMessageText(s.chatLabel(ctx, chatID), body), callerUserID)
+	label := s.chatLabel(ctx, chatID)
+	s.notifyApp(ctx, chatID, appMessageTitle(label, senderName), vkMessagePreview(body), callerUserID)
+	s.notifyVK(ctx, chatID, vkNewMessageText(label, senderName, body), callerUserID)
 
 	return dto, nil
 }
@@ -468,7 +480,7 @@ const maxAttachmentsPerMessage = 10
 // вложения при этом остаются (не роллбэчим предыдущие — редкий edge case,
 // не стоит городить ради него распределённую транзакцию по нескольким
 // независимым upload'ам).
-func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader) (ChatMessageDTO, error) {
+func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, caption string, files []*multipart.FileHeader, senderName string) (ChatMessageDTO, error) {
 	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
 		return ChatMessageDTO{}, err
 	}
@@ -506,7 +518,9 @@ func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, cap
 
 	dto := ChatMessageDTO{ChatMessage: message, Attachments: attachments}
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
-	s.notifyVK(ctx, chatID, vkNewMessageText(s.chatLabel(ctx, chatID), caption), callerUserID)
+	label := s.chatLabel(ctx, chatID)
+	s.notifyApp(ctx, chatID, appMessageTitle(label, senderName), vkMessagePreview(caption), callerUserID)
+	s.notifyVK(ctx, chatID, vkNewMessageText(label, senderName, caption), callerUserID)
 
 	return dto, nil
 }
@@ -817,6 +831,41 @@ func (s *service) notifyVK(ctx context.Context, chatID, text string, exclude ...
 	s.vk.NotifyMany(ctx, ids, text, s.chatURL(chatID))
 }
 
+// notifyApp — версия notifyVK для общей таблицы notifications (см.
+// internal/notification): та же рассылка живьём по SSE, но в колокольчике
+// приложения, а не в VK. Исключения те же, кроме VkMuted — тот глушит
+// только VK-дубликат, на записи в notifications не влияет (см. SetVKMuted).
+func (s *service) notifyApp(ctx context.Context, chatID, title, message string, exclude ...string) {
+	participants, err := s.repo.ListChatParticipants(ctx, chatID)
+	if err != nil {
+		return
+	}
+
+	excluded := make(map[string]struct{}, len(exclude))
+	for _, id := range exclude {
+		excluded[id] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(participants))
+	for _, p := range participants {
+		if p.Muted {
+			continue
+		}
+		if _, skip := excluded[p.UserID]; skip {
+			continue
+		}
+		if s.hub.IsViewing(p.UserID, chatID) {
+			continue
+		}
+		ids = append(ids, p.UserID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	s.notificationService.CreateMany(ctx, ids, title, message, repo.NotificationsTypeInfo, "chat", chatID)
+}
+
 func (s *service) chatURL(chatID string) string {
 	return fmt.Sprintf("%s/chats?open=%s", s.frontendURL, chatID)
 }
@@ -850,12 +899,21 @@ func vkMessagePreview(body string) string {
 
 // vkNewMessageText/vkNewChatText — label из chatLabel(); пустой, если имя
 // чата неизвестно (личный чат или группа без названия) — тогда просто
-// используется общая формулировка без него.
-func vkNewMessageText(label, body string) string {
-	if label == "" {
-		return "Новое сообщение в чате: " + vkMessagePreview(body)
+// используется общая формулировка без него. senderName — из
+// SendMessageRequest.SenderName (фронт передаёт всегда, кроме заведомо
+// старых клиентов — тогда просто нет имени в тексте).
+func vkNewMessageText(label, senderName, body string) string {
+	preview := vkMessagePreview(body)
+	switch {
+	case senderName != "" && label != "":
+		return fmt.Sprintf("%s в «%s»: %s", senderName, label, preview)
+	case senderName != "":
+		return fmt.Sprintf("%s: %s", senderName, preview)
+	case label != "":
+		return fmt.Sprintf("Новое сообщение в «%s»: %s", label, preview)
+	default:
+		return "Новое сообщение в чате: " + preview
 	}
-	return fmt.Sprintf("Новое сообщение в «%s»: %s", label, vkMessagePreview(body))
 }
 
 func vkNewChatText(label string) string {
@@ -863,6 +921,36 @@ func vkNewChatText(label string) string {
 		return "У вас новый чат"
 	}
 	return fmt.Sprintf("Новый чат: «%s»", label)
+}
+
+// appMessageTitle/appChatTitle — заголовок записи в notifications (текст
+// превью — отдельно, в message). Та же логика по label/senderName, что у
+// vkNewMessageText, только без превью, склеенного в одну строку.
+func appMessageTitle(label, senderName string) string {
+	switch {
+	case senderName != "" && label != "":
+		return fmt.Sprintf("%s — «%s»", senderName, label)
+	case senderName != "":
+		return senderName
+	case label != "":
+		return fmt.Sprintf("Новое сообщение в «%s»", label)
+	default:
+		return "Новое сообщение в чате"
+	}
+}
+
+func appChatTitle(label string) string {
+	if label == "" {
+		return "Новый чат"
+	}
+	return fmt.Sprintf("Новый чат: «%s»", label)
+}
+
+func appChatMessage(label string) string {
+	if label == "" {
+		return "У вас появился новый чат"
+	}
+	return fmt.Sprintf("«%s»", label)
 }
 
 func normalizeParticipants(chatType, callerUserID string, ids []string) ([]string, error) {

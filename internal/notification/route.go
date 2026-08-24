@@ -5,6 +5,7 @@ import (
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/sse"
 )
 
 func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string) {
@@ -16,6 +17,7 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 	}
 
 	// permission notification:read — свои же уведомления, ничего чужого
+	router.Get("/stream", require("read"), sse.New(sse.Config{Handler: handler.Stream}))
 	router.Get("", require("read"), handler.ListMine)
 	router.Get("/unread-count", require("read"), handler.UnreadCount)
 

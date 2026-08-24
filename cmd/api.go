@@ -89,7 +89,9 @@ func (app *application) mount() *fiber.App {
 		SecretKey:          app.config.vk.secretKey,
 	})
 
-	notificationService := notification.NewService(repo.New(app.db), app.logger)
+	// Свой SSE-хаб, отдельный от chat.Hub — см. internal/notification/hub.go.
+	notificationHub := notification.NewHub()
+	notificationService := notification.NewService(repo.New(app.db), notificationHub, app.logger)
 	notification.SetupRoutes(v1, notificationService, app.grpcClient, app.config.prefix)
 
 	// Vacation routes
@@ -158,7 +160,7 @@ func (app *application) mount() *fiber.App {
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)
 	chatHub := chat.NewHub()
-	chatService := chat.NewService(repo.New(app.db), chatHub, fileService, vkService, app.config.frontendURL)
+	chatService := chat.NewService(repo.New(app.db), chatHub, fileService, vkService, notificationService, app.config.frontendURL)
 	chat.SetupRoutes(v1, chatService, app.grpcClient, app.config.prefix)
 
 	return fiberApp

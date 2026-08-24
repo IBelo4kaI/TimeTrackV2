@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	repo "timetrack/internal/adapter/mysql/sqlc"
+
+	"github.com/google/uuid"
 )
 
 // Ключи в system_settings (каждый — JSON-массив user_id), отдельно для
@@ -36,15 +39,20 @@ type Service interface {
 	// вызывающая сторона просто никому не шлёт.
 	GetVacationAdminRecipients(ctx context.Context) ([]string, error)
 	GetSickLeaveAdminRecipients(ctx context.Context) ([]string, error)
+
+	// SSE
+	Subscribe(userID string) chan Event
+	Unsubscribe(userID string, ch chan Event)
 }
 
 type service struct {
 	repo   repo.Querier
+	hub    *Hub
 	logger *slog.Logger
 }
 
-func NewService(r repo.Querier, logger *slog.Logger) Service {
-	return &service{repo: r, logger: logger}
+func NewService(r repo.Querier, hub *Hub, logger *slog.Logger) Service {
+	return &service{repo: r, hub: hub, logger: logger}
 }
 
 func (s *service) ListMine(ctx context.Context, userID string, limit, offset int32) ([]repo.Notification, error) {
@@ -71,18 +79,40 @@ func (s *service) MarkAllRead(ctx context.Context, userID string) error {
 }
 
 func (s *service) CreateMany(ctx context.Context, userIDs []string, title, message string, notifType repo.NotificationsType, entityType, entityID string) {
+	typ := repo.NullNotificationsType{NotificationsType: notifType, Valid: notifType != ""}
+	entType := sql.NullString{String: entityType, Valid: entityType != ""}
+	entID := sql.NullString{String: entityID, Valid: entityID != ""}
+
 	for _, userID := range userIDs {
+		id := uuid.NewString()
 		err := s.repo.CreateNotification(ctx, repo.CreateNotificationParams{
+			ID:         id,
 			UserID:     userID,
 			Title:      title,
 			Message:    message,
-			Type:       repo.NullNotificationsType{NotificationsType: notifType, Valid: notifType != ""},
-			EntityType: sql.NullString{String: entityType, Valid: entityType != ""},
-			EntityID:   sql.NullString{String: entityID, Valid: entityID != ""},
+			Type:       typ,
+			EntityType: entType,
+			EntityID:   entID,
 		})
 		if err != nil {
 			s.logger.Error("notification: create failed", "err", err, "userId", userID)
+			continue
 		}
+
+		s.hub.SendToUser(userID, Event{
+			Type: "notification_created",
+			Data: repo.Notification{
+				ID:         id,
+				UserID:     userID,
+				Title:      title,
+				Message:    message,
+				Type:       typ,
+				IsRead:     sql.NullBool{Bool: false, Valid: true},
+				EntityType: entType,
+				EntityID:   entID,
+				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
+			},
+		})
 	}
 }
 
@@ -92,6 +122,14 @@ func (s *service) GetVacationAdminRecipients(ctx context.Context) ([]string, err
 
 func (s *service) GetSickLeaveAdminRecipients(ctx context.Context) ([]string, error) {
 	return s.getRecipients(ctx, sickLeaveAdminRecipientsSettingKey)
+}
+
+func (s *service) Subscribe(userID string) chan Event {
+	return s.hub.Subscribe(userID)
+}
+
+func (s *service) Unsubscribe(userID string, ch chan Event) {
+	s.hub.Unsubscribe(userID, ch)
 }
 
 func (s *service) getRecipients(ctx context.Context, settingKey string) ([]string, error) {

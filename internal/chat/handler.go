@@ -216,7 +216,7 @@ func (h Handler) SendMessage(c fiber.Ctx) error {
 		}
 	}
 
-	message, err := h.service.SendMessage(c.RequestCtx(), c.Params("id"), callerID(c), body.Body, ref)
+	message, err := h.service.SendMessage(c.RequestCtx(), c.Params("id"), callerID(c), body.Body, ref, body.SenderName)
 	if err != nil {
 		return mapError(c, err)
 	}
@@ -282,7 +282,7 @@ func (h Handler) SendFileMessage(c fiber.Ctx) error {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
 	}
 
-	message, err := h.service.SendFileMessage(c.RequestCtx(), c.Params("id"), callerID(c), c.FormValue("body"), files)
+	message, err := h.service.SendFileMessage(c.RequestCtx(), c.Params("id"), callerID(c), c.FormValue("body"), files, c.FormValue("senderName"))
 	if err != nil {
 		return mapError(c, err)
 	}

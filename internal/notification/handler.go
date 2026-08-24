@@ -6,6 +6,7 @@ import (
 	"timetrack/internal/response"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/sse"
 )
 
 type Handler struct {
@@ -19,6 +20,35 @@ func NewHandler(service Service) Handler {
 func callerID(c fiber.Ctx) string {
 	id, _ := c.Locals("user_id").(string)
 	return id
+}
+
+// Stream — SSE-коннекшен на пользователя, см. chat.Handler.Stream (тот же
+// паттерн, отдельный хаб).
+func (h Handler) Stream(c fiber.Ctx, stream *sse.Stream) error {
+	userID := callerID(c)
+	if userID == "" {
+		return fiber.ErrUnauthorized
+	}
+
+	events := h.service.Subscribe(userID)
+	defer h.service.Unsubscribe(userID, events)
+
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if err := stream.Event(sse.Event{
+				Name: event.Type,
+				Data: event.Data,
+			}); err != nil {
+				return err
+			}
+		case <-stream.Done():
+			return stream.Err()
+		}
+	}
 }
 
 // ListMine godoc

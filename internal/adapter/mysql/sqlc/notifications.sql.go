@@ -29,12 +29,13 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, userID string) (
 
 const createNotification = `-- name: CreateNotification :exec
 INSERT INTO
-  notifications (user_id, title, message, type, entity_type, entity_id)
+  notifications (id, user_id, title, message, type, entity_type, entity_id)
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateNotificationParams struct {
+	ID         string                `json:"id"`
 	UserID     string                `json:"userId"`
 	Title      string                `json:"title"`
 	Message    string                `json:"message"`
@@ -45,6 +46,7 @@ type CreateNotificationParams struct {
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
 	_, err := q.db.ExecContext(ctx, createNotification,
+		arg.ID,
 		arg.UserID,
 		arg.Title,
 		arg.Message,

@@ -22,6 +22,12 @@ type SendMessageRequest struct {
 	EntityID       string `json:"entityId"`
 	EntityTitle    string `json:"entityTitle"`
 	EntitySubtitle string `json:"entitySubtitle"`
+	// SenderName — ФИО отправителя, для текста VK/app-уведомления другим
+	// участникам. Фронт уже знает его (это сам залогиненный пользователь,
+	// без похода за чужими данными), как и с applicantName у заявок на
+	// отпуск/больничный — нигде не хранится, ни на что не влияет кроме
+	// текста уведомления.
+	SenderName string `json:"senderName"`
 }
 
 // EntityRef — распарсенная и провалидированная ссылка на сущность из
