@@ -271,6 +271,14 @@ func (h *Handler) UpdateVacationType(c fiber.Ctx) error {
 	})
 }
 
+// DeleteVacation godoc
+// DELETE /v1/vacation/:id
+//
+// Как и GetVacation, роут без :userId в пути — базовый middleware.Require
+// проверяет только "vacation:delete", владельца узнаём после чтения записи
+// и довалидируем через RequireOwnerOrAll. Дополнительно: свою заявку можно
+// удалить только пока она "на рассмотрении" — чужую (т.е. только через
+// .all, значит уже подтверждённый админ) можно удалить в любом статусе.
 func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 	vacationID := c.Params("id")
 
@@ -278,7 +286,31 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	err := h.service.DeleteVacation(c.RequestCtx(), vacationID)
+	vacation, err := h.service.GetVacationByID(c.RequestCtx(), vacationID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
+		}
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "delete"},
+		callerID,
+		vacation.UserID,
+	)
+	if !allowed {
+		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "нет доступа к этой заявке"))
+	}
+
+	if vacation.UserID == callerID && vacation.Status != repo.VacationsStatusPending {
+		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "удалить можно только заявку на рассмотрении"))
+	}
+
+	err = h.service.DeleteVacation(c.RequestCtx(), vacationID)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}

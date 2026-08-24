@@ -69,7 +69,8 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
 		handler.UploadVacationFile)
 
-	// permission vacation:delete
+	// permission vacation:delete; владелец/статус довалидируются в хендлере
+	// (RequireOwnerOrAll), см. комментарий над DeleteVacation
 	router.Delete("/:id",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "delete"}),
 		handler.DeleteVacation)
