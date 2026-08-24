@@ -232,6 +232,37 @@
 					}
 				},
 				{
+					"name": "Mute/unmute chat",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"muted\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/mute",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"mute"
+							]
+						}
+					}
+				},
+				{
 					"name": "Delete chat",
 					"request": {
 						"method": "DELETE",

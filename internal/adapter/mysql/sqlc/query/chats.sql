@@ -37,7 +37,8 @@ SELECT
   c.updated_at,
   cp.role,
   cp.last_read_message_id,
-  cp.last_read_at
+  cp.last_read_at,
+  cp.muted
 FROM
   chats c
   INNER JOIN chat_participants cp ON cp.chat_id = c.id

@@ -41,6 +41,7 @@ type Service interface {
 	GetChat(ctx context.Context, chatID, callerUserID string) (ChatWithMeta, error)
 	ListMyChats(ctx context.Context, callerUserID string) ([]ChatWithMeta, error)
 	RenameChat(ctx context.Context, chatID, callerUserID, name string) error
+	SetMuted(ctx context.Context, chatID, callerUserID string, muted bool) error
 	DeleteChat(ctx context.Context, chatID, callerUserID string) error
 
 	// Сообщения
@@ -229,6 +230,7 @@ func (s *service) GetChat(ctx context.Context, chatID, callerUserID string) (Cha
 		Role:              participant.Role,
 		LastReadMessageID: nullInt64ToPtr(participant.LastReadMessageID),
 		UnreadCount:       unread,
+		Muted:             participant.Muted,
 	}, nil
 }
 
@@ -263,10 +265,24 @@ func (s *service) ListMyChats(ctx context.Context, callerUserID string) ([]ChatW
 			Role:              r.Role,
 			LastReadMessageID: nullInt64ToPtr(r.LastReadMessageID),
 			UnreadCount:       unread,
+			Muted:             r.Muted,
 		})
 	}
 
 	return result, nil
+}
+
+// SetMuted включает/выключает уведомления по чату лично для callerUserID —
+// не влияет на остальных участников (см. миграцию 014_chat_mute.sql).
+func (s *service) SetMuted(ctx context.Context, chatID, callerUserID string, muted bool) error {
+	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
+		return err
+	}
+	return s.repo.SetChatParticipantMuted(ctx, repo.SetChatParticipantMutedParams{
+		Muted:  muted,
+		ChatID: chatID,
+		UserID: callerUserID,
+	})
 }
 
 func (s *service) RenameChat(ctx context.Context, chatID, callerUserID, name string) error {

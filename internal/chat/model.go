@@ -71,6 +71,7 @@ type ChatWithMeta struct {
 	Role              repo.ChatParticipantsRole `json:"role"`
 	LastReadMessageID *uint64                   `json:"lastReadMessageId"`
 	UnreadCount       int64                     `json:"unreadCount"`
+	Muted             bool                      `json:"muted"`
 }
 
 func nullInt64ToPtr(v sql.NullInt64) *uint64 {

@@ -126,7 +126,8 @@ SELECT
   c.updated_at,
   cp.role,
   cp.last_read_message_id,
-  cp.last_read_at
+  cp.last_read_at,
+  cp.muted
 FROM
   chats c
   INNER JOIN chat_participants cp ON cp.chat_id = c.id
@@ -150,6 +151,7 @@ type ListChatsByUserRow struct {
 	Role              ChatParticipantsRole `json:"role"`
 	LastReadMessageID sql.NullInt64        `json:"lastReadMessageId"`
 	LastReadAt        sql.NullTime         `json:"lastReadAt"`
+	Muted             bool                 `json:"muted"`
 }
 
 func (q *Queries) ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error) {
@@ -174,6 +176,7 @@ func (q *Queries) ListChatsByUser(ctx context.Context, userID string) ([]ListCha
 			&i.Role,
 			&i.LastReadMessageID,
 			&i.LastReadAt,
+			&i.Muted,
 		); err != nil {
 			return nil, err
 		}

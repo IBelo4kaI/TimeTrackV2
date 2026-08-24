@@ -58,7 +58,7 @@ func (q *Queries) CountUnreadChatMessages(ctx context.Context, arg CountUnreadCh
 
 const getChatParticipant = `-- name: GetChatParticipant :one
 SELECT
-  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at
+  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted
 FROM
   chat_participants
 WHERE
@@ -81,13 +81,14 @@ func (q *Queries) GetChatParticipant(ctx context.Context, arg GetChatParticipant
 		&i.LastReadMessageID,
 		&i.LastReadAt,
 		&i.JoinedAt,
+		&i.Muted,
 	)
 	return i, err
 }
 
 const listChatParticipants = `-- name: ListChatParticipants :many
 SELECT
-  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at
+  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted
 FROM
   chat_participants
 WHERE
@@ -112,6 +113,7 @@ func (q *Queries) ListChatParticipants(ctx context.Context, chatID string) ([]Ch
 			&i.LastReadMessageID,
 			&i.LastReadAt,
 			&i.JoinedAt,
+			&i.Muted,
 		); err != nil {
 			return nil, err
 		}
@@ -161,6 +163,26 @@ type RemoveChatParticipantParams struct {
 
 func (q *Queries) RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error {
 	_, err := q.db.ExecContext(ctx, removeChatParticipant, arg.ChatID, arg.UserID)
+	return err
+}
+
+const setChatParticipantMuted = `-- name: SetChatParticipantMuted :exec
+UPDATE chat_participants
+SET
+  muted = ?
+WHERE
+  chat_id = ?
+  AND user_id = ?
+`
+
+type SetChatParticipantMutedParams struct {
+	Muted  bool   `json:"muted"`
+	ChatID string `json:"chatId"`
+	UserID string `json:"userId"`
+}
+
+func (q *Queries) SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error {
+	_, err := q.db.ExecContext(ctx, setChatParticipantMuted, arg.Muted, arg.ChatID, arg.UserID)
 	return err
 }
 

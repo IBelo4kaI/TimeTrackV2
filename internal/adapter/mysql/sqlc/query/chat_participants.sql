@@ -40,6 +40,14 @@ WHERE
   chat_id = ?
   AND user_id = ?;
 
+-- name: SetChatParticipantMuted :exec
+UPDATE chat_participants
+SET
+  muted = ?
+WHERE
+  chat_id = ?
+  AND user_id = ?;
+
 -- name: MarkChatRead :exec
 UPDATE chat_participants
 SET
