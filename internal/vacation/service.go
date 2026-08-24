@@ -140,8 +140,13 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		}
 	}
 
-	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск",
-		fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006")))
+	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
+	body := dates
+	if vacation.ApplicantName != "" {
+		body = fmt.Sprintf("%s, %s", vacation.ApplicantName, dates)
+	}
+
+	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск", body)
 
 	return nil
 }

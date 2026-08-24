@@ -26,6 +26,9 @@ func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
 		EndDate     time.Time `json:"endDate"`
 		Description string    `json:"description"`
 		Status      string    `json:"status"`
+		// ФИО заявителя — фронт уже знает его (userStore.usersAll), передаёт
+		// только для текста уведомления админам, нигде не хранится.
+		ApplicantName string `json:"applicantName"`
 	}
 	if err := c.Bind().Body(&body); err != nil {
 		return response.BadRequest(c)
@@ -41,11 +44,12 @@ func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
 	}
 
 	if err := h.service.CreateSickLeave(c.RequestCtx(), CreateSickLeaveParams{
-		UserID:      body.UserID,
-		StartDate:   body.StartDate,
-		EndDate:     body.EndDate,
-		Description: body.Description,
-		Status:      status,
+		UserID:        body.UserID,
+		StartDate:     body.StartDate,
+		EndDate:       body.EndDate,
+		Description:   body.Description,
+		Status:        status,
+		ApplicantName: body.ApplicantName,
 	}); err != nil {
 		return response.ServerError(c)
 	}

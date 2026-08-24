@@ -35,4 +35,8 @@ type VacationCreateRequest struct {
 	Description    string               `json:"description"`
 	Status         repo.VacationsStatus `json:"status"`
 	VacationTypeID string               `json:"vacationTypeId"`
+	// ФИО заявителя — фронт уже знает его (userStore.usersAll), передаёт
+	// вместе с заявкой только для текста уведомления админам, нигде не
+	// хранится и ни на что не влияет кроме текста.
+	ApplicantName string `json:"applicantName"`
 }

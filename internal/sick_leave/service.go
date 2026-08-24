@@ -24,11 +24,12 @@ type Service interface {
 }
 
 type CreateSickLeaveParams struct {
-	UserID      string
-	StartDate   time.Time
-	EndDate     time.Time
-	Description string
-	Status      repo.SickLeavesStatus
+	UserID        string
+	StartDate     time.Time
+	EndDate       time.Time
+	Description   string
+	Status        repo.SickLeavesStatus
+	ApplicantName string
 }
 
 type sickLeaveService struct {
@@ -109,7 +110,7 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 		return fmt.Errorf("create time entries: %w", err)
 	}
 
-	s.notifyAdminsNewApplication(ctx, id, p.StartDate, p.EndDate)
+	s.notifyAdminsNewApplication(ctx, id, p.StartDate, p.EndDate, p.ApplicantName)
 
 	return nil
 }
@@ -117,7 +118,7 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 // notifyAdminsNewApplication — см. тот же метод у vacationService, здесь
 // без ссылки на конкретную заявку: у больничных нет отдельной страницы-
 // карточки (только общий список), ссылка ведёт на /sick-leave.
-func (s *sickLeaveService) notifyAdminsNewApplication(ctx context.Context, id string, startDate, endDate time.Time) {
+func (s *sickLeaveService) notifyAdminsNewApplication(ctx context.Context, id string, startDate, endDate time.Time, applicantName string) {
 	adminIDs, err := s.notificationService.GetSickLeaveAdminRecipients(ctx)
 	if err != nil || len(adminIDs) == 0 {
 		return
@@ -125,6 +126,9 @@ func (s *sickLeaveService) notifyAdminsNewApplication(ctx context.Context, id st
 
 	title := "Новая заявка на больничный"
 	body := fmt.Sprintf("%s – %s", startDate.Format("02.01.2006"), endDate.Format("02.01.2006"))
+	if applicantName != "" {
+		body = fmt.Sprintf("%s, %s", applicantName, body)
+	}
 
 	s.notificationService.CreateMany(ctx, adminIDs, title, body, repo.NotificationsTypeInfo, "sick_leave", id)
 	s.vkService.NotifyMany(ctx, adminIDs, title+": "+body, s.frontendURL+"/sick-leave")
