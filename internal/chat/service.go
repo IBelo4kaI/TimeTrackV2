@@ -57,6 +57,11 @@ type Service interface {
 	ResolveEntityRefOwner(ctx context.Context, entityType, entityID string) (string, error)
 	DeleteMessage(ctx context.Context, messageID uint64, callerUserID string) error
 	MarkRead(ctx context.Context, chatID, callerUserID string, messageID uint64) error
+	// SetViewing/ClearViewing — "я сейчас смотрю в этот чат" / "я его
+	// закрыл", отдельно от MarkRead: нужно ДО того, как в чат что-то придёт,
+	// чтобы решить, слать ли VK-дубликат уведомления (см. notifyVK).
+	SetViewing(ctx context.Context, chatID, callerUserID string) error
+	ClearViewing(callerUserID string)
 	Typing(ctx context.Context, chatID, callerUserID string) error
 
 	// Участники
@@ -579,6 +584,20 @@ func (s *service) MarkRead(ctx context.Context, chatID, callerUserID string, mes
 	return nil
 }
 
+// SetViewing — эфемерный сигнал "я сейчас смотрю в этот чат", как Typing,
+// ничего не пишет в БД — только in-memory состояние хаба.
+func (s *service) SetViewing(ctx context.Context, chatID, callerUserID string) error {
+	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
+		return err
+	}
+	s.hub.SetViewing(callerUserID, chatID)
+	return nil
+}
+
+func (s *service) ClearViewing(callerUserID string) {
+	s.hub.ClearViewing(callerUserID)
+}
+
 // Typing — эфемерный сигнал "печатает", ничего не пишет в БД.
 func (s *service) Typing(ctx context.Context, chatID, callerUserID string) error {
 	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
@@ -765,6 +784,11 @@ func (s *service) notifyVK(ctx context.Context, chatID, text string, exclude ...
 			continue
 		}
 		if _, skip := excluded[p.UserID]; skip {
+			continue
+		}
+		// Сидит в этом чате прямо сейчас — уже видит сообщение живьём по
+		// SSE, дублировать в VK незачем (см. Hub.viewing).
+		if s.hub.IsViewing(p.UserID, chatID) {
 			continue
 		}
 		ids = append(ids, p.UserID)

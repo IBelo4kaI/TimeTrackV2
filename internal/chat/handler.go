@@ -301,6 +301,18 @@ func (h Handler) MarkRead(c fiber.Ctx) error {
 	return response.Updated(c)
 }
 
+func (h Handler) SetViewing(c fiber.Ctx) error {
+	if err := h.service.SetViewing(c.RequestCtx(), c.Params("id"), callerID(c)); err != nil {
+		return mapError(c, err)
+	}
+	return response.Updated(c)
+}
+
+func (h Handler) ClearViewing(c fiber.Ctx) error {
+	h.service.ClearViewing(callerID(c))
+	return response.Updated(c)
+}
+
 func (h Handler) Typing(c fiber.Ctx) error {
 	if err := h.service.Typing(c.RequestCtx(), c.Params("id"), callerID(c)); err != nil {
 		return mapError(c, err)

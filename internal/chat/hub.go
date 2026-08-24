@@ -40,10 +40,17 @@ type Event struct {
 type Hub struct {
 	mu    sync.RWMutex
 	conns map[string]map[chan Event]struct{}
+	// viewing — userID -> id чата, который сейчас открыт на фронте (см.
+	// SetViewing/ClearViewing/IsViewing). Нужен, чтобы не слать VK-дубликат
+	// уведомления, пока человек и так сидит в этом чате в приложении.
+	viewing map[string]string
 }
 
 func NewHub() *Hub {
-	return &Hub{conns: make(map[string]map[chan Event]struct{})}
+	return &Hub{
+		conns:   make(map[string]map[chan Event]struct{}),
+		viewing: make(map[string]string),
+	}
 }
 
 // Subscribe регистрирует новое SSE-соединение пользователя и возвращает
@@ -74,9 +81,32 @@ func (h *Hub) Unsubscribe(userID string, ch chan Event) {
 		delete(set, ch)
 		if len(set) == 0 {
 			delete(h.conns, userID)
+			// Соединений (вкладок) не осталось — значит, ничего физически
+			// не открыто, viewing протух сам по себе (закрытие вкладки/сеть
+			// упала — явный ClearViewing от фронта в этом случае не придёт).
+			delete(h.viewing, userID)
 		}
 	}
 	close(ch)
+}
+
+// SetViewing/ClearViewing/IsViewing — см. комментарий у поля viewing.
+func (h *Hub) SetViewing(userID, chatID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.viewing[userID] = chatID
+}
+
+func (h *Hub) ClearViewing(userID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.viewing, userID)
+}
+
+func (h *Hub) IsViewing(userID, chatID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.viewing[userID] == chatID
 }
 
 // SendToUser рассылает событие во все открытые соединения пользователя.
