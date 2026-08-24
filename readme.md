@@ -88,14 +88,9 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 
 -- Кому слать уведомления о новых заявках (в таблицу notifications и в VK) —
 -- отдельные JSON-массивы user_id в system_settings для отпусков и
--- больничных. Настраивается на странице "Настройки"
--- (NotificationSettings.vue), но можно и вручную:
-INSERT INTO `system_settings`
-  (`setting_key`, `setting_value`, `setting_type`, `category`, `description`)
-VALUES
-  ('notification_vacation_admin_user_ids', '[]', 'json', 'notifications', 'user_id сотрудников, которым слать уведомления о новых заявках на отпуск'),
-  ('notification_sick_leave_admin_user_ids', '[]', 'json', 'notifications', 'user_id сотрудников, которым слать уведомления о новых заявках на больничный')
-ON DUPLICATE KEY UPDATE setting_key = setting_key;
+-- больничных, настраивается на странице "Настройки" (NotificationSettings.vue).
+-- Строки заводит миграция 017_seed_notification_settings.sql — вручную
+-- ничего накатывать не нужно.
 
 ### work_standards on 2026
 

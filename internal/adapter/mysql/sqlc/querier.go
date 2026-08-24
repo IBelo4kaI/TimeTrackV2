@@ -186,6 +186,12 @@ type Querier interface {
 	UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error
 	UpdateVacationStatus(ctx context.Context, arg UpdateVacationStatusParams) error
 	UpdateVacationType(ctx context.Context, arg UpdateVacationTypeParams) error
+	// INSERT ... ON DUPLICATE, а не голый UPDATE: та настройка, которую ещё ни
+	// разу не сохраняли (нет строки в system_settings — например, только что
+	// заведённый ключ), голым UPDATE молча не создаётся (0 affected rows, без
+	// ошибки) — значение просто терялось бы. setting_type/category берут
+	// дефолт колонки ('string'/'general'), для JSON-настроек тип выставляется
+	// отдельно через CreateSystemSetting/сид-миграцию.
 	UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error
 	UpdateWorkStandard(ctx context.Context, arg UpdateWorkStandardParams) error
 }

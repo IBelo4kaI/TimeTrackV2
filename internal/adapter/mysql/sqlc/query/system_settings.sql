@@ -50,11 +50,19 @@ WHERE
   setting_key = ?;
 
 -- name: UpdateValueSystemSetting :exec
-UPDATE system_settings
-SET
-  setting_value = ?
-WHERE
-  setting_key = ?;
+-- INSERT ... ON DUPLICATE, а не голый UPDATE: та настройка, которую ещё ни
+-- разу не сохраняли (нет строки в system_settings — например, только что
+-- заведённый ключ), голым UPDATE молча не создаётся (0 affected rows, без
+-- ошибки) — значение просто терялось бы. setting_type/category берут
+-- дефолт колонки ('string'/'general'), для JSON-настроек тип выставляется
+-- отдельно через CreateSystemSetting/сид-миграцию.
+INSERT INTO
+  system_settings (setting_key, setting_value)
+VALUES
+  (?, ?) ON DUPLICATE KEY
+UPDATE setting_value =
+VALUES
+  (setting_value);
 
 -- name: DeleteSystemSetting :exec
 DELETE FROM system_settings

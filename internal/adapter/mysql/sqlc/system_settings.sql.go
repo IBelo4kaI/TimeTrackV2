@@ -276,19 +276,27 @@ func (q *Queries) UpdateSystemSetting(ctx context.Context, arg UpdateSystemSetti
 }
 
 const updateValueSystemSetting = `-- name: UpdateValueSystemSetting :exec
-UPDATE system_settings
-SET
-  setting_value = ?
-WHERE
-  setting_key = ?
+INSERT INTO
+  system_settings (setting_key, setting_value)
+VALUES
+  (?, ?) ON DUPLICATE KEY
+UPDATE setting_value =
+VALUES
+  (setting_value)
 `
 
 type UpdateValueSystemSettingParams struct {
-	SettingValue sql.NullString `json:"settingValue"`
 	SettingKey   string         `json:"settingKey"`
+	SettingValue sql.NullString `json:"settingValue"`
 }
 
+// INSERT ... ON DUPLICATE, а не голый UPDATE: та настройка, которую ещё ни
+// разу не сохраняли (нет строки в system_settings — например, только что
+// заведённый ключ), голым UPDATE молча не создаётся (0 affected rows, без
+// ошибки) — значение просто терялось бы. setting_type/category берут
+// дефолт колонки ('string'/'general'), для JSON-настроек тип выставляется
+// отдельно через CreateSystemSetting/сид-миграцию.
 func (q *Queries) UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error {
-	_, err := q.db.ExecContext(ctx, updateValueSystemSetting, arg.SettingValue, arg.SettingKey)
+	_, err := q.db.ExecContext(ctx, updateValueSystemSetting, arg.SettingKey, arg.SettingValue)
 	return err
 }

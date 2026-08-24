@@ -1,6 +1,8 @@
 package systemsetting
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"timetrack/internal/response"
 
@@ -52,6 +54,16 @@ func (h *Handler) GetSystemSettingByKey(c fiber.Ctx) error {
 
 	setting, err := h.service.GetSystemSettingByKey(c.RequestCtx(), settingKey)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Настройку ещё ни разу не сохраняли — не ошибка, просто пусто.
+			// UpdateSystemSettingValue теперь сам создаёт строку при первом
+			// сохранении (см. UpdateValueSystemSetting), но до первого
+			// сохранения запись законно может не существовать.
+			return response.Success(c, fiber.Map{
+				"settingKey":   settingKey,
+				"settingValue": nil,
+			})
+		}
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 
