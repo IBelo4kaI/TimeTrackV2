@@ -164,8 +164,18 @@ func (s *service) send(vkUserID int, message, url string) {
 	}
 
 	if url != "" {
+		// Не через AddOpenLinkButton — она маршалит payload=nil в строку
+		// "null" (VK: "invalid payload"). Кнопке open_link payload не
+		// нужен вовсе, оставляем поле пустым (omitempty уберёт его из JSON).
 		kb := object.NewMessagesKeyboardInline()
-		kb.AddRow().AddOpenLinkButton(url, "Перейти в чат", nil)
+		kb.AddRow()
+		kb.Buttons[0] = append(kb.Buttons[0], object.MessagesKeyboardButton{
+			Action: object.MessagesKeyboardButtonAction{
+				Type:  object.ButtonOpenLink,
+				Label: "Перейти в чат",
+				Link:  url,
+			},
+		})
 		if raw, err := json.Marshal(kb); err == nil {
 			params["keyboard"] = string(raw)
 		}
