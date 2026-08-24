@@ -150,6 +150,18 @@ func (h Handler) SetMuted(c fiber.Ctx) error {
 	return response.Updated(c)
 }
 
+func (h Handler) SetVKMuted(c fiber.Ctx) error {
+	var body setMutedRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	if err := h.service.SetVKMuted(c.RequestCtx(), c.Params("id"), callerID(c), body.Muted); err != nil {
+		return mapError(c, err)
+	}
+	return response.Updated(c)
+}
+
 func (h Handler) DeleteChat(c fiber.Ctx) error {
 	if err := h.service.DeleteChat(c.RequestCtx(), c.Params("id"), callerID(c)); err != nil {
 		return mapError(c, err)

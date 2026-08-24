@@ -153,6 +153,7 @@ type Querier interface {
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
+	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error

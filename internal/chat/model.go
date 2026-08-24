@@ -72,6 +72,7 @@ type ChatWithMeta struct {
 	LastReadMessageID *uint64                   `json:"lastReadMessageId"`
 	UnreadCount       int64                     `json:"unreadCount"`
 	Muted             bool                      `json:"muted"`
+	VKMuted           bool                      `json:"vkMuted"`
 }
 
 func nullInt64ToPtr(v sql.NullInt64) *uint64 {

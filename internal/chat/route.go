@@ -40,6 +40,7 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 	router.Put("/:id/viewing", require("edit"), handler.SetViewing)
 	router.Delete("/viewing", require("edit"), handler.ClearViewing)
 	router.Put("/:id/mute", require("edit"), handler.SetMuted)
+	router.Put("/:id/vk-mute", require("edit"), handler.SetVKMuted)
 
 	// permission chat:delete
 	router.Delete("/:id/messages/:messageId", require("delete"), handler.DeleteMessage)

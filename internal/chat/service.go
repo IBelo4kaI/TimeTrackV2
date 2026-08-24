@@ -43,6 +43,9 @@ type Service interface {
 	ListMyChats(ctx context.Context, callerUserID string) ([]ChatWithMeta, error)
 	RenameChat(ctx context.Context, chatID, callerUserID, name string) error
 	SetMuted(ctx context.Context, chatID, callerUserID string, muted bool) error
+	// SetVKMuted — отдельно от SetMuted: глушит только VK-дубликат, тост/
+	// браузер/звук в приложении продолжают работать как обычно.
+	SetVKMuted(ctx context.Context, chatID, callerUserID string, muted bool) error
 	DeleteChat(ctx context.Context, chatID, callerUserID string) error
 
 	// Сообщения
@@ -242,6 +245,7 @@ func (s *service) GetChat(ctx context.Context, chatID, callerUserID string) (Cha
 		LastReadMessageID: nullInt64ToPtr(participant.LastReadMessageID),
 		UnreadCount:       unread,
 		Muted:             participant.Muted,
+		VKMuted:           participant.VkMuted,
 	}, nil
 }
 
@@ -277,6 +281,7 @@ func (s *service) ListMyChats(ctx context.Context, callerUserID string) ([]ChatW
 			LastReadMessageID: nullInt64ToPtr(r.LastReadMessageID),
 			UnreadCount:       unread,
 			Muted:             r.Muted,
+			VKMuted:           r.VkMuted,
 		})
 	}
 
@@ -293,6 +298,18 @@ func (s *service) SetMuted(ctx context.Context, chatID, callerUserID string, mut
 		Muted:  muted,
 		ChatID: chatID,
 		UserID: callerUserID,
+	})
+}
+
+// SetVKMuted — см. комментарий в интерфейсе Service.
+func (s *service) SetVKMuted(ctx context.Context, chatID, callerUserID string, muted bool) error {
+	if _, err := s.ensureParticipant(ctx, chatID, callerUserID); err != nil {
+		return err
+	}
+	return s.repo.SetChatParticipantVKMuted(ctx, repo.SetChatParticipantVKMutedParams{
+		VkMuted: muted,
+		ChatID:  chatID,
+		UserID:  callerUserID,
 	})
 }
 
@@ -780,7 +797,7 @@ func (s *service) notifyVK(ctx context.Context, chatID, text string, exclude ...
 
 	ids := make([]string, 0, len(participants))
 	for _, p := range participants {
-		if p.Muted {
+		if p.Muted || p.VkMuted {
 			continue
 		}
 		if _, skip := excluded[p.UserID]; skip {

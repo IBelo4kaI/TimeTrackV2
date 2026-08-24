@@ -58,7 +58,7 @@ func (q *Queries) CountUnreadChatMessages(ctx context.Context, arg CountUnreadCh
 
 const getChatParticipant = `-- name: GetChatParticipant :one
 SELECT
-  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted
+  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted, vk_muted
 FROM
   chat_participants
 WHERE
@@ -82,13 +82,14 @@ func (q *Queries) GetChatParticipant(ctx context.Context, arg GetChatParticipant
 		&i.LastReadAt,
 		&i.JoinedAt,
 		&i.Muted,
+		&i.VkMuted,
 	)
 	return i, err
 }
 
 const listChatParticipants = `-- name: ListChatParticipants :many
 SELECT
-  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted
+  chat_id, user_id, role, last_read_message_id, last_read_at, joined_at, muted, vk_muted
 FROM
   chat_participants
 WHERE
@@ -114,6 +115,7 @@ func (q *Queries) ListChatParticipants(ctx context.Context, chatID string) ([]Ch
 			&i.LastReadAt,
 			&i.JoinedAt,
 			&i.Muted,
+			&i.VkMuted,
 		); err != nil {
 			return nil, err
 		}
@@ -183,6 +185,26 @@ type SetChatParticipantMutedParams struct {
 
 func (q *Queries) SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error {
 	_, err := q.db.ExecContext(ctx, setChatParticipantMuted, arg.Muted, arg.ChatID, arg.UserID)
+	return err
+}
+
+const setChatParticipantVKMuted = `-- name: SetChatParticipantVKMuted :exec
+UPDATE chat_participants
+SET
+  vk_muted = ?
+WHERE
+  chat_id = ?
+  AND user_id = ?
+`
+
+type SetChatParticipantVKMutedParams struct {
+	VkMuted bool   `json:"vkMuted"`
+	ChatID  string `json:"chatId"`
+	UserID  string `json:"userId"`
+}
+
+func (q *Queries) SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error {
+	_, err := q.db.ExecContext(ctx, setChatParticipantVKMuted, arg.VkMuted, arg.ChatID, arg.UserID)
 	return err
 }
 

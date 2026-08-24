@@ -263,6 +263,37 @@
 					}
 				},
 				{
+					"name": "Mute/unmute VK duplicate only",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Cookie",
+								"value": "session={{sessionCookie}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"muted\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/chats/{{chatId}}/vk-mute",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"chats",
+								"{{chatId}}",
+								"vk-mute"
+							]
+						}
+					}
+				},
+				{
 					"name": "Delete chat",
 					"request": {
 						"method": "DELETE",

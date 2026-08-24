@@ -312,6 +312,7 @@ type ChatParticipant struct {
 	LastReadAt        sql.NullTime         `json:"lastReadAt"`
 	JoinedAt          time.Time            `json:"joinedAt"`
 	Muted             bool                 `json:"muted"`
+	VkMuted           bool                 `json:"vkMuted"`
 }
 
 type DayType struct {
