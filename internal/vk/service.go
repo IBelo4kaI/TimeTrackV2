@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math/big"
@@ -14,6 +15,7 @@ import (
 	repo "timetrack/internal/adapter/mysql/sqlc"
 
 	"github.com/SevereCloud/vksdk/v3/api"
+	"github.com/SevereCloud/vksdk/v3/object"
 )
 
 // LinkCodeTTL — сколько код привязки действителен после генерации.
@@ -101,7 +103,7 @@ func (s *service) HandleMessage(ctx context.Context, vkUserID int, text string) 
 	s.mu.Unlock()
 
 	if !ok || time.Now().After(pending.expiresAt) {
-		s.send(vkUserID, "Код не найден или истёк — сгенерируйте новый в приложении.")
+		s.send(vkUserID, "Код не найден или истёк — сгенерируйте новый в приложении.", "")
 		return
 	}
 
@@ -110,11 +112,11 @@ func (s *service) HandleMessage(ctx context.Context, vkUserID int, text string) 
 		VkUserID: int64(vkUserID),
 	}); err != nil {
 		s.logger.Error("vk: link account failed", "err", err)
-		s.send(vkUserID, "Не удалось привязать аккаунт, попробуйте ещё раз.")
+		s.send(vkUserID, "Не удалось привязать аккаунт, попробуйте ещё раз.", "")
 		return
 	}
 
-	s.send(vkUserID, "Готово — уведомления теперь будут дублироваться сюда.")
+	s.send(vkUserID, "Готово — уведомления теперь будут дублироваться сюда.", "")
 }
 
 func (s *service) Notify(ctx context.Context, userID, text, url string) {
@@ -122,7 +124,7 @@ func (s *service) Notify(ctx context.Context, userID, text, url string) {
 	if err != nil {
 		return // не привязан либо БД недоступна — не критично, это дублирующий канал
 	}
-	s.send(int(vkID), formatMessage(text, url))
+	s.send(int(vkID), text, url)
 }
 
 func (s *service) NotifyMany(ctx context.Context, userIDs []string, text, url string, exclude ...string) {
@@ -146,28 +148,32 @@ func (s *service) NotifyMany(ctx context.Context, userIDs []string, text, url st
 		return
 	}
 
-	message := formatMessage(text, url)
 	for _, l := range links {
-		s.send(int(l.VkUserID), message)
+		s.send(int(l.VkUserID), text, url)
 	}
 }
 
-func (s *service) send(vkUserID int, message string) {
-	_, err := s.vk.MessagesSend(api.Params{
+// send — url (если есть) вложен как inline-кнопка "Перейти в чат", а не
+// вставлен в текст сырой строкой: так короче и не занимает отдельную строку
+// сообщения.
+func (s *service) send(vkUserID int, message, url string) {
+	params := api.Params{
 		"user_id":   vkUserID,
 		"message":   message,
 		"random_id": time.Now().UnixNano(),
-	})
-	if err != nil {
+	}
+
+	if url != "" {
+		kb := object.NewMessagesKeyboardInline()
+		kb.AddRow().AddOpenLinkButton(url, "Перейти в чат", nil)
+		if raw, err := json.Marshal(kb); err == nil {
+			params["keyboard"] = string(raw)
+		}
+	}
+
+	if _, err := s.vk.MessagesSend(params); err != nil {
 		s.logger.Error("vk: send message failed", "err", err, "vkUserId", vkUserID)
 	}
-}
-
-func formatMessage(text, url string) string {
-	if url == "" {
-		return text
-	}
-	return text + "\n" + url
 }
 
 func randomCode() string {
