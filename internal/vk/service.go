@@ -1,0 +1,180 @@
+package vk
+
+import (
+	"context"
+	"crypto/rand"
+	"database/sql"
+	"errors"
+	"log/slog"
+	"math/big"
+	"strings"
+	"sync"
+	"time"
+
+	repo "timetrack/internal/adapter/mysql/sqlc"
+
+	"github.com/SevereCloud/vksdk/v3/api"
+)
+
+// LinkCodeTTL — сколько код привязки действителен после генерации.
+const LinkCodeTTL = 10 * time.Minute
+
+// без 0/O/1/I — легче набрать вручную, отправляя боту сообщением.
+const linkCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+type Service interface {
+	// GenerateLinkCode — код, который сотрудник присылает боту сообщением,
+	// чтобы привязать VK-аккаунт (см. HandleMessage). Хранится в памяти —
+	// код короткоживущий, переживать рестарт ему не нужно.
+	GenerateLinkCode(userID string) string
+	Unlink(ctx context.Context, userID string) error
+	IsLinked(ctx context.Context, userID string) (bool, error)
+
+	// HandleMessage — входящее сообщение от пользователя VK (Callback API
+	// message_new). Единственное, что понимаем сейчас — код привязки.
+	HandleMessage(ctx context.Context, vkUserID int, text string)
+
+	// Notify — тихо ничего не делает, если аккаунт не привязан (VK для
+	// уведомлений опционален, а не обязателен).
+	Notify(ctx context.Context, userID, text, url string)
+	// NotifyMany — то же самое пачкой, exclude — кого пропустить
+	// (например, отправителя сообщения в чате).
+	NotifyMany(ctx context.Context, userIDs []string, text, url string, exclude ...string)
+}
+
+type pendingCode struct {
+	userID    string
+	expiresAt time.Time
+}
+
+type service struct {
+	repo   repo.Querier
+	vk     *api.VK
+	logger *slog.Logger
+
+	mu    sync.Mutex
+	codes map[string]pendingCode
+}
+
+func NewService(r repo.Querier, groupToken string, logger *slog.Logger) Service {
+	return &service{
+		repo:   r,
+		vk:     api.NewVK(groupToken),
+		logger: logger,
+		codes:  make(map[string]pendingCode),
+	}
+}
+
+func (s *service) GenerateLinkCode(userID string) string {
+	code := randomCode()
+
+	s.mu.Lock()
+	s.codes[code] = pendingCode{userID: userID, expiresAt: time.Now().Add(LinkCodeTTL)}
+	s.mu.Unlock()
+
+	return code
+}
+
+func (s *service) Unlink(ctx context.Context, userID string) error {
+	return s.repo.UnlinkUserVK(ctx, userID)
+}
+
+func (s *service) IsLinked(ctx context.Context, userID string) (bool, error) {
+	_, err := s.repo.GetVKIDByUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *service) HandleMessage(ctx context.Context, vkUserID int, text string) {
+	code := strings.ToUpper(strings.TrimSpace(text))
+
+	s.mu.Lock()
+	pending, ok := s.codes[code]
+	if ok {
+		delete(s.codes, code)
+	}
+	s.mu.Unlock()
+
+	if !ok || time.Now().After(pending.expiresAt) {
+		s.send(vkUserID, "Код не найден или истёк — сгенерируйте новый в приложении.")
+		return
+	}
+
+	if err := s.repo.LinkUserVK(ctx, repo.LinkUserVKParams{
+		UserID:   pending.userID,
+		VkUserID: int64(vkUserID),
+	}); err != nil {
+		s.logger.Error("vk: link account failed", "err", err)
+		s.send(vkUserID, "Не удалось привязать аккаунт, попробуйте ещё раз.")
+		return
+	}
+
+	s.send(vkUserID, "Готово — уведомления теперь будут дублироваться сюда.")
+}
+
+func (s *service) Notify(ctx context.Context, userID, text, url string) {
+	vkID, err := s.repo.GetVKIDByUser(ctx, userID)
+	if err != nil {
+		return // не привязан либо БД недоступна — не критично, это дублирующий канал
+	}
+	s.send(int(vkID), formatMessage(text, url))
+}
+
+func (s *service) NotifyMany(ctx context.Context, userIDs []string, text, url string, exclude ...string) {
+	excluded := make(map[string]struct{}, len(exclude))
+	for _, id := range exclude {
+		excluded[id] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(userIDs))
+	for _, id := range userIDs {
+		if _, skip := excluded[id]; !skip {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	links, err := s.repo.ListVKIDsByUsers(ctx, ids)
+	if err != nil {
+		return
+	}
+
+	message := formatMessage(text, url)
+	for _, l := range links {
+		s.send(int(l.VkUserID), message)
+	}
+}
+
+func (s *service) send(vkUserID int, message string) {
+	_, err := s.vk.MessagesSend(api.Params{
+		"user_id":   vkUserID,
+		"message":   message,
+		"random_id": time.Now().UnixNano(),
+	})
+	if err != nil {
+		s.logger.Error("vk: send message failed", "err", err, "vkUserId", vkUserID)
+	}
+}
+
+func formatMessage(text, url string) string {
+	if url == "" {
+		return text
+	}
+	return text + "\n" + url
+}
+
+func randomCode() string {
+	b := make([]byte, 6)
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(linkCodeAlphabet))))
+		b[i] = linkCodeAlphabet[n.Int64()]
+	}
+	return string(b)
+}

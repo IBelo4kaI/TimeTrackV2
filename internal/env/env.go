@@ -3,6 +3,7 @@ package env
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -28,4 +29,28 @@ func (e *Env) GetAddr() string {
 
 func (e *Env) GetGRPCServerAddr() string {
 	return os.Getenv("GRPC_ADDR")
+}
+
+// GetFrontendURL — публичный адрес фронта (без слэша на конце), нужен,
+// чтобы собрать кликабельную ссылку на чат в VK-уведомлении.
+func (e *Env) GetFrontendURL() string {
+	return os.Getenv("FRONTEND_URL")
+}
+
+// GetVKGroupID — числовой id сообщества (ожидает vksdk/callback), не токен.
+func (e *Env) GetVKGroupID() int {
+	id, _ := strconv.Atoi(os.Getenv("VK_GROUP_ID"))
+	return id
+}
+
+func (e *Env) GetVKGroupToken() string {
+	return os.Getenv("VK_GROUP_TOKEN")
+}
+
+func (e *Env) GetVKConfirmationString() string {
+	return os.Getenv("VK_CONFIRMATION_STRING")
+}
+
+func (e *Env) GetVKSecretKey() string {
+	return os.Getenv("VK_SECRET_KEY")
 }

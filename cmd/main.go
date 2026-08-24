@@ -9,7 +9,7 @@ import (
 	mysqladapter "timetrack/internal/adapter/mysql"
 	"timetrack/internal/env"
 
-	_ "github.com/go-sql-driver/mysql"		
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -21,7 +21,13 @@ func main() {
 		db: dbConfig{
 			dsn: env.GetDbString(),
 		},
-		prefix: "time",
+		prefix:      "time",
+		frontendURL: env.GetFrontendURL(),
+		vk: vkConfig{
+			groupToken:         env.GetVKGroupToken(),
+			confirmationString: env.GetVKConfirmationString(),
+			secretKey:          env.GetVKSecretKey(),
+		},
 	}
 
 	db, err := sql.Open("mysql", cfg.db.dsn)

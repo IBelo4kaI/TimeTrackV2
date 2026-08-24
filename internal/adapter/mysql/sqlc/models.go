@@ -407,6 +407,12 @@ type UserTimeEntry struct {
 	UpdatedAt   sql.NullTime `json:"updatedAt"`
 }
 
+type UserVkLink struct {
+	UserID    string    `json:"userId"`
+	VkUserID  int64     `json:"vkUserId"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type Vacation struct {
 	ID              string          `json:"id"`
 	UserID          string          `json:"userId"`

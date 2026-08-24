@@ -98,12 +98,14 @@ type Querier interface {
 	GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (interface{}, error)
 	GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByMonthParams) (interface{}, error)
 	GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYearParams) (interface{}, error)
+	GetUserByVKID(ctx context.Context, vkUserID int64) (string, error)
 	// ============================================
 	// user_time_entries queries
 	// ============================================
 	GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTimeEntriesForMonthParams) ([]UserTimeEntry, error)
 	GetUserTimeEntryById(ctx context.Context, id string) (UserTimeEntry, error)
 	GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]UserTimeEntry, error)
+	GetVKIDByUser(ctx context.Context, userID string) (int64, error)
 	GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error)
 	GetVacationDaysByMonth(ctx context.Context, arg GetVacationDaysByMonthParams) (interface{}, error)
 	GetVacationDaysByYear(ctx context.Context, arg GetVacationDaysByYearParams) (interface{}, error)
@@ -124,6 +126,7 @@ type Querier interface {
 	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	HardDeleteFile(ctx context.Context, id string) error
+	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
@@ -135,6 +138,9 @@ type Querier interface {
 	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
+	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
+	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
 	// Урезанный набор полей отпусков ВСЕХ сотрудников для виджета "отпуска
 	// коллег" (internal/vacation/service.go ListVacationCalendarByYear) — без
 	// description: это личная причина отпуска, её не должен видеть весь
@@ -150,6 +156,7 @@ type Querier interface {
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error
+	UnlinkUserVK(ctx context.Context, userID string) error
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
 	UpdateChatName(ctx context.Context, arg UpdateChatNameParams) error

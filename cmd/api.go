@@ -18,6 +18,7 @@ import (
 	usertimeentry "timetrack/internal/user_time_entry"
 	vacation "timetrack/internal/vacation"
 	vacationtype "timetrack/internal/vacation_type"
+	"timetrack/internal/vk"
 	workstandard "timetrack/internal/work_standard"
 
 	"github.com/gofiber/fiber/v3"
@@ -33,13 +34,21 @@ type application struct {
 }
 
 type config struct {
-	addr   string
-	db     dbConfig
-	prefix string
+	addr        string
+	db          dbConfig
+	prefix      string
+	frontendURL string
+	vk          vkConfig
 }
 
 type dbConfig struct {
 	dsn string
+}
+
+type vkConfig struct {
+	groupToken         string
+	confirmationString string
+	secretKey          string
 }
 
 func (app *application) mount() *fiber.App {
@@ -133,10 +142,19 @@ func (app *application) mount() *fiber.App {
 	workStandardService := workstandard.NewService(repo.New(app.db))
 	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
 
+	// VK-бот (дублирование уведомлений чатов) — no-op, пока в .env не
+	// заполнены VK_GROUP_TOKEN и остальные VK_* (см. internal/env/env.go).
+	// Собирается раньше chat — chat.Service дублирует свои уведомления сюда.
+	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.logger)
+	vk.SetupRoutes(v1, vkService, app.grpcClient, app.config.prefix, vk.Config{
+		ConfirmationString: app.config.vk.confirmationString,
+		SecretKey:          app.config.vk.secretKey,
+	})
+
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)
 	chatHub := chat.NewHub()
-	chatService := chat.NewService(repo.New(app.db), chatHub, fileService)
+	chatService := chat.NewService(repo.New(app.db), chatHub, fileService, vkService, app.config.frontendURL)
 	chat.SetupRoutes(v1, chatService, app.grpcClient, app.config.prefix)
 
 	return fiberApp

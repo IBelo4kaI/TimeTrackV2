@@ -70,6 +70,15 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
 ('a7682c92-43af-400a-9413-ab130f51dc2b', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vacation_calendar:read', 'Просмотр календаря отпусков коллег', 'Разрешение видеть даты и статусы отпусков всех сотрудников (без причины/описания) в общем календаре', NOW());
 
+### vk bot permissions
+
+-- Выдать всем сотрудникам, кто пользуется чатами — привязка VK своя,
+-- личная, ничего чужого не открывает.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('7fa5b7fe-4a42-4a6d-acf5-9df9671dbb40', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vk:read', 'Статус привязки VK', 'Разрешение проверять, привязан ли свой VK-аккаунт', NOW()),
+('8c18486e-9ed2-4f8d-b5fd-353dff6ab5a4', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vk:create', 'Привязка VK-аккаунта', 'Разрешение сгенерировать код привязки своего VK-аккаунта', NOW()),
+('6597f62e-912b-4df4-b851-802020fca654', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vk:delete', 'Отвязка VK-аккаунта', 'Разрешение отвязать свой VK-аккаунт', NOW());
+
 ### work_standards on 2026
 
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES

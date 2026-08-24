@@ -10,6 +10,7 @@ import (
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	fileservice "timetrack/internal/service"
+	"timetrack/internal/vk"
 
 	"github.com/google/uuid"
 )
@@ -78,10 +79,12 @@ type service struct {
 	repo        repo.Querier
 	hub         *Hub
 	fileService *fileservice.FileService
+	vk          vk.Service
+	frontendURL string
 }
 
-func NewService(r repo.Querier, hub *Hub, fileService *fileservice.FileService) Service {
-	return &service{repo: r, hub: hub, fileService: fileService}
+func NewService(r repo.Querier, hub *Hub, fileService *fileservice.FileService, vkService vk.Service, frontendURL string) Service {
+	return &service{repo: r, hub: hub, fileService: fileService, vk: vkService, frontendURL: frontendURL}
 }
 
 // ============================================
@@ -126,6 +129,7 @@ func (s *service) CreateChat(ctx context.Context, callerUserID string, req Creat
 		Type: EventChatCreated,
 		Data: map[string]any{"chatId": chatID},
 	}, callerUserID)
+	s.notifyVK(ctx, chatID, "У вас новый чат", callerUserID)
 
 	return s.GetChat(ctx, chatID, callerUserID)
 }
@@ -164,6 +168,7 @@ func (s *service) GetOrCreateEntityChat(ctx context.Context, entityType, entityI
 				Type: EventChatCreated,
 				Data: map[string]any{"chatId": existing.ID},
 			}, callerUserID)
+			s.notifyVK(ctx, existing.ID, "У вас новый чат", callerUserID)
 		}
 		return s.GetChat(ctx, existing.ID, callerUserID)
 	}
@@ -199,6 +204,7 @@ func (s *service) GetOrCreateEntityChat(ctx context.Context, entityType, entityI
 		Type: EventChatCreated,
 		Data: map[string]any{"chatId": chatID},
 	}, callerUserID)
+	s.notifyVK(ctx, chatID, "У вас новый чат", callerUserID)
 
 	return s.GetChat(ctx, chatID, callerUserID)
 }
@@ -402,6 +408,7 @@ func (s *service) SendMessage(ctx context.Context, chatID, callerUserID, body st
 
 	dto := ChatMessageDTO{ChatMessage: message, Attachments: []MessageAttachment{}}
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
+	s.notifyVK(ctx, chatID, vkMessagePreview(body), callerUserID)
 
 	return dto, nil
 }
@@ -477,6 +484,7 @@ func (s *service) SendFileMessage(ctx context.Context, chatID, callerUserID, cap
 
 	dto := ChatMessageDTO{ChatMessage: message, Attachments: attachments}
 	s.broadcastToParticipants(ctx, chatID, Event{Type: EventMessageCreated, Data: dto})
+	s.notifyVK(ctx, chatID, vkMessagePreview(caption), callerUserID)
 
 	return dto, nil
 }
@@ -620,6 +628,7 @@ func (s *service) AddParticipant(ctx context.Context, chatID, callerUserID, newU
 		Type: EventChatCreated,
 		Data: map[string]any{"chatId": chatID},
 	})
+	s.vk.Notify(ctx, newUserID, "У вас новый чат", s.chatURL(chatID))
 
 	return nil
 }
@@ -733,6 +742,57 @@ func (s *service) broadcastToParticipants(ctx context.Context, chatID string, ev
 		}
 		s.hub.SendToUser(p.UserID, event)
 	}
+}
+
+// notifyVK — дублирует уведомление в VK участникам чата (кто привязал
+// аккаунт, см. internal/vk) без mute. Только для "новое сообщение"/"новый
+// чат" — не для typing/read_receipt/message_deleted, как и браузерные
+// уведомления на фронте.
+func (s *service) notifyVK(ctx context.Context, chatID, text string, exclude ...string) {
+	participants, err := s.repo.ListChatParticipants(ctx, chatID)
+	if err != nil {
+		return
+	}
+
+	excluded := make(map[string]struct{}, len(exclude))
+	for _, id := range exclude {
+		excluded[id] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(participants))
+	for _, p := range participants {
+		if p.Muted {
+			continue
+		}
+		if _, skip := excluded[p.UserID]; skip {
+			continue
+		}
+		ids = append(ids, p.UserID)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	s.vk.NotifyMany(ctx, ids, text, s.chatURL(chatID))
+}
+
+func (s *service) chatURL(chatID string) string {
+	return fmt.Sprintf("%s/chats?open=%s", s.frontendURL, chatID)
+}
+
+// vkMessagePreview — текст для VK-уведомления о новом сообщении. Без имени
+// отправителя: у chat.service нет прав дёрнуть справочник сотрудников
+// (GetUsers за gRPC требует session_token, а тут только callerUserID) —
+// имя резолвит только фронт, из уже загруженного списка сотрудников.
+func vkMessagePreview(body string) string {
+	if body == "" {
+		return "Новое сообщение в чате (вложение)"
+	}
+	runes := []rune(body)
+	if len(runes) > 200 {
+		return "Новое сообщение в чате: " + string(runes[:200]) + "…"
+	}
+	return "Новое сообщение в чате: " + body
 }
 
 func normalizeParticipants(chatType, callerUserID string, ids []string) ([]string, error) {
