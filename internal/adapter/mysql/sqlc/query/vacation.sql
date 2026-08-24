@@ -116,8 +116,12 @@ ORDER BY
   v.created_at DESC;
 
 -- name: CreateVacation :exec
+-- id передаём явно (не полагаемся на DEFAULT(uuid())) — нужен сразу после
+-- вставки, чтобы привязать к нему уведомления админам (см. internal/vacation
+-- /service.go CreateVacationReport).
 INSERT INTO
   vacations (
+    id,
     user_id,
     start_date,
     end_date,
@@ -127,7 +131,7 @@ INSERT INTO
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountVacationsByStatus :one
 SELECT

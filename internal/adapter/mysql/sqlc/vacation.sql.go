@@ -32,6 +32,7 @@ func (q *Queries) AssignVacationType(ctx context.Context, arg AssignVacationType
 const createVacation = `-- name: CreateVacation :exec
 INSERT INTO
   vacations (
+    id,
     user_id,
     start_date,
     end_date,
@@ -41,10 +42,11 @@ INSERT INTO
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
+	ID             string          `json:"id"`
 	UserID         string          `json:"userId"`
 	StartDate      time.Time       `json:"startDate"`
 	EndDate        time.Time       `json:"endDate"`
@@ -54,8 +56,12 @@ type CreateVacationParams struct {
 	VacationTypeID sql.NullString  `json:"vacationTypeId"`
 }
 
+// id передаём явно (не полагаемся на DEFAULT(uuid())) — нужен сразу после
+// вставки, чтобы привязать к нему уведомления админам (см. internal/vacation
+// /service.go CreateVacationReport).
 func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) error {
 	_, err := q.db.ExecContext(ctx, createVacation,
+		arg.ID,
 		arg.UserID,
 		arg.StartDate,
 		arg.EndDate,

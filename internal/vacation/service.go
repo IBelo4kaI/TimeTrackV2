@@ -9,14 +9,21 @@ import (
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/date"
+	"timetrack/internal/notification"
 	"timetrack/internal/parser"
 	usertimeentry "timetrack/internal/user_time_entry"
+	"timetrack/internal/vk"
+
+	"github.com/google/uuid"
 )
 
 type vacationService struct {
 	repo                 *repo.Queries
 	db                   *sql.DB
 	userTimeEntryService usertimeentry.Service
+	notificationService  notification.Service
+	vkService            vk.Service
+	frontendURL          string
 }
 
 type Service interface {
@@ -42,8 +49,15 @@ type Service interface {
 // defaultVacationTypeSystemName — тип отпуска, назначаемый по умолчанию, если клиент его не указал.
 const defaultVacationTypeSystemName = "paid"
 
-func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service) Service {
-	return &vacationService{repo: repo, db: db, userTimeEntryService: userTimeEntryService}
+func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, frontendURL string) Service {
+	return &vacationService{
+		repo:                 repo,
+		db:                   db,
+		userTimeEntryService: userTimeEntryService,
+		notificationService:  notificationService,
+		vkService:            vkService,
+		frontendURL:          frontendURL,
+	}
 }
 
 func (s *vacationService) GetVacationsByYear(ctx context.Context, userId string, year int) (*[]repo.GetVacationsByYearRow, error) {
@@ -101,8 +115,11 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		return err
 	}
 
+	vacationID := uuid.NewString()
+
 	// Создаем отпуск в базе данных
 	err = s.repo.CreateVacation(ctx, repo.CreateVacationParams{
+		ID:             vacationID,
 		UserID:         vacation.UserID,
 		StartDate:      vacation.StartDate,
 		EndDate:        vacation.EndDate,
@@ -123,7 +140,24 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		}
 	}
 
+	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск",
+		fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006")))
+
 	return nil
+}
+
+// notifyAdminsNewApplication — и в notifications (таблица), и в VK, тем, кто
+// настроен в system_settings под отпуска отдельно от больничных (см.
+// notification.Service.GetVacationAdminRecipients). Best-effort — ошибка
+// тут не должна ронять создание самой заявки.
+func (s *vacationService) notifyAdminsNewApplication(ctx context.Context, entityType, entityID, title, body string) {
+	adminIDs, err := s.notificationService.GetVacationAdminRecipients(ctx)
+	if err != nil || len(adminIDs) == 0 {
+		return
+	}
+
+	s.notificationService.CreateMany(ctx, adminIDs, title, body, repo.NotificationsTypeInfo, entityType, entityID)
+	s.vkService.NotifyMany(ctx, adminIDs, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, entityID))
 }
 
 // Основная версия — только дни между датами, сгруппированные по месяцам

@@ -7,7 +7,11 @@ import (
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/date"
+	"timetrack/internal/notification"
 	usertimeentry "timetrack/internal/user_time_entry"
+	"timetrack/internal/vk"
+
+	"github.com/google/uuid"
 )
 
 type Service interface {
@@ -30,10 +34,19 @@ type CreateSickLeaveParams struct {
 type sickLeaveService struct {
 	repo                 *repo.Queries
 	userTimeEntryService usertimeentry.Service
+	notificationService  notification.Service
+	vkService            vk.Service
+	frontendURL          string
 }
 
-func NewService(r *repo.Queries, userTimeEntryService usertimeentry.Service) Service {
-	return &sickLeaveService{repo: r, userTimeEntryService: userTimeEntryService}
+func NewService(r *repo.Queries, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, frontendURL string) Service {
+	return &sickLeaveService{
+		repo:                 r,
+		userTimeEntryService: userTimeEntryService,
+		notificationService:  notificationService,
+		vkService:            vkService,
+		frontendURL:          frontendURL,
+	}
 }
 
 func (s *sickLeaveService) GetSickLeavesByYear(ctx context.Context, userID string, year int) ([]repo.GetSickLeavesByYearRow, error) {
@@ -78,7 +91,10 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 		status = repo.SickLeavesStatusUnofficial
 	}
 
+	id := uuid.NewString()
+
 	if err := s.repo.CreateSickLeave(ctx, repo.CreateSickLeaveParams{
+		ID:          id,
 		UserID:      p.UserID,
 		StartDate:   p.StartDate,
 		EndDate:     p.EndDate,
@@ -93,7 +109,25 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 		return fmt.Errorf("create time entries: %w", err)
 	}
 
+	s.notifyAdminsNewApplication(ctx, id, p.StartDate, p.EndDate)
+
 	return nil
+}
+
+// notifyAdminsNewApplication — см. тот же метод у vacationService, здесь
+// без ссылки на конкретную заявку: у больничных нет отдельной страницы-
+// карточки (только общий список), ссылка ведёт на /sick-leave.
+func (s *sickLeaveService) notifyAdminsNewApplication(ctx context.Context, id string, startDate, endDate time.Time) {
+	adminIDs, err := s.notificationService.GetSickLeaveAdminRecipients(ctx)
+	if err != nil || len(adminIDs) == 0 {
+		return
+	}
+
+	title := "Новая заявка на больничный"
+	body := fmt.Sprintf("%s – %s", startDate.Format("02.01.2006"), endDate.Format("02.01.2006"))
+
+	s.notificationService.CreateMany(ctx, adminIDs, title, body, repo.NotificationsTypeInfo, "sick_leave", id)
+	s.vkService.NotifyMany(ctx, adminIDs, title+": "+body, s.frontendURL+"/sick-leave")
 }
 
 func (s *sickLeaveService) UpdateSickLeaveStatus(ctx context.Context, id string, status repo.SickLeavesStatus) error {

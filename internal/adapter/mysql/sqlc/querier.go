@@ -19,6 +19,7 @@ type Querier interface {
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
+	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
 	// ============================================
@@ -33,9 +34,15 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) error
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
 	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
+	// id передаём явно — та же причина, что у CreateVacation (сразу нужен для
+	// уведомлений админам).
 	CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error
 	CreateSystemSetting(ctx context.Context, arg CreateSystemSettingParams) error
 	CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error
+	// id передаём явно (не полагаемся на DEFAULT(uuid())) — нужен сразу после
+	// вставки, чтобы привязать к нему уведомления админам (см. internal/vacation
+	// /service.go CreateVacationReport).
 	CreateVacation(ctx context.Context, arg CreateVacationParams) error
 	CreateVacationType(ctx context.Context, arg CreateVacationTypeParams) error
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
@@ -138,6 +145,7 @@ type Querier interface {
 	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
@@ -150,7 +158,9 @@ type Querier interface {
 	// всем сотрудникам time:vacation.all:read (тот открывает куда более
 	// чувствительный полный список + доступ к менеджерским действиям).
 	ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error)
+	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error

@@ -14,6 +14,7 @@ import (
 const createSickLeave = `-- name: CreateSickLeave :exec
 INSERT INTO
   sick_leaves (
+    id,
     user_id,
     start_date,
     end_date,
@@ -22,10 +23,11 @@ INSERT INTO
     status
   )
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateSickLeaveParams struct {
+	ID          string           `json:"id"`
 	UserID      string           `json:"userId"`
 	StartDate   time.Time        `json:"startDate"`
 	EndDate     time.Time        `json:"endDate"`
@@ -34,8 +36,11 @@ type CreateSickLeaveParams struct {
 	Status      SickLeavesStatus `json:"status"`
 }
 
+// id передаём явно — та же причина, что у CreateVacation (сразу нужен для
+// уведомлений админам).
 func (q *Queries) CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error {
 	_, err := q.db.ExecContext(ctx, createSickLeave,
+		arg.ID,
 		arg.UserID,
 		arg.StartDate,
 		arg.EndDate,

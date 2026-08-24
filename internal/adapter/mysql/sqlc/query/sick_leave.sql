@@ -66,8 +66,11 @@ ORDER BY
   created_at DESC;
 
 -- name: CreateSickLeave :exec
+-- id передаём явно — та же причина, что у CreateVacation (сразу нужен для
+-- уведомлений админам).
 INSERT INTO
   sick_leaves (
+    id,
     user_id,
     start_date,
     end_date,
@@ -76,7 +79,7 @@ INSERT INTO
     status
   )
 VALUES
-  (?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountSickLeavesByStatus :one
 SELECT

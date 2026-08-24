@@ -12,6 +12,7 @@ import (
 	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
 	"timetrack/internal/middleware"
+	"timetrack/internal/notification"
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
 	systemsetting "timetrack/internal/system_setting"
@@ -79,12 +80,24 @@ func (app *application) mount() *fiber.App {
 
 	fileService := service.NewFileService(app.db, "docs")
 
+	// VK-бот и notifications нужны раньше vacation/sick_leave — те шлют в
+	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication
+	// в соответствующих service.go).
+	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.logger)
+	vk.SetupRoutes(v1, vkService, app.grpcClient, app.config.prefix, vk.Config{
+		ConfirmationString: app.config.vk.confirmationString,
+		SecretKey:          app.config.vk.secretKey,
+	})
+
+	notificationService := notification.NewService(repo.New(app.db), app.logger)
+	notification.SetupRoutes(v1, notificationService, app.grpcClient, app.config.prefix)
+
 	// Vacation routes
-	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService)
+	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, app.config.frontendURL)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.grpcClient, app.config.prefix)
 
 	// Sick leave routes
-	sickLeaveService := sickleave.NewService(repo.New(app.db), userTimeEntryService)
+	sickLeaveService := sickleave.NewService(repo.New(app.db), userTimeEntryService, notificationService, vkService, app.config.frontendURL)
 	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.grpcClient, app.config.prefix)
 
 	// File routes
@@ -141,15 +154,6 @@ func (app *application) mount() *fiber.App {
 	// Work standards routes
 	workStandardService := workstandard.NewService(repo.New(app.db))
 	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
-
-	// VK-бот (дублирование уведомлений чатов) — no-op, пока в .env не
-	// заполнены VK_GROUP_TOKEN и остальные VK_* (см. internal/env/env.go).
-	// Собирается раньше chat — chat.Service дублирует свои уведомления сюда.
-	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.logger)
-	vk.SetupRoutes(v1, vkService, app.grpcClient, app.config.prefix, vk.Config{
-		ConfirmationString: app.config.vk.confirmationString,
-		SecretKey:          app.config.vk.secretKey,
-	})
 
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)
