@@ -70,6 +70,16 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
 ('a7682c92-43af-400a-9413-ab130f51dc2b', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:vacation_calendar:read', 'Просмотр календаря отпусков коллег', 'Разрешение видеть даты и статусы отпусков всех сотрудников (без причины/описания) в общем календаре', NOW());
 
+### work standards mine permission
+
+-- Отдельно от time:work_standards:read — то отдаёт нормы ВСЕХ сотрудников
+-- и есть только у админов (страница "Настройки"). time:work_standards_mine:read
+-- отдаёт только собственные индивидуальные нормы вызывающего (GET
+-- /work-standards/mine/:year) — нужно для расчёта плановых часов на
+-- странице календаря, безопасно выдать всем сотрудникам.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('bc35d196-a798-4237-b0cb-886c62d12595', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:work_standards_mine:read', 'Просмотр своего индивидуального графика', 'Разрешение видеть собственные индивидуальные нормы часов (без чужих)', NOW());
+
 ### vk bot permissions
 
 -- Выдать всем сотрудникам, кто пользуется чатами — привязка VK своя,

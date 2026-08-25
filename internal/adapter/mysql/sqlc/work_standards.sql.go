@@ -258,6 +258,60 @@ func (q *Queries) GetWorkStandardsByYear(ctx context.Context, year int32) ([]Wor
 	return items, nil
 }
 
+const listWorkStandardsByUserAndYear = `-- name: ListWorkStandardsByUserAndYear :many
+SELECT
+  id, user_id, month, year, standard_hours, standard_days, gender, created_at, updated_at
+FROM
+  work_standards
+WHERE
+  user_id = ?
+  AND year = ?
+ORDER BY
+  month
+`
+
+type ListWorkStandardsByUserAndYearParams struct {
+	UserID sql.NullString `json:"userId"`
+	Year   int32          `json:"year"`
+}
+
+// Только собственные индивидуальные нормы вызывающего — см.
+// time:work_standards_mine:read, узкое разрешение для страницы календаря
+// (в отличие от work_standards:read, которое отдаёт нормы всех и есть
+// только у админов).
+func (q *Queries) ListWorkStandardsByUserAndYear(ctx context.Context, arg ListWorkStandardsByUserAndYearParams) ([]WorkStandard, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkStandardsByUserAndYear, arg.UserID, arg.Year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkStandard
+	for rows.Next() {
+		var i WorkStandard
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Month,
+			&i.Year,
+			&i.StandardHours,
+			&i.StandardDays,
+			&i.Gender,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateWorkStandard = `-- name: UpdateWorkStandard :exec
 UPDATE work_standards
 SET

@@ -14,6 +14,9 @@ type Service interface {
 	GetWorkStandardsByMonth(ctx context.Context, month, year int32) ([]repo.WorkStandard, error)
 	GetWorkStandardByMonthAndGender(ctx context.Context, month, year, gender int32, userID string) (repo.WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]repo.WorkStandard, error)
+	// ListMyStandards — только свои индивидуальные нормы за год, см.
+	// time:work_standards_mine:read.
+	ListMyStandards(ctx context.Context, userID string, year int32) ([]repo.WorkStandard, error)
 	GetWorkStandardsByYearGrouped(ctx context.Context, year int32) (map[string]map[string]repo.WorkStandard, error)
 	UpdateWorkStandard(ctx context.Context, params repo.UpdateWorkStandardParams) error
 	DeleteWorkStandard(ctx context.Context, id string) error
@@ -91,6 +94,14 @@ func (s *service) GetWorkStandardsByYear(ctx context.Context, year int32) ([]rep
 	}
 
 	return workStandards, nil
+}
+
+// ListMyStandards получает собственные индивидуальные нормы вызывающего за год
+func (s *service) ListMyStandards(ctx context.Context, userID string, year int32) ([]repo.WorkStandard, error) {
+	return s.repo.ListWorkStandardsByUserAndYear(ctx, repo.ListWorkStandardsByUserAndYearParams{
+		UserID: sql.NullString{String: userID, Valid: true},
+		Year:   year,
+	})
 }
 
 // GetWorkStandardsByYearGrouped получает стандарты работы по году, сгруппированные по месяцам и полу

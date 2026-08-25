@@ -171,6 +171,31 @@ func (h *Handler) GetWorkStandardsByYear(c fiber.Ctx) error {
 	return response.Success(c, workStandards)
 }
 
+// ListMyStandards получает собственные индивидуальные нормы вызывающего за год
+func (h *Handler) ListMyStandards(c fiber.Ctx) error {
+	yearStr := c.Params("year")
+	if yearStr == "" {
+		return fiber.NewError(http.StatusBadRequest, "year is required")
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil || year < 2000 || year > 2100 {
+		return fiber.NewError(http.StatusBadRequest, "year must be a number between 2000 and 2100")
+	}
+
+	userID, _ := c.Locals("user_id").(string)
+	if userID == "" {
+		return fiber.ErrUnauthorized
+	}
+
+	standards, err := h.service.ListMyStandards(c.RequestCtx(), userID, int32(year))
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, standards)
+}
+
 // GetWorkStandardsByYearGrouped получает стандарты работы по году, сгруппированные по месяцам и полу
 func (h *Handler) GetWorkStandardsByYearGrouped(c fiber.Ctx) error {
 	yearStr := c.Params("year")

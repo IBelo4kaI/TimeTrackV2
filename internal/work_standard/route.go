@@ -16,6 +16,13 @@ func SetupRoutes(fiber fiber.Router, service Service, grpc *grpc.Client, prefix 
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "work_standards", Action: "create"}),
 		handler.CreateWorkStandard)
 
+	// permission work_standards_mine:read — узкое, для планового расчёта часов
+	// на странице календаря; в отличие от work_standards:read (ниже) отдаёт
+	// только собственные индивидуальные нормы, безопасно выдать всем.
+	router.Get("/mine/:year",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "work_standards_mine", Action: "read"}),
+		handler.ListMyStandards)
+
 	// permission work_standards:read
 	router.Get("/month/:month/year/:year",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "work_standards", Action: "read"}),

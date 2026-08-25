@@ -55,6 +55,21 @@ ORDER BY
   gender,
   user_id;
 
+-- name: ListWorkStandardsByUserAndYear :many
+-- Только собственные индивидуальные нормы вызывающего — см.
+-- time:work_standards_mine:read, узкое разрешение для страницы календаря
+-- (в отличие от work_standards:read, которое отдаёт нормы всех и есть
+-- только у админов).
+SELECT
+  *
+FROM
+  work_standards
+WHERE
+  user_id = ?
+  AND year = ?
+ORDER BY
+  month;
+
 -- name: CreateWorkStandard :exec
 INSERT INTO
   work_standards (

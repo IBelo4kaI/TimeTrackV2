@@ -158,6 +158,11 @@ type Querier interface {
 	// всем сотрудникам time:vacation.all:read (тот открывает куда более
 	// чувствительный полный список + доступ к менеджерским действиям).
 	ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error)
+	// Только собственные индивидуальные нормы вызывающего — см.
+	// time:work_standards_mine:read, узкое разрешение для страницы календаря
+	// (в отличие от work_standards:read, которое отдаёт нормы всех и есть
+	// только у админов).
+	ListWorkStandardsByUserAndYear(ctx context.Context, arg ListWorkStandardsByUserAndYearParams) ([]WorkStandard, error)
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
