@@ -143,3 +143,27 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 	_, err := q.db.ExecContext(ctx, markNotificationRead, arg.ID, arg.UserID)
 	return err
 }
+
+const markNotificationsReadByEntity = `-- name: MarkNotificationsReadByEntity :exec
+UPDATE notifications
+SET
+  is_read = TRUE
+WHERE
+  user_id = ?
+  AND entity_type = ?
+  AND entity_id = ?
+  AND is_read = FALSE
+`
+
+type MarkNotificationsReadByEntityParams struct {
+	UserID     string         `json:"userId"`
+	EntityType sql.NullString `json:"entityType"`
+	EntityID   sql.NullString `json:"entityId"`
+}
+
+// Прочитать разом все уведомления по сущности (например, все накопленные
+// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
+func (q *Queries) MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error {
+	_, err := q.db.ExecContext(ctx, markNotificationsReadByEntity, arg.UserID, arg.EntityType, arg.EntityID)
+	return err
+}

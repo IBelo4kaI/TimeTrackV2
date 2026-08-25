@@ -612,6 +612,12 @@ func (s *service) MarkRead(ctx context.Context, chatID, callerUserID string, mes
 		Data: map[string]any{"chatId": chatID, "userId": callerUserID, "messageId": messageID},
 	})
 
+	// Прочитал чат — заодно гасим накопленные уведомления о нём в
+	// колокольчике. Best-effort, как notifyApp/notifyVK выше — у chat.service
+	// нет своего логгера, ошибку осознанно проглатываем, не должна ронять
+	// сам MarkRead.
+	_ = s.notificationService.MarkReadByEntity(ctx, callerUserID, "chat", chatID)
+
 	return nil
 }
 

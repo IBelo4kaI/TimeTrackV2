@@ -166,6 +166,9 @@ type Querier interface {
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
+	// Прочитать разом все уведомления по сущности (например, все накопленные
+	// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
+	MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error

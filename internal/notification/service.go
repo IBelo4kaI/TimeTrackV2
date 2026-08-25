@@ -27,6 +27,11 @@ type Service interface {
 	CountUnread(ctx context.Context, userID string) (int64, error)
 	MarkRead(ctx context.Context, id, userID string) error
 	MarkAllRead(ctx context.Context, userID string) error
+	// MarkReadByEntity — разом все накопленные уведомления по сущности
+	// (например, чату) для пользователя, при прочтении самой сущности (см.
+	// chat.Service.MarkRead). Best-effort в вызывающей стороне — как
+	// CreateMany, ошибку только логируем.
+	MarkReadByEntity(ctx context.Context, userID, entityType, entityID string) error
 
 	// CreateMany — рассылка одного уведомления сразу нескольким пользователям
 	// (например, всем админам о новой заявке). Best-effort: ошибки только
@@ -76,6 +81,27 @@ func (s *service) MarkRead(ctx context.Context, id, userID string) error {
 
 func (s *service) MarkAllRead(ctx context.Context, userID string) error {
 	return s.repo.MarkAllNotificationsRead(ctx, userID)
+}
+
+func (s *service) MarkReadByEntity(ctx context.Context, userID, entityType, entityID string) error {
+	if err := s.repo.MarkNotificationsReadByEntity(ctx, repo.MarkNotificationsReadByEntityParams{
+		UserID:     userID,
+		EntityType: sql.NullString{String: entityType, Valid: entityType != ""},
+		EntityID:   sql.NullString{String: entityID, Valid: entityID != ""},
+	}); err != nil {
+		return err
+	}
+
+	// Сколько именно строк прочитано — не знаем (:exec не отдаёт rows
+	// affected), поэтому шлём просто "по этой сущности у тебя теперь всё
+	// прочитано" — фронт сам сверяет с тем, что у него загружено (см.
+	// notificationCenter.js), лишний/нулевой эффект безопасен.
+	s.hub.SendToUser(userID, Event{
+		Type: "notifications_read",
+		Data: map[string]string{"entityType": entityType, "entityId": entityID},
+	})
+
+	return nil
 }
 
 func (s *service) CreateMany(ctx context.Context, userIDs []string, title, message string, notifType repo.NotificationsType, entityType, entityID string) {

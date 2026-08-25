@@ -42,3 +42,15 @@ SET
 WHERE
   user_id = ?
   AND is_read = FALSE;
+
+-- name: MarkNotificationsReadByEntity :exec
+-- Прочитать разом все уведомления по сущности (например, все накопленные
+-- уведомления о новых сообщениях в чате — при открытии/прочтении чата).
+UPDATE notifications
+SET
+  is_read = TRUE
+WHERE
+  user_id = ?
+  AND entity_type = ?
+  AND entity_id = ?
+  AND is_read = FALSE;
