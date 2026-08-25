@@ -110,7 +110,11 @@ func (s *service) CreateMany(ctx context.Context, userIDs []string, title, messa
 				IsRead:     sql.NullBool{Bool: false, Valid: true},
 				EntityType: entType,
 				EntityID:   entID,
-				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
+				// .UTC() — та же логика, что и в 013_chat_timestamps_utc.sql:
+				// created_at в БД теперь буквальный UTC (UTC_TIMESTAMP() в
+				// CreateNotification), значение в SSE-пуше должно совпадать,
+				// а не быть локальным временем процесса.
+				CreatedAt: time.Now().UTC(),
 			},
 		})
 	}

@@ -29,9 +29,9 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, userID string) (
 
 const createNotification = `-- name: CreateNotification :exec
 INSERT INTO
-  notifications (id, user_id, title, message, type, entity_type, entity_id)
+  notifications (id, user_id, title, message, type, entity_type, entity_id, created_at)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())
 `
 
 type CreateNotificationParams struct {

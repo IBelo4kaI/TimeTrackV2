@@ -371,7 +371,7 @@ type Notification struct {
 	IsRead     sql.NullBool          `json:"isRead"`
 	EntityType sql.NullString        `json:"entityType"`
 	EntityID   sql.NullString        `json:"entityId"`
-	CreatedAt  sql.NullTime          `json:"createdAt"`
+	CreatedAt  time.Time             `json:"createdAt"`
 }
 
 type SickLeafe struct {
