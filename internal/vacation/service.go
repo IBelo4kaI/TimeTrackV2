@@ -652,6 +652,8 @@ func (s *vacationService) ApproveVacation(ctx context.Context, vacationID string
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
+	s.notifyApplicantStatusChanged(ctx, vacation, repo.VacationsStatusApproved)
+
 	return nil
 }
 
@@ -685,7 +687,30 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
+	s.notifyApplicantStatusChanged(ctx, vacation, newStatus)
+
 	return nil
+}
+
+// notifyApplicantStatusChanged — сотруднику, чья заявка, о смене статуса на
+// approved/rejected (и в notifications, и в VK). "pending" не уведомляем —
+// это возврат на рассмотрение, а не решение. Best-effort, как
+// notifyAdminsNewApplication — ошибка не должна ронять саму смену статуса.
+func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vacation repo.GetVacationByIDRow, newStatus repo.VacationsStatus) {
+	var title string
+	switch newStatus {
+	case repo.VacationsStatusApproved:
+		title = "Заявка на отпуск утверждена"
+	case repo.VacationsStatusRejected:
+		title = "Заявка на отпуск отклонена"
+	default:
+		return
+	}
+
+	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
+
+	s.notificationService.CreateMany(ctx, []string{vacation.UserID}, title, dates, repo.NotificationsTypeInfo, "vacation", vacation.ID)
+	s.vkService.Notify(ctx, vacation.UserID, title+": "+dates, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
 }
 
 func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string) error {
