@@ -36,7 +36,7 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 	cb.SecretKey = cfg.SecretKey
 
 	cb.MessageNew(func(ctx context.Context, obj events.MessageNewObject) {
-		service.HandleMessage(ctx, obj.Message.FromID, obj.Message.Text)
+		service.HandleMessage(ctx, obj.Message.FromID, obj.Message.Text, obj.Message.Ref)
 	})
 
 	// Без middleware.Require — сюда стучится сам VK, не браузер с сессией;

@@ -54,3 +54,9 @@ func (e *Env) GetVKConfirmationString() string {
 func (e *Env) GetVKSecretKey() string {
 	return os.Getenv("VK_SECRET_KEY")
 }
+
+// GetVKCommunityScreenName — короткое имя сообщества (vk.ru/<имя>), для
+// диплинка привязки VK (vk.me/<имя>?ref=<код>) — см. vk.Service.GenerateLinkCode.
+func (e *Env) GetVKCommunityScreenName() string {
+	return os.Getenv("VK_COMMUNITY_SCREEN_NAME")
+}

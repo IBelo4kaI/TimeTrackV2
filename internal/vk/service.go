@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"strings"
@@ -27,14 +28,20 @@ const linkCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 type Service interface {
 	// GenerateLinkCode — код, который сотрудник присылает боту сообщением,
 	// чтобы привязать VK-аккаунт (см. HandleMessage). Хранится в памяти —
-	// код короткоживущий, переживать рестарт ему не нужно.
-	GenerateLinkCode(userID string) string
+	// код короткоживущий, переживать рестарт ему не нужно. linkURL — та же
+	// привязка в одну ссылку (vk.me/<сообщество>?ref=<код>): если в
+	// сообществе включена кнопка "Начать", пользователю достаточно её
+	// нажать — код в ref долетит до HandleMessage без ручного ввода.
+	// Пустая строка, если VK_COMMUNITY_SCREEN_NAME не задан.
+	GenerateLinkCode(userID string) (code string, linkURL string)
 	Unlink(ctx context.Context, userID string) error
 	IsLinked(ctx context.Context, userID string) (bool, error)
 
 	// HandleMessage — входящее сообщение от пользователя VK (Callback API
-	// message_new). Единственное, что понимаем сейчас — код привязки.
-	HandleMessage(ctx context.Context, vkUserID int, text string)
+	// message_new). ref — из диплинка (см. GenerateLinkCode), проверяем его
+	// первым: сообщение при нажатии "Начать" обычно пустое, код есть только
+	// в ref. Если ref пуст/не совпал — как раньше, ищем код в тексте.
+	HandleMessage(ctx context.Context, vkUserID int, text, ref string)
 
 	// Notify — тихо ничего не делает, если аккаунт не привязан (VK для
 	// уведомлений опционален, а не обязателен).
@@ -50,31 +57,36 @@ type pendingCode struct {
 }
 
 type service struct {
-	repo   repo.Querier
-	vk     *api.VK
-	logger *slog.Logger
+	repo                repo.Querier
+	vk                  *api.VK
+	communityScreenName string
+	logger              *slog.Logger
 
 	mu    sync.Mutex
 	codes map[string]pendingCode
 }
 
-func NewService(r repo.Querier, groupToken string, logger *slog.Logger) Service {
+func NewService(r repo.Querier, groupToken, communityScreenName string, logger *slog.Logger) Service {
 	return &service{
-		repo:   r,
-		vk:     api.NewVK(groupToken),
-		logger: logger,
-		codes:  make(map[string]pendingCode),
+		repo:                r,
+		vk:                  api.NewVK(groupToken),
+		communityScreenName: communityScreenName,
+		logger:              logger,
+		codes:               make(map[string]pendingCode),
 	}
 }
 
-func (s *service) GenerateLinkCode(userID string) string {
+func (s *service) GenerateLinkCode(userID string) (string, string) {
 	code := randomCode()
 
 	s.mu.Lock()
 	s.codes[code] = pendingCode{userID: userID, expiresAt: time.Now().Add(LinkCodeTTL)}
 	s.mu.Unlock()
 
-	return code
+	if s.communityScreenName == "" {
+		return code, ""
+	}
+	return code, fmt.Sprintf("https://vk.me/%s?ref=%s", s.communityScreenName, code)
 }
 
 func (s *service) Unlink(ctx context.Context, userID string) error {
@@ -92,15 +104,26 @@ func (s *service) IsLinked(ctx context.Context, userID string) (bool, error) {
 	return true, nil
 }
 
-func (s *service) HandleMessage(ctx context.Context, vkUserID int, text string) {
-	code := strings.ToUpper(strings.TrimSpace(text))
-
+// takeCode — забирает и удаляет код, если он есть (одноразовый).
+func (s *service) takeCode(code string) (pendingCode, bool) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	pending, ok := s.codes[code]
 	if ok {
 		delete(s.codes, code)
 	}
-	s.mu.Unlock()
+	return pending, ok
+}
+
+func (s *service) HandleMessage(ctx context.Context, vkUserID int, text, ref string) {
+	// ref — из диплинка (см. GenerateLinkCode): при нажатии "Начать" само
+	// сообщение обычно пустое, код есть только тут. Не совпал/пуст — как
+	// раньше, ищем код в тексте (ручной ввод).
+	pending, ok := s.takeCode(strings.ToUpper(strings.TrimSpace(ref)))
+	if !ok {
+		pending, ok = s.takeCode(strings.ToUpper(strings.TrimSpace(text)))
+	}
 
 	if !ok || time.Now().After(pending.expiresAt) {
 		s.send(vkUserID, "Код не найден или истёк — сгенерируйте новый в приложении.", "")

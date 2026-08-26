@@ -24,9 +24,10 @@ func main() {
 		prefix:      "time",
 		frontendURL: env.GetFrontendURL(),
 		vk: vkConfig{
-			groupToken:         env.GetVKGroupToken(),
-			confirmationString: env.GetVKConfirmationString(),
-			secretKey:          env.GetVKSecretKey(),
+			groupToken:          env.GetVKGroupToken(),
+			confirmationString:  env.GetVKConfirmationString(),
+			secretKey:           env.GetVKSecretKey(),
+			communityScreenName: env.GetVKCommunityScreenName(),
 		},
 	}
 

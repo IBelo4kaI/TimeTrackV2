@@ -47,9 +47,10 @@ type dbConfig struct {
 }
 
 type vkConfig struct {
-	groupToken         string
-	confirmationString string
-	secretKey          string
+	groupToken          string
+	confirmationString  string
+	secretKey           string
+	communityScreenName string
 }
 
 func (app *application) mount() *fiber.App {
@@ -83,7 +84,7 @@ func (app *application) mount() *fiber.App {
 	// VK-бот и notifications нужны раньше vacation/sick_leave — те шлют в
 	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication
 	// в соответствующих service.go).
-	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.logger)
+	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.config.vk.communityScreenName, app.logger)
 	vk.SetupRoutes(v1, vkService, app.grpcClient, app.config.prefix, vk.Config{
 		ConfirmationString: app.config.vk.confirmationString,
 		SecretKey:          app.config.vk.secretKey,

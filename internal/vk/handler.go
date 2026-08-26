@@ -23,9 +23,10 @@ func callerID(c fiber.Ctx) string {
 // GenerateLinkCode godoc
 // POST /vk/link-code
 func (h Handler) GenerateLinkCode(c fiber.Ctx) error {
-	code := h.service.GenerateLinkCode(callerID(c))
+	code, linkURL := h.service.GenerateLinkCode(callerID(c))
 	return response.Success(c, fiber.Map{
 		"code":             code,
+		"linkUrl":          linkURL,
 		"expiresInSeconds": int(LinkCodeTTL.Seconds()),
 	})
 }
