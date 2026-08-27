@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/date"
@@ -144,14 +145,39 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 	}
 
 	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
-	body := dates
-	if vacation.ApplicantName != "" {
-		body = fmt.Sprintf("%s, %s", vacation.ApplicantName, dates)
+
+	// Тип отпуска (имя) и описание — их ещё нет в исходном запросе в готовом
+	// для показа виде (VacationTypeID мог быть не задан и разрешиться в
+	// дефолтный), поэтому просто перечитываем только что созданную запись —
+	// тот же приём, что и везде в этом файле (ApproveVacation/DeleteVacation).
+	typeName := ""
+	if full, err := s.repo.GetVacationByID(ctx, vacationID); err == nil {
+		typeName = full.VacationTypeName
 	}
+
+	body := vacationNotificationBody(vacation.ApplicantName, dates, typeName, vacation.Description)
 
 	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск", body)
 
 	return nil
+}
+
+// vacationNotificationBody — единый формат текста для всех уведомлений про
+// заявку на отпуск: ФИО заявителя (если получатель — не сам заявитель, тогда
+// applicantName пустой), даты, тип отпуска, причина/описание.
+func vacationNotificationBody(applicantName, dates, typeName, description string) string {
+	lines := make([]string, 0, 4)
+	if applicantName != "" {
+		lines = append(lines, applicantName)
+	}
+	lines = append(lines, dates)
+	if typeName != "" {
+		lines = append(lines, "Тип: "+typeName)
+	}
+	if description != "" {
+		lines = append(lines, "Описание: "+description)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // notifyAdminsNewApplication — и в notifications (таблица), и в VK, тем, кто
@@ -711,9 +737,11 @@ func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vaca
 	}
 
 	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
+	// Себе (это же его заявка) — без ФИО, просто даты/тип/описание.
+	body := vacationNotificationBody("", dates, vacation.VacationTypeName, vacation.Description)
 
-	s.notificationService.CreateMany(ctx, []string{vacation.UserID}, title, dates, repo.NotificationsTypeInfo, "vacation", vacation.ID)
-	s.vkService.Notify(ctx, vacation.UserID, title+": "+dates, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
+	s.notificationService.CreateMany(ctx, []string{vacation.UserID}, title, body, repo.NotificationsTypeInfo, "vacation", vacation.ID)
+	s.vkService.Notify(ctx, vacation.UserID, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
 
 	if newStatus == repo.VacationsStatusApproved {
 		s.notifyApprovedThirdParties(ctx, vacation, dates, applicantName)
@@ -738,7 +766,7 @@ func (s *vacationService) notifyApprovedThirdParties(ctx context.Context, vacati
 	}
 
 	title := "Заявка на отпуск утверждена"
-	body := fmt.Sprintf("%s: %s", who, dates)
+	body := vacationNotificationBody(who, dates, vacation.VacationTypeName, vacation.Description)
 
 	s.notificationService.CreateMany(ctx, recipients, title, body, repo.NotificationsTypeInfo, "vacation", vacation.ID)
 	s.vkService.NotifyMany(ctx, recipients, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
