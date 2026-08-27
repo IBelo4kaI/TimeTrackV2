@@ -18,6 +18,9 @@ type Querier interface {
 	AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
+	// Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
+	// created_at теперь буквальный UTC, см. 018_notification_timestamp_utc.sql).
+	CountNotificationsSentToday(ctx context.Context, arg CountNotificationsSentTodayParams) (int64, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
@@ -145,6 +148,12 @@ type Querier interface {
 	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	// Сотрудники, о которых бэк вообще что-то знает локально (без похода в
+	// auth-сервис за полным списком — см. internal/timesheetreminder) — кто
+	// хоть раз вносил запись в табель, либо кому задан индивидуальный график.
+	// Ограничение: сотрудник, который вообще ничего ни разу не вносил, сюда не
+	// попадёт — и не получит напоминание, хотя ему оно нужнее всего.
+	ListKnownUserIDs(ctx context.Context) ([]string, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).

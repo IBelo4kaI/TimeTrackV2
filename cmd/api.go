@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
+	"time"
 	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/calendar"
@@ -16,6 +18,7 @@ import (
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
 	systemsetting "timetrack/internal/system_setting"
+	"timetrack/internal/timesheetreminder"
 	usertimeentry "timetrack/internal/user_time_entry"
 	vacation "timetrack/internal/vacation"
 	vacationtype "timetrack/internal/vacation_type"
@@ -99,6 +102,13 @@ func (app *application) mount() *fiber.App {
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, app.config.frontendURL)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.grpcClient, app.config.prefix)
 
+	// Напоминание заполнить табель — свой тикер в процессе, без внешнего
+	// cron (см. internal/timesheetreminder). Список сотрудников — только
+	// локально известные (без похода в auth-сервис за полным списком).
+	reminderService := timesheetreminder.NewService(repo.New(app.db), calendarService, notificationService, vkService, app.config.frontendURL, app.logger)
+	timesheetreminder.SetupRoutes(v1, reminderService, app.grpcClient, app.config.prefix)
+	go runTimesheetReminderTicker(reminderService)
+
 	// Sick leave routes
 	sickLeaveService := sickleave.NewService(repo.New(app.db), userTimeEntryService, notificationService, vkService, app.config.frontendURL)
 	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.grpcClient, app.config.prefix)
@@ -165,6 +175,22 @@ func (app *application) mount() *fiber.App {
 	chat.SetupRoutes(v1, chatService, app.grpcClient, app.config.prefix)
 
 	return fiberApp
+}
+
+// runTimesheetReminderTicker — раз в час дёргает Run (сама проверка внутри
+// срабатывает не чаще раза в сутки, см. timesheetreminder.Service.Run).
+// Первый вызов — сразу при старте, на случай если процесс поднялся ровно в
+// нужный час; остальные — по тикеру. Живёт всё время работы процесса, без
+// отдельного graceful shutdown — как и остальной фон в этом файле.
+func runTimesheetReminderTicker(s *timesheetreminder.Service) {
+	ctx := context.Background()
+	s.Run(ctx, time.Now().UTC())
+
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for now := range ticker.C {
+		s.Run(ctx, now.UTC())
+	}
 }
 
 func (app *application) run(f *fiber.App) error {
