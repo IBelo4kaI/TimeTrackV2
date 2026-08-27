@@ -50,12 +50,14 @@ type Querier interface {
 	CreateVacationType(ctx context.Context, arg CreateVacationTypeParams) error
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
 	DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error
+	DeleteAllNotificationsByUser(ctx context.Context, userID string) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	// Каскадно удаляет chat_participants и chat_messages (ON DELETE CASCADE,
 	// см. миграцию 011_add_chats.sql).
 	DeleteChat(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
 	DeleteFileCategory(ctx context.Context, id string) error
+	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error

@@ -85,3 +85,17 @@ func (h Handler) MarkAllRead(c fiber.Ctx) error {
 	}
 	return response.Updated(c)
 }
+
+func (h Handler) Delete(c fiber.Ctx) error {
+	if err := h.service.Delete(c.RequestCtx(), c.Params("id"), callerID(c)); err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+	return response.Deleted(c)
+}
+
+func (h Handler) DeleteAll(c fiber.Ctx) error {
+	if err := h.service.DeleteAll(c.RequestCtx(), callerID(c)); err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+	return response.Deleted(c)
+}

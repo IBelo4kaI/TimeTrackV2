@@ -24,4 +24,8 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 	// permission notification:edit
 	router.Put("/:id/read", require("edit"), handler.MarkRead)
 	router.Put("/read-all", require("edit"), handler.MarkAllRead)
+
+	// permission notification:delete — своя запись, безвозвратно.
+	router.Delete("/:id", require("delete"), handler.Delete)
+	router.Delete("", require("delete"), handler.DeleteAll)
 }

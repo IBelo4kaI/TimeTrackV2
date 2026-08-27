@@ -28,6 +28,9 @@ type Service interface {
 	CountUnread(ctx context.Context, userID string) (int64, error)
 	MarkRead(ctx context.Context, id, userID string) error
 	MarkAllRead(ctx context.Context, userID string) error
+	// Delete/DeleteAll — насовсем, не просто пометка прочитанным.
+	Delete(ctx context.Context, id, userID string) error
+	DeleteAll(ctx context.Context, userID string) error
 	// MarkReadByEntity — разом все накопленные уведомления по сущности
 	// (например, чату) для пользователя, при прочтении самой сущности (см.
 	// chat.Service.MarkRead). Best-effort в вызывающей стороне — как
@@ -86,6 +89,26 @@ func (s *service) MarkRead(ctx context.Context, id, userID string) error {
 
 func (s *service) MarkAllRead(ctx context.Context, userID string) error {
 	return s.repo.MarkAllNotificationsRead(ctx, userID)
+}
+
+func (s *service) Delete(ctx context.Context, id, userID string) error {
+	if err := s.repo.DeleteNotification(ctx, repo.DeleteNotificationParams{ID: id, UserID: userID}); err != nil {
+		return err
+	}
+
+	s.hub.SendToUser(userID, Event{Type: "notification_deleted", Data: map[string]string{"id": id}})
+
+	return nil
+}
+
+func (s *service) DeleteAll(ctx context.Context, userID string) error {
+	if err := s.repo.DeleteAllNotificationsByUser(ctx, userID); err != nil {
+		return err
+	}
+
+	s.hub.SendToUser(userID, Event{Type: "notifications_cleared", Data: nil})
+
+	return nil
 }
 
 func (s *service) MarkReadByEntity(ctx context.Context, userID, entityType, entityID string) error {

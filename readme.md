@@ -97,7 +97,8 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 -- Свои же уведомления, ничего чужого не открывает — выдать всем.
 INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
 ('135dfc96-9d7b-4339-99e7-1ac6775bc32c', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:read', 'Просмотр своих уведомлений', 'Разрешение читать список своих уведомлений', NOW()),
-('1adb2c33-41ba-49ac-8d7c-a7ead4fbeef9', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:edit', 'Отметка уведомлений прочитанными', 'Разрешение отмечать свои уведомления прочитанными', NOW());
+('1adb2c33-41ba-49ac-8d7c-a7ead4fbeef9', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:edit', 'Отметка уведомлений прочитанными', 'Разрешение отмечать свои уведомления прочитанными', NOW()),
+('123d5ef1-0e78-4bc5-8498-e95e28fe28de', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:delete', 'Удаление своих уведомлений', 'Разрешение безвозвратно удалять свои уведомления', NOW());
 
 -- Кому слать уведомления о новых заявках (в таблицу notifications и в VK) —
 -- отдельные JSON-массивы user_id в system_settings для отпусков и

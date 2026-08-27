@@ -57,6 +57,34 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	return err
 }
 
+const deleteAllNotificationsByUser = `-- name: DeleteAllNotificationsByUser :exec
+DELETE FROM notifications
+WHERE
+  user_id = ?
+`
+
+func (q *Queries) DeleteAllNotificationsByUser(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAllNotificationsByUser, userID)
+	return err
+}
+
+const deleteNotification = `-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE
+  id = ?
+  AND user_id = ?
+`
+
+type DeleteNotificationParams struct {
+	ID     string `json:"id"`
+	UserID string `json:"userId"`
+}
+
+func (q *Queries) DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error {
+	_, err := q.db.ExecContext(ctx, deleteNotification, arg.ID, arg.UserID)
+	return err
+}
+
 const listNotificationsByUser = `-- name: ListNotificationsByUser :many
 SELECT
   id, user_id, title, message, type, is_read, entity_type, entity_id, created_at

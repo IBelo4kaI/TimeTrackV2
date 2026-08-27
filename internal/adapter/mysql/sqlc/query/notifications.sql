@@ -54,3 +54,14 @@ WHERE
   AND entity_type = ?
   AND entity_id = ?
   AND is_read = FALSE;
+
+-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE
+  id = ?
+  AND user_id = ?;
+
+-- name: DeleteAllNotificationsByUser :exec
+DELETE FROM notifications
+WHERE
+  user_id = ?;
