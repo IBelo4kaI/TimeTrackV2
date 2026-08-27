@@ -38,6 +38,7 @@ type Querier interface {
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
 	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
+	CreateNotificationTemplate(ctx context.Context, arg CreateNotificationTemplateParams) error
 	// id передаём явно — та же причина, что у CreateVacation (сразу нужен для
 	// уведомлений админам).
 	CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error
@@ -58,6 +59,7 @@ type Querier interface {
 	DeleteDayType(ctx context.Context, id string) error
 	DeleteFileCategory(ctx context.Context, id string) error
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
+	DeleteNotificationTemplate(ctx context.Context, id string) error
 	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
@@ -96,6 +98,8 @@ type Querier interface {
 	GetFileCategoryByParentAndName(ctx context.Context, arg GetFileCategoryByParentAndNameParams) (FileCategory, error)
 	GetFileCategoryBySystemName(ctx context.Context, systemName sql.NullString) (FileCategory, error)
 	GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error)
+	GetNotificationTemplateByID(ctx context.Context, id string) (NotificationTemplate, error)
+	GetNotificationTemplateByName(ctx context.Context, name string) (NotificationTemplate, error)
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
 	GetSickLeaveByID(ctx context.Context, id string) (GetSickLeaveByIDRow, error)
 	GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYearParams) ([]GetSickLeavesByYearRow, error)
@@ -156,6 +160,7 @@ type Querier interface {
 	// Ограничение: сотрудник, который вообще ничего ни разу не вносил, сюда не
 	// попадёт — и не получит напоминание, хотя ему оно нужнее всего.
 	ListKnownUserIDs(ctx context.Context) ([]string, error)
+	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
@@ -198,6 +203,7 @@ type Querier interface {
 	UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error
 	UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTypeParams) error
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
+	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error

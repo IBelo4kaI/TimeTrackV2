@@ -374,6 +374,15 @@ type Notification struct {
 	CreatedAt  time.Time             `json:"createdAt"`
 }
 
+type NotificationTemplate struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type SickLeafe struct {
 	ID          string           `json:"id"`
 	UserID      string           `json:"userId"`

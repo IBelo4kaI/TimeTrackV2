@@ -10,6 +10,7 @@ import (
 	"time"
 
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/vk"
 
 	"github.com/google/uuid"
 )
@@ -43,6 +44,13 @@ type Service interface {
 	// заявки, ради которой шлётся.
 	CreateMany(ctx context.Context, userIDs []string, title, message string, notifType repo.NotificationsType, entityType, entityID string)
 
+	// SendManual — ручная рассылка от админа сотрудникам (свободный текст
+	// или заранее заполненный на фронте из notification_template — сам бэк
+	// про шаблоны не знает). В отличие от CreateMany это прямое действие
+	// пользователя, а не побочный эффект другого действия — ошибку
+	// возвращаем, а не просто логируем.
+	SendManual(ctx context.Context, userIDs []string, title, message string) error
+
 	// GetVacationAdminRecipients/GetSickLeaveAdminRecipients — раздельные
 	// списки получателей. Пустой список, если настройка не задана —
 	// вызывающая сторона просто никому не шлёт.
@@ -61,11 +69,12 @@ type Service interface {
 type service struct {
 	repo   repo.Querier
 	hub    *Hub
+	vk     vk.Service
 	logger *slog.Logger
 }
 
-func NewService(r repo.Querier, hub *Hub, logger *slog.Logger) Service {
-	return &service{repo: r, hub: hub, logger: logger}
+func NewService(r repo.Querier, hub *Hub, vkService vk.Service, logger *slog.Logger) Service {
+	return &service{repo: r, hub: hub, vk: vkService, logger: logger}
 }
 
 func (s *service) ListMine(ctx context.Context, userID string, limit, offset int32) ([]repo.Notification, error) {
@@ -172,6 +181,27 @@ func (s *service) CreateMany(ctx context.Context, userIDs []string, title, messa
 			},
 		})
 	}
+}
+
+const manualEntityType = "admin_message"
+
+func (s *service) SendManual(ctx context.Context, userIDs []string, title, message string) error {
+	if len(userIDs) == 0 {
+		return errors.New("выберите хотя бы одного получателя")
+	}
+	if title == "" {
+		return errors.New("укажите заголовок уведомления")
+	}
+
+	s.CreateMany(ctx, userIDs, title, message, repo.NotificationsTypeInfo, manualEntityType, "")
+
+	vkText := title
+	if message != "" {
+		vkText = title + ": " + message
+	}
+	s.vk.NotifyMany(ctx, userIDs, vkText, "")
+
+	return nil
 }
 
 func (s *service) GetVacationAdminRecipients(ctx context.Context) ([]string, error) {

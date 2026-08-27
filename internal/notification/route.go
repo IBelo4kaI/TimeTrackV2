@@ -28,4 +28,8 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 	// permission notification:delete — своя запись, безвозвратно.
 	router.Delete("/:id", require("delete"), handler.Delete)
 	router.Delete("", require("delete"), handler.DeleteAll)
+
+	// permission notification:create — админская рассылка сотрудникам,
+	// не самому себе (в отличие от read/edit/delete — те про свои же).
+	router.Post("/send", require("create"), handler.SendManual)
 }

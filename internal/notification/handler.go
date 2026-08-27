@@ -99,3 +99,24 @@ func (h Handler) DeleteAll(c fiber.Ctx) error {
 	}
 	return response.Deleted(c)
 }
+
+// SendManual godoc
+// POST /notifications/send — ручная рассылка от админа (permission
+// notification:create). title/message — либо введены вручную, либо
+// подставлены на фронте из выбранного notification_template.
+func (h Handler) SendManual(c fiber.Ctx) error {
+	var body struct {
+		UserIDs []string `json:"userIds"`
+		Title   string   `json:"title"`
+		Message string   `json:"message"`
+	}
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	if err := h.service.SendManual(c.RequestCtx(), body.UserIDs, body.Title, body.Message); err != nil {
+		return response.Error(c, http.StatusBadRequest, err)
+	}
+
+	return response.Success(c, fiber.Map{"message": "Уведомление отправлено"})
+}

@@ -100,6 +100,19 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 ('1adb2c33-41ba-49ac-8d7c-a7ead4fbeef9', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:edit', 'Отметка уведомлений прочитанными', 'Разрешение отмечать свои уведомления прочитанными', NOW()),
 ('123d5ef1-0e78-4bc5-8498-e95e28fe28de', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:delete', 'Удаление своих уведомлений', 'Разрешение безвозвратно удалять свои уведомления', NOW());
 
+-- Ручная рассылка от админа сотрудникам (не себе) — только админам, в
+-- отличие от read/edit/delete выше (те про свои же уведомления, выданы всем).
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('a5e21ece-8975-403f-ab99-79bef101662f', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification:create', 'Ручная рассылка уведомлений', 'Разрешение отправлять уведомления от админа другим сотрудникам', NOW());
+
+-- Готовые шаблоны для ручной рассылки (см. internal/notification_template) —
+-- тоже только админам, как и сама рассылка выше.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('cb283d84-d80d-4955-830a-c1e4ccad80e5', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification_templates:read', 'Просмотр шаблонов уведомлений', 'Разрешение видеть список готовых шаблонов для рассылки', NOW()),
+('6cbd684b-894c-4d9d-a662-0b9107e4d5ad', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification_templates:create', 'Создание шаблона уведомления', 'Разрешение создавать готовые шаблоны для рассылки', NOW()),
+('b9bc07ea-3c74-476e-ac91-f49c12e5e44b', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification_templates:edit', 'Редактирование шаблона уведомления', 'Разрешение редактировать готовые шаблоны для рассылки', NOW()),
+('f278b2bb-cf51-4b85-8a57-3a37e72df9d2', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:notification_templates:delete', 'Удаление шаблона уведомления', 'Разрешение удалять готовые шаблоны для рассылки', NOW());
+
 -- Кому слать уведомления о новых заявках (в таблицу notifications и в VK) —
 -- отдельные JSON-массивы user_id в system_settings для отпусков и
 -- больничных, настраивается на странице "Настройки" (NotificationSettings.vue).

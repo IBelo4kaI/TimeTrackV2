@@ -15,6 +15,7 @@ import (
 	"timetrack/internal/handler"
 	"timetrack/internal/middleware"
 	"timetrack/internal/notification"
+	notificationtemplate "timetrack/internal/notification_template"
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
 	systemsetting "timetrack/internal/system_setting"
@@ -95,8 +96,12 @@ func (app *application) mount() *fiber.App {
 
 	// Свой SSE-хаб, отдельный от chat.Hub — см. internal/notification/hub.go.
 	notificationHub := notification.NewHub()
-	notificationService := notification.NewService(repo.New(app.db), notificationHub, app.logger)
+	notificationService := notification.NewService(repo.New(app.db), notificationHub, vkService, app.logger)
 	notification.SetupRoutes(v1, notificationService, app.grpcClient, app.config.prefix)
+
+	// Готовые шаблоны для ручной рассылки (см. notificationService.SendManual)
+	notificationTemplateService := notificationtemplate.NewService(repo.New(app.db))
+	notificationtemplate.SetupRoutes(v1, notificationTemplateService, app.grpcClient, app.config.prefix)
 
 	// Vacation routes
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, app.config.frontendURL)
