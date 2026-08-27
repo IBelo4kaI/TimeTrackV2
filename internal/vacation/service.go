@@ -40,8 +40,11 @@ type Service interface {
 	GetVacationsByYear(ctx context.Context, userId string, year int) (*[]repo.GetVacationsByYearRow, error)
 	GetVacationByID(ctx context.Context, vacationID string) (*repo.GetVacationByIDRow, error)
 	CreateVacationReport(ctx context.Context, vacation VacationCreateRequest) error
-	ApproveVacation(ctx context.Context, vacationID string) error
-	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error
+	// applicantName — см. VacationCreateRequest.ApplicantName, тот же приём:
+	// фронт уже знает ФИО заявителя (из usersAll по item.userId), передаёт
+	// только для текста уведомления об утверждении, нигде не хранится.
+	ApproveVacation(ctx context.Context, vacationID, applicantName string) error
+	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus, applicantName string) error
 	UpdateVacationType(ctx context.Context, vacationID string, vacationTypeID string) error
 	DeleteVacation(ctx context.Context, vacationID string) error
 }
@@ -625,7 +628,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 	return nil
 }
 
-func (s *vacationService) ApproveVacation(ctx context.Context, vacationID string) error {
+func (s *vacationService) ApproveVacation(ctx context.Context, vacationID, applicantName string) error {
 	// Получаем отпуск по ID
 	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
 	if err != nil {
@@ -652,12 +655,12 @@ func (s *vacationService) ApproveVacation(ctx context.Context, vacationID string
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
-	s.notifyApplicantStatusChanged(ctx, vacation, repo.VacationsStatusApproved)
+	s.notifyApplicantStatusChanged(ctx, vacation, repo.VacationsStatusApproved, applicantName)
 
 	return nil
 }
 
-func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error {
+func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus, applicantName string) error {
 	// Получаем отпуск по ID
 	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
 	if err != nil {
@@ -666,7 +669,7 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 
 	// Если новый статус "approved", вызываем метод ApproveVacation
 	if newStatus == repo.VacationsStatusApproved {
-		return s.ApproveVacation(ctx, vacationID)
+		return s.ApproveVacation(ctx, vacationID, applicantName)
 	}
 
 	// Если текущий статус "approved" и новый статус не "approved",
@@ -687,7 +690,7 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
-	s.notifyApplicantStatusChanged(ctx, vacation, newStatus)
+	s.notifyApplicantStatusChanged(ctx, vacation, newStatus, applicantName)
 
 	return nil
 }
@@ -696,7 +699,7 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 // approved/rejected (и в notifications, и в VK). "pending" не уведомляем —
 // это возврат на рассмотрение, а не решение. Best-effort, как
 // notifyAdminsNewApplication — ошибка не должна ронять саму смену статуса.
-func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vacation repo.GetVacationByIDRow, newStatus repo.VacationsStatus) {
+func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vacation repo.GetVacationByIDRow, newStatus repo.VacationsStatus, applicantName string) {
 	var title string
 	switch newStatus {
 	case repo.VacationsStatusApproved:
@@ -711,6 +714,34 @@ func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vaca
 
 	s.notificationService.CreateMany(ctx, []string{vacation.UserID}, title, dates, repo.NotificationsTypeInfo, "vacation", vacation.ID)
 	s.vkService.Notify(ctx, vacation.UserID, title+": "+dates, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
+
+	if newStatus == repo.VacationsStatusApproved {
+		s.notifyApprovedThirdParties(ctx, vacation, dates, applicantName)
+	}
+}
+
+// notifyApprovedThirdParties — отдельный список получателей (не сам
+// заявитель — тот уже уведомлён выше), настраивается в system_settings
+// notification_vacation_approved_user_ids, отдельно от списка "новая
+// заявка" (см. GetVacationApprovedRecipients). Текст с ФИО заявителя —
+// applicantName фронт передаёт сам (тот же приём, что у ApplicantName в
+// CreateVacationReport), ничего не резолвим по gRPC.
+func (s *vacationService) notifyApprovedThirdParties(ctx context.Context, vacation repo.GetVacationByIDRow, dates, applicantName string) {
+	recipients, err := s.notificationService.GetVacationApprovedRecipients(ctx)
+	if err != nil || len(recipients) == 0 {
+		return
+	}
+
+	who := applicantName
+	if who == "" {
+		who = "Сотрудник"
+	}
+
+	title := "Заявка на отпуск утверждена"
+	body := fmt.Sprintf("%s: %s", who, dates)
+
+	s.notificationService.CreateMany(ctx, recipients, title, body, repo.NotificationsTypeInfo, "vacation", vacation.ID)
+	s.vkService.NotifyMany(ctx, recipients, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
 }
 
 func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string) error {

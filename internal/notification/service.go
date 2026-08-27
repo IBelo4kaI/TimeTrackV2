@@ -18,8 +18,9 @@ import (
 // отпусков и больничных — настраиваются на странице "Настройки", не
 // хардкожены. См. GetVacationAdminRecipients/GetSickLeaveAdminRecipients.
 const (
-	vacationAdminRecipientsSettingKey  = "notification_vacation_admin_user_ids"
-	sickLeaveAdminRecipientsSettingKey = "notification_sick_leave_admin_user_ids"
+	vacationAdminRecipientsSettingKey    = "notification_vacation_admin_user_ids"
+	sickLeaveAdminRecipientsSettingKey   = "notification_sick_leave_admin_user_ids"
+	vacationApprovedRecipientsSettingKey = "notification_vacation_approved_user_ids"
 )
 
 type Service interface {
@@ -44,6 +45,10 @@ type Service interface {
 	// вызывающая сторона просто никому не шлёт.
 	GetVacationAdminRecipients(ctx context.Context) ([]string, error)
 	GetSickLeaveAdminRecipients(ctx context.Context) ([]string, error)
+	// GetVacationApprovedRecipients — отдельный список, не пересекается с
+	// GetVacationAdminRecipients: тем шлют про НОВЫЕ заявки, этим — про уже
+	// утверждённые (например, бухгалтерия).
+	GetVacationApprovedRecipients(ctx context.Context) ([]string, error)
 
 	// SSE
 	Subscribe(userID string) chan Event
@@ -152,6 +157,10 @@ func (s *service) GetVacationAdminRecipients(ctx context.Context) ([]string, err
 
 func (s *service) GetSickLeaveAdminRecipients(ctx context.Context) ([]string, error) {
 	return s.getRecipients(ctx, sickLeaveAdminRecipientsSettingKey)
+}
+
+func (s *service) GetVacationApprovedRecipients(ctx context.Context) ([]string, error) {
+	return s.getRecipients(ctx, vacationApprovedRecipientsSettingKey)
 }
 
 func (s *service) Subscribe(userID string) chan Event {

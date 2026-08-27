@@ -104,6 +104,13 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 -- больничных, настраивается на странице "Настройки" (NotificationSettings.vue).
 -- Строки заводит миграция 017_seed_notification_settings.sql — вручную
 -- ничего накатывать не нужно.
+--
+-- Отдельно — кому слать уведомление об УТВЕРЖДЕНИИ отпуска (не о новой
+-- заявке): notification_vacation_approved_user_ids, тоже JSON-массив
+-- user_id, тоже настраивается в NotificationSettings.vue. Сам заявитель
+-- уведомляется об утверждении/отклонении всегда, без этой настройки — она
+-- только про дополнительных получателей. Заводит миграция
+-- 019_seed_vacation_approved_setting.sql.
 
 ### work_standards on 2026
 
