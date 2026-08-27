@@ -19,9 +19,18 @@ func NewHandler(service *Service) Handler {
 // не дожидаясь суточного тикера. Для проверки/на случай если нужно
 // пересчитать раньше расписания.
 func (h Handler) RunNow(c fiber.Ctx) error {
-	sent := h.service.RunNow(c.RequestCtx())
+	results := h.service.RunNow(c.RequestCtx())
+
+	sent := 0
+	for _, r := range results {
+		if r.Notified {
+			sent++
+		}
+	}
+
 	return response.Success(c, fiber.Map{
 		"message": "Проверка выполнена",
 		"sent":    sent,
+		"results": results,
 	})
 }

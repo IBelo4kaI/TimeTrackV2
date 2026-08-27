@@ -40,6 +40,19 @@ var monthNames = [...]string{
 	"июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
 }
 
+// GapResult — один сотрудник с незаполненными днями за конкретный месяц.
+// Notified — реально ли ушло уведомление именно сейчас (false, если раньше
+// сегодня уже слали — см. CountNotificationsSentToday, — пропуски при этом
+// у него всё равно есть и он всё равно попадает в список).
+type GapResult struct {
+	UserID   string `json:"userId"`
+	Kind     string `json:"kind"` // "soft" | "hard"
+	Year     int    `json:"year"`
+	Month    int    `json:"month"`
+	Gaps     int    `json:"gaps"`
+	Notified bool   `json:"notified"`
+}
+
 type Service struct {
 	repo                repo.Querier
 	calendarService     calendar.Service
@@ -94,7 +107,10 @@ func (s *Service) Run(ctx context.Context, now time.Time) {
 // (CountNotificationsSentToday) при этом никуда не девается: повторный
 // запуск в тот же день для уже уведомлённого пользователя+месяца ничего
 // не задублирует.
-func (s *Service) RunNow(ctx context.Context) int {
+// RunNow — см. комментарий выше, дополнительно возвращает список тех, у
+// кого нашлись пропуски (в т.ч. если уведомление сегодня уже уходило и
+// сейчас подавлено дедупом — пропуски у человека всё равно есть).
+func (s *Service) RunNow(ctx context.Context) []GapResult {
 	now := time.Now().UTC()
 	return s.checkAllUsers(ctx, now, true, true)
 }
@@ -111,38 +127,41 @@ func (s *Service) runDailyCheck(ctx context.Context, now time.Time) {
 	s.checkAllUsers(ctx, now, inSoftWindow, inHardWindow)
 }
 
-func (s *Service) checkAllUsers(ctx context.Context, now time.Time, checkSoft, checkHard bool) int {
+func (s *Service) checkAllUsers(ctx context.Context, now time.Time, checkSoft, checkHard bool) []GapResult {
 	userIDs, err := s.repo.ListKnownUserIDs(ctx)
 	if err != nil {
 		s.logger.Error("timesheet reminder: list users failed", "err", err)
-		return 0
+		return nil
 	}
 
-	sent := 0
+	var results []GapResult
 	for _, userID := range userIDs {
-		if checkSoft && s.checkAndNotify(ctx, userID, now.Year(), int(now.Month()), now, "soft") {
-			sent++
+		if checkSoft {
+			if r, ok := s.checkAndNotify(ctx, userID, now.Year(), int(now.Month()), now, "soft"); ok {
+				results = append(results, r)
+			}
 		}
 		if checkHard {
 			prevMonth := now.AddDate(0, -1, 0)
-			if s.checkAndNotify(ctx, userID, prevMonth.Year(), int(prevMonth.Month()), now, "hard") {
-				sent++
+			if r, ok := s.checkAndNotify(ctx, userID, prevMonth.Year(), int(prevMonth.Month()), now, "hard"); ok {
+				results = append(results, r)
 			}
 		}
 	}
-	return sent
+	return results
 }
 
 // checkAndNotify — считает пропуски в табеле пользователя за конкретный
-// месяц и, если они есть, шлёт напоминание (не чаще раза в день на
-// пользователя+месяц+режим, см. CountNotificationsSentToday). now нужен
-// только для "soft": ещё не наступившие дни текущего месяца не считаем.
-// Возвращает true, если уведомление реально отправлено.
-func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear, targetMonth int, now time.Time, kind string) bool {
+// месяц; если они есть — шлёт напоминание (не чаще раза в день на
+// пользователя+месяц+режим, см. CountNotificationsSentToday) и возвращает
+// (GapResult, true) в любом случае, отправилось реально уведомление или
+// подавлено дедупом (это в GapResult.Notified). now нужен только для
+// "soft": ещё не наступившие дни текущего месяца не считаем.
+func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear, targetMonth int, now time.Time, kind string) (GapResult, bool) {
 	days, err := s.calendarService.GetCalendarDays(ctx, userID, targetMonth, targetYear)
 	if err != nil {
 		s.logger.Error("timesheet reminder: get calendar days failed", "err", err, "userId", userID)
-		return false
+		return GapResult{}, false
 	}
 
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
@@ -158,8 +177,10 @@ func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear,
 		gaps++
 	}
 	if gaps == 0 {
-		return false
+		return GapResult{}, false
 	}
+
+	result := GapResult{UserID: userID, Kind: kind, Year: targetYear, Month: targetMonth, Gaps: gaps}
 
 	entityID := fmt.Sprintf("%s:%04d-%02d", kind, targetYear, targetMonth)
 
@@ -170,17 +191,18 @@ func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear,
 	})
 	if err != nil {
 		s.logger.Error("timesheet reminder: dedup check failed", "err", err, "userId", userID)
-		return false
+		return result, true
 	}
 	if sentToday > 0 {
-		return false
+		return result, true
 	}
 
 	title, body := buildText(kind, targetYear, targetMonth, gaps)
 
 	s.notificationService.CreateMany(ctx, []string{userID}, title, body, repo.NotificationsTypeWarn, entityType, entityID)
 	s.vkService.Notify(ctx, userID, title+": "+body, s.frontendURL+"/calendar")
-	return true
+	result.Notified = true
+	return result, true
 }
 
 func buildText(kind string, year, month, gaps int) (title, body string) {
