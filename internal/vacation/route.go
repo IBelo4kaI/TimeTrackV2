@@ -51,17 +51,20 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.RequireFromBody(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "create"}),
 		handler.CreateVacation)
 
-	// permission vacation:edit
+	// permission vacation.all:edit — утверждение/отклонение/смена типа это
+	// чисто административные действия, self-service тут смысла не имеет
+	// (сотрудник не должен мочь утвердить/отклонить свою же заявку), поэтому
+	// RequireAll:true без исключения для владельца, в отличие от upload/delete.
 	router.Put("/:id/approve",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit", RequireAll: true}),
 		handler.ApproveVacation)
 
 	router.Put("/:id/status",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit", RequireAll: true}),
 		handler.UpdateVacationStatus)
 
 	router.Put("/:id/type",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit", RequireAll: true}),
 		handler.UpdateVacationType)
 
 	// загрузка файла; просмотр: GET /v1/files/entity/vacation/:id, удаление: DELETE /v1/files/:id

@@ -322,18 +322,41 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 
 // UploadVacationFile загружает файл и привязывает его к отпуску через file_entity_refs.
 // Файлы доступны через GET /v1/files/open/:id и листаются через GET /v1/files/entity/vacation/:id.
+//
+// Как и GetVacation/DeleteVacation, роут без :userId в пути — базовый
+// middleware.Require проверяет только "vacation:edit", владельца узнаём
+// после чтения записи и довалидируем через RequireOwnerOrAll: свою заявку
+// можно дополнить файлом всегда, чужую — только с vacation.all:edit.
 func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "ID отпуска не указан"))
 	}
 
+	vacation, err := h.service.GetVacationByID(c.RequestCtx(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
+		}
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	uploaderID, _ := c.Locals("user_id").(string)
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "edit"},
+		uploaderID,
+		vacation.UserID,
+	)
+	if !allowed {
+		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "нет доступа к этой заявке"))
+	}
+
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "файл не найден в запросе"))
 	}
-
-	uploaderID, _ := c.Locals("user_id").(string)
 
 	f, err := h.fileService.Upload(c.RequestCtx(), service.UploadFileParams{
 		File:       fileHeader,
