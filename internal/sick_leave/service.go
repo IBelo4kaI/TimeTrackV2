@@ -8,6 +8,7 @@ import (
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/date"
 	"timetrack/internal/notification"
+	"timetrack/internal/parser"
 	usertimeentry "timetrack/internal/user_time_entry"
 	"timetrack/internal/vk"
 
@@ -18,6 +19,7 @@ type Service interface {
 	GetSickLeavesByYear(ctx context.Context, userID string, year int) ([]repo.GetSickLeavesByYearRow, error)
 	GetAllUsersSickLeavesByYear(ctx context.Context, year int) ([]repo.GetAllUsersSickLeavesByYearRow, error)
 	GetSickLeaveByID(ctx context.Context, id string) (repo.GetSickLeaveByIDRow, error)
+	GetSickLeaveStats(ctx context.Context, userID string, year int) (*SickLeaveStats, error)
 	CreateSickLeave(ctx context.Context, p CreateSickLeaveParams) error
 	UpdateSickLeaveStatus(ctx context.Context, id string, status repo.SickLeavesStatus) error
 	DeleteSickLeave(ctx context.Context, id string) error
@@ -69,6 +71,33 @@ func (s *sickLeaveService) GetAllUsersSickLeavesByYear(ctx context.Context, year
 		return nil, fmt.Errorf("get all sick leaves: %w", err)
 	}
 	return rows, nil
+}
+
+func (s *sickLeaveService) GetSickLeaveStats(ctx context.Context, userID string, year int) (*SickLeaveStats, error) {
+	yearDate := date.FirstDayOfMonth(1, year)
+
+	official, err := s.repo.GetCountSickLeavesByStatus(ctx, repo.GetCountSickLeavesByStatusParams{
+		UserID: userID,
+		Status: repo.SickLeavesStatusOfficial,
+		Year:   yearDate,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get official days: %w", err)
+	}
+
+	unofficial, err := s.repo.GetCountSickLeavesByStatus(ctx, repo.GetCountSickLeavesByStatusParams{
+		UserID: userID,
+		Status: repo.SickLeavesStatusUnofficial,
+		Year:   yearDate,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get unofficial days: %w", err)
+	}
+
+	return &SickLeaveStats{
+		Official:   parser.InterfaceToInt(official),
+		Unofficial: parser.InterfaceToInt(unofficial),
+	}, nil
 }
 
 func (s *sickLeaveService) GetSickLeaveByID(ctx context.Context, id string) (repo.GetSickLeaveByIDRow, error) {

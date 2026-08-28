@@ -18,6 +18,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		handler.CreateSickLeave)
 
 	// permission sick_leaves:read
+	router.Get("/stats/:userId/:year",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "read"}),
+		handler.GetSickLeaveStatistics)
+
+	// permission sick_leaves:read
 	// эндпоинт отдаёт больничные ВСЕХ сотрудников — без RequireAll middleware
 	// проверил бы обычный "sick_leaves:read" вместо "sick_leaves.all:read"
 	router.Get("/all/:year",

@@ -71,6 +71,20 @@ func (h *Handler) GetSickLeavesByYear(c fiber.Ctx) error {
 	return response.Success(c, rows)
 }
 
+func (h *Handler) GetSickLeaveStatistics(c fiber.Ctx) error {
+	year, err := fiber.Params[int](c, "year"), error(nil)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+	userID := c.Params("userId")
+
+	stats, err := h.service.GetSickLeaveStats(c.RequestCtx(), userID, year)
+	if err != nil {
+		return response.ServerError(c)
+	}
+	return response.Success(c, stats)
+}
+
 func (h *Handler) GetAllUsersSickLeavesByYear(c fiber.Ctx) error {
 	year, err := fiber.Params[int](c, "year"), error(nil)
 	if err != nil {
