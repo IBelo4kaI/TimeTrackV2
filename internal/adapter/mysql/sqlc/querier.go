@@ -16,6 +16,7 @@ type Querier interface {
 	// ============================================
 	AddChatParticipant(ctx context.Context, arg AddChatParticipantParams) error
 	AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error
+	CountCalendarEventsByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
 	// Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
@@ -23,6 +24,7 @@ type Querier interface {
 	CountNotificationsSentToday(ctx context.Context, arg CountNotificationsSentTodayParams) (int64, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
+	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
 	// ============================================

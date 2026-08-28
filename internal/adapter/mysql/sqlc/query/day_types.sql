@@ -94,3 +94,19 @@ WHERE
 DELETE FROM day_types
 WHERE
   id = ?;
+
+-- name: CountUserTimeEntriesByDayType :one
+SELECT
+  COUNT(*)
+FROM
+  user_time_entries
+WHERE
+  day_type_id = ?;
+
+-- name: CountCalendarEventsByDayType :one
+SELECT
+  COUNT(*)
+FROM
+  calendar_events
+WHERE
+  day_type_id = ?;

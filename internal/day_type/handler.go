@@ -1,6 +1,7 @@
 package daytype
 
 import (
+	"errors"
 	"net/http"
 	"timetrack/internal/response"
 
@@ -16,9 +17,68 @@ func NewHandler(service Service) Handler {
 }
 
 func (h Handler) GetDayTypes(c fiber.Ctx) error {
-	types, err := h.service.GetDayTypes(c.RequestCtx())
+	types, err := h.service.GetAll(c.RequestCtx())
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 	return response.Success(c, types)
+}
+
+func (h Handler) CreateDayType(c fiber.Ctx) error {
+	var body CreateDayTypeRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	dayType, err := h.service.Create(c.RequestCtx(), body)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, dayType)
+}
+
+func (h Handler) UpdateDayType(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	var body UpdateDayTypeRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	dayType, err := h.service.Update(c.RequestCtx(), id, body)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, dayType)
+}
+
+func (h Handler) DeleteDayType(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	if err := h.service.Delete(c.RequestCtx(), id); err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Deleted(c)
+}
+
+func mapError(c fiber.Ctx, err error) error {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return response.Error(c, http.StatusNotFound, err)
+	case errors.Is(err, ErrNameTaken), errors.Is(err, ErrTypeInUse), errors.Is(err, ErrSystemReserved):
+		return response.Error(c, http.StatusConflict, err)
+	case errors.Is(err, ErrColorCodeReq), errors.Is(err, ErrSystemNameEmpty), errors.Is(err, ErrNameEmpty):
+		return response.Error(c, http.StatusBadRequest, err)
+	default:
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
 }

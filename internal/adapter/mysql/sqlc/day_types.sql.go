@@ -9,6 +9,38 @@ import (
 	"context"
 )
 
+const countCalendarEventsByDayType = `-- name: CountCalendarEventsByDayType :one
+SELECT
+  COUNT(*)
+FROM
+  calendar_events
+WHERE
+  day_type_id = ?
+`
+
+func (q *Queries) CountCalendarEventsByDayType(ctx context.Context, dayTypeID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCalendarEventsByDayType, dayTypeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUserTimeEntriesByDayType = `-- name: CountUserTimeEntriesByDayType :one
+SELECT
+  COUNT(*)
+FROM
+  user_time_entries
+WHERE
+  day_type_id = ?
+`
+
+func (q *Queries) CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUserTimeEntriesByDayType, dayTypeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDayType = `-- name: CreateDayType :exec
 INSERT INTO
   day_types (

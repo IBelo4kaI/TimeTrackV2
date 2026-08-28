@@ -126,6 +126,15 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 -- только про дополнительных получателей. Заводит миграция
 -- 019_seed_vacation_approved_setting.sql.
 
+-- Управление типами дней (см. internal/day_type) — справочник, которым
+-- заполняются календарь и табель (work/vacation/medical/decree/weekend и
+-- т.п.). Просмотр (GET /daytypes) открыт всем авторизованным без
+-- разрешения — нужен для выбора типа при заполнении своего табеля.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('133d15eb-4cea-4b03-a1e3-778f2f6c95c8', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:day_types:create', 'Создание типа дня', 'Разрешение создавать новые типы дней в справочнике', NOW()),
+('a001d385-7554-438e-9ca5-839778904399', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:day_types:edit', 'Редактирование типа дня', 'Разрешение редактировать название/цвет/флаги типа дня', NOW()),
+('e60bf79e-45f1-4113-b3fd-9dbc63dfe874', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:day_types:delete', 'Удаление типа дня', 'Разрешение удалять неиспользуемые типы дней', NOW());
+
 ### work_standards on 2026
 
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES
