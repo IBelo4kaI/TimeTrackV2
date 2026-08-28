@@ -362,6 +362,19 @@ type FileEntityRef struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+type NewsPost struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type NewsReadMark struct {
+	UserID     string    `json:"userId"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+}
+
 type Notification struct {
 	ID         string                `json:"id"`
 	UserID     string                `json:"userId"`

@@ -135,6 +135,14 @@ INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `c
 ('a001d385-7554-438e-9ca5-839778904399', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:day_types:edit', 'Редактирование типа дня', 'Разрешение редактировать название/цвет/флаги типа дня', NOW()),
 ('e60bf79e-45f1-4113-b3fd-9dbc63dfe874', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:day_types:delete', 'Удаление типа дня', 'Разрешение удалять неиспользуемые типы дней', NOW());
 
+-- Новости/чейнджлог приложения (см. internal/news) — просмотр (GET /news,
+-- /news/unread-count, POST /news/mark-seen) открыт всем авторизованным без
+-- разрешения, публикация — только админам.
+INSERT INTO `permissions` (`id`, `service_id`, `code`, `name`, `description`, `created_at`) VALUES
+('f2879f46-2e7d-4748-8f62-80c585b5a1cb', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:news:create', 'Публикация новости', 'Разрешение публиковать новости/обновления приложения', NOW()),
+('69c222a9-b3ce-4cdc-a6d8-89a0d1bb6625', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:news:edit', 'Редактирование новости', 'Разрешение редактировать опубликованные новости', NOW()),
+('db3578b2-d192-4dfa-a879-803794b1e292', '19c1a24e-190d-4742-b559-a1aa25e3afb7', 'time:news:delete', 'Удаление новости', 'Разрешение удалять опубликованные новости', NOW());
+
 ### work_standards on 2026
 
 INSERT INTO `work_standards` (`id`, `user_id`, `month`, `year`, `standard_hours`, `standard_days`, `gender`, `created_at`, `updated_at`) VALUES

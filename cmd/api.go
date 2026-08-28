@@ -14,6 +14,7 @@ import (
 	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
 	"timetrack/internal/middleware"
+	"timetrack/internal/news"
 	"timetrack/internal/notification"
 	notificationtemplate "timetrack/internal/notification_template"
 	"timetrack/internal/service"
@@ -102,6 +103,10 @@ func (app *application) mount() *fiber.App {
 	// Готовые шаблоны для ручной рассылки (см. notificationService.SendManual)
 	notificationTemplateService := notificationtemplate.NewService(repo.New(app.db))
 	notificationtemplate.SetupRoutes(v1, notificationTemplateService, app.grpcClient, app.config.prefix)
+
+	// Новости/чейнджлог приложения (см. internal/news)
+	newsService := news.NewService(repo.New(app.db))
+	news.SetupRoutes(v1, newsService, app.grpcClient, app.config.prefix)
 
 	// Vacation routes
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, app.config.frontendURL)

@@ -19,6 +19,7 @@ type Querier interface {
 	CountCalendarEventsByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
+	CountNewsPostsSince(ctx context.Context, createdAt time.Time) (int64, error)
 	// Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
 	// created_at теперь буквальный UTC, см. 018_notification_timestamp_utc.sql).
 	CountNotificationsSentToday(ctx context.Context, arg CountNotificationsSentTodayParams) (int64, error)
@@ -39,6 +40,7 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) error
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
 	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
+	CreateNewsPost(ctx context.Context, arg CreateNewsPostParams) error
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateNotificationTemplate(ctx context.Context, arg CreateNotificationTemplateParams) error
 	// id передаём явно — та же причина, что у CreateVacation (сразу нужен для
@@ -60,6 +62,7 @@ type Querier interface {
 	DeleteChat(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
 	DeleteFileCategory(ctx context.Context, id string) error
+	DeleteNewsPost(ctx context.Context, id string) error
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	DeleteNotificationTemplate(ctx context.Context, id string) error
 	DeleteSickLeave(ctx context.Context, id string) error
@@ -100,6 +103,8 @@ type Querier interface {
 	GetFileCategoryByParentAndName(ctx context.Context, arg GetFileCategoryByParentAndNameParams) (FileCategory, error)
 	GetFileCategoryBySystemName(ctx context.Context, systemName sql.NullString) (FileCategory, error)
 	GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error)
+	GetNewsPostByID(ctx context.Context, id string) (NewsPost, error)
+	GetNewsReadMark(ctx context.Context, userID string) (NewsReadMark, error)
 	GetNotificationTemplateByID(ctx context.Context, id string) (NotificationTemplate, error)
 	GetNotificationTemplateByName(ctx context.Context, name string) (NotificationTemplate, error)
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
@@ -162,6 +167,7 @@ type Querier interface {
 	// Ограничение: сотрудник, который вообще ничего ни разу не вносил, сюда не
 	// попадёт — и не получит напоминание, хотя ему оно нужнее всего.
 	ListKnownUserIDs(ctx context.Context) ([]string, error)
+	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
@@ -205,6 +211,7 @@ type Querier interface {
 	UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error
 	UpdateIsWorkDayType(ctx context.Context, arg UpdateIsWorkDayTypeParams) error
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
+	UpdateNewsPost(ctx context.Context, arg UpdateNewsPostParams) error
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
@@ -221,6 +228,7 @@ type Querier interface {
 	// отдельно через CreateSystemSetting/сид-миграцию.
 	UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error
 	UpdateWorkStandard(ctx context.Context, arg UpdateWorkStandardParams) error
+	UpsertNewsReadMark(ctx context.Context, userID string) error
 }
 
 var _ Querier = (*Queries)(nil)
