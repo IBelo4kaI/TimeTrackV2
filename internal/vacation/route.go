@@ -14,6 +14,7 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 
 	// расчёт дней отпуска — только авторизация
 	router.Get("/calculate", handler.CalculateVacationDays)
+	router.Get("/calculate-end", handler.CalculateVacationEndDate)
 
 	// permission vacation:read
 	router.Get("/stats/:userId/:year",

@@ -16,6 +16,11 @@ type VacationCalculationResult struct {
 	Months            []VacationMonth `json:"months"`
 }
 
+type VacationEndDateResult struct {
+	EndDate           time.Time `json:"endDate"`
+	TotalVacationDays int       `json:"totalVacationDays"`
+}
+
 type VacationDay struct {
 	Date        time.Time `json:"date"`
 	IsVacation  bool      `json:"isVacation"`  // Входит ли день в отпуск

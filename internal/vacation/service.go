@@ -30,6 +30,7 @@ type vacationService struct {
 type Service interface {
 	CalculateVacationDaysFullMonths(ctx context.Context, startDate, endDate time.Time) (*VacationCalculationResult, error)
 	CalculateVacationDays(ctx context.Context, startDate, endDate time.Time) (*VacationCalculationResult, error)
+	CalculateVacationEndDate(ctx context.Context, startDate time.Time, days int) (*VacationEndDateResult, error)
 	GetCountVacationsByStatus(ctx context.Context, prm repo.GetCountVacationsByStatusParams) (int, error)
 	GetVacationsStats(ctx context.Context, userId string, year int) (*VacationStats, error)
 	GetAllUserVacationsByYear(ctx context.Context, year int) (*[]repo.GetAllUsersVacationsByYearRow, error)
@@ -228,6 +229,33 @@ func (s *vacationService) CalculateVacationDays(ctx context.Context, startDate, 
 	}
 
 	return &result, nil
+}
+
+// maxVacationEndDateScan — предохранитель от зависания, если что-то пошло не
+// так (например, buildVacationDay почему-то никогда не считает день отпускным):
+// 3 года календарных дней заведомо больше любого реального отпуска.
+const maxVacationEndDateScan = 3 * 366
+
+// CalculateVacationEndDate — обратная задача к CalculateVacationDays: по дате
+// начала и желаемому числу отпускных дней находит дату окончания, раздвигая
+// диапазон на праздничные дни (affects_vacation = false), которые в счёт
+// отпуска не идут.
+func (s *vacationService) CalculateVacationEndDate(ctx context.Context, startDate time.Time, days int) (*VacationEndDateResult, error) {
+	startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+
+	counted := 0
+	currentDate := startDate
+	for i := 0; i < maxVacationEndDateScan; i++ {
+		if _, isVacation := s.buildVacationDay(ctx, currentDate); isVacation {
+			counted++
+			if counted == days {
+				return &VacationEndDateResult{EndDate: currentDate, TotalVacationDays: counted}, nil
+			}
+		}
+		currentDate = currentDate.AddDate(0, 0, 1)
+	}
+
+	return nil, fmt.Errorf("не удалось определить дату окончания отпуска: превышен предел поиска")
 }
 
 // Версия с полными месяцами — каждый месяц раскрывается целиком

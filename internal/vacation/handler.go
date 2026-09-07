@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
@@ -160,6 +161,35 @@ func (h *Handler) CalculateVacationDays(c fiber.Ctx) error {
 
 	// Вызываем сервис
 	result, err := h.service.CalculateVacationDays(c.RequestCtx(), startDate, endDate)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, result)
+}
+
+func (h *Handler) CalculateVacationEndDate(c fiber.Ctx) error {
+	startDateStr := c.Query("startDate")
+	daysStr := c.Query("days")
+
+	if startDateStr == "" || daysStr == "" {
+		return response.Error(c, http.StatusBadRequest,
+			fiber.NewError(http.StatusBadRequest, "Необходимо указать startDate и days параметры"))
+	}
+
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		return response.Error(c, http.StatusBadRequest,
+			fiber.NewError(http.StatusBadRequest, "Некорректный формат startDate. Используйте YYYY-MM-DD"))
+	}
+
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days < 1 {
+		return response.Error(c, http.StatusBadRequest,
+			fiber.NewError(http.StatusBadRequest, "days должен быть положительным целым числом"))
+	}
+
+	result, err := h.service.CalculateVacationEndDate(c.RequestCtx(), startDate, days)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
