@@ -43,6 +43,11 @@ type Querier interface {
 	CreateNewsPost(ctx context.Context, arg CreateNewsPostParams) error
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateNotificationTemplate(ctx context.Context, arg CreateNotificationTemplateParams) error
+	// ============================================
+	// receipts / receipt_items queries
+	// ============================================
+	CreateReceipt(ctx context.Context, arg CreateReceiptParams) error
+	CreateReceiptItem(ctx context.Context, arg CreateReceiptItemParams) error
 	// id передаём явно — та же причина, что у CreateVacation (сразу нужен для
 	// уведомлений админам).
 	CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error
@@ -65,6 +70,7 @@ type Querier interface {
 	DeleteNewsPost(ctx context.Context, id string) error
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	DeleteNotificationTemplate(ctx context.Context, id string) error
+	DeleteReceipt(ctx context.Context, id string) error
 	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
@@ -108,6 +114,8 @@ type Querier interface {
 	GetNotificationTemplateByID(ctx context.Context, id string) (NotificationTemplate, error)
 	GetNotificationTemplateByName(ctx context.Context, name string) (NotificationTemplate, error)
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
+	GetReceiptByFiscalKey(ctx context.Context, arg GetReceiptByFiscalKeyParams) (Receipt, error)
+	GetReceiptByID(ctx context.Context, id string) (Receipt, error)
 	GetSickLeaveByID(ctx context.Context, id string) (GetSickLeaveByIDRow, error)
 	GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYearParams) ([]GetSickLeavesByYearRow, error)
 	GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error)
@@ -150,6 +158,7 @@ type Querier interface {
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	HardDeleteFile(ctx context.Context, id string) error
 	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
+	ListAllReceipts(ctx context.Context) ([]Receipt, error)
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
@@ -170,6 +179,8 @@ type Querier interface {
 	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
+	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
+	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)

@@ -396,6 +396,41 @@ type NotificationTemplate struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type Receipt struct {
+	ID                   string         `json:"id"`
+	UserID               string         `json:"userId"`
+	FiscalDriveNumber    string         `json:"fiscalDriveNumber"`
+	FiscalDocumentNumber string         `json:"fiscalDocumentNumber"`
+	FiscalSign           string         `json:"fiscalSign"`
+	TicketDate           time.Time      `json:"ticketDate"`
+	TotalSum             int64          `json:"totalSum"`
+	SellerInn            string         `json:"sellerInn"`
+	SellerName           sql.NullString `json:"sellerName"`
+	OperationType        int32          `json:"operationType"`
+	RetailPlaceAddress   sql.NullString `json:"retailPlaceAddress"`
+	RequestNumber        sql.NullString `json:"requestNumber"`
+	CashTotalSum         sql.NullInt64  `json:"cashTotalSum"`
+	EcashTotalSum        sql.NullInt64  `json:"ecashTotalSum"`
+	TaxationType         sql.NullInt32  `json:"taxationType"`
+	Nds20                int64          `json:"nds20"`
+	Nds10                int64          `json:"nds10"`
+	Nds0                 int64          `json:"nds0"`
+	NdsNo                int64          `json:"ndsNo"`
+	RawQr                sql.NullString `json:"rawQr"`
+	CreatedAt            time.Time      `json:"createdAt"`
+	UpdatedAt            time.Time      `json:"updatedAt"`
+}
+
+type ReceiptItem struct {
+	ID         uint64        `json:"id"`
+	ReceiptID  string        `json:"receiptId"`
+	PositionNo sql.NullInt32 `json:"positionNo"`
+	Name       string        `json:"name"`
+	Price      int64         `json:"price"`
+	Quantity   string        `json:"quantity"`
+	Sum        int64         `json:"sum"`
+}
+
 type SickLeafe struct {
 	ID          string           `json:"id"`
 	UserID      string           `json:"userId"`

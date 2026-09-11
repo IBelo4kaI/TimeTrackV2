@@ -17,6 +17,7 @@ import (
 	"timetrack/internal/news"
 	"timetrack/internal/notification"
 	notificationtemplate "timetrack/internal/notification_template"
+	"timetrack/internal/receipt"
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
 	systemsetting "timetrack/internal/system_setting"
@@ -177,6 +178,13 @@ func (app *application) mount() *fiber.App {
 	// Work standards routes
 	workStandardService := workstandard.NewService(repo.New(app.db))
 	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
+
+	// Receipt routes — сотрудник сканирует QR на фронте, сам ходит во
+	// внешнее API и уже с готовым разобранным ответом идёт сюда (см.
+	// internal/receipt). Нужна транзакция (чек + позиции), поэтому сервису
+	// передаём ещё и app.db, как userTimeEntryService выше.
+	receiptService := receipt.NewService(repo.New(app.db), app.db)
+	receipt.SetupRoutes(v1, receiptService, fileService, app.grpcClient, app.config.prefix)
 
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)
