@@ -147,6 +147,29 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteByEntity удаляет все файлы, привязанные к сущности (файл + запись в
+// БД + file_entity_refs каскадом, см. Delete) — вызывается при удалении
+// самой сущности (чек/отпуск/больничный), иначе файлы остаются сиротами:
+// удаление сущности само по себе file_entity_refs не трогает. Ошибка на
+// одном файле не прерывает чистку остальных.
+func (s *FileService) DeleteByEntity(ctx context.Context, entityType, entityID string) error {
+	files, err := s.repo.ListFilesByEntity(ctx, repo.ListFilesByEntityParams{
+		EntityType: entityType,
+		EntityID:   entityID,
+	})
+	if err != nil {
+		return fmt.Errorf("list files by entity: %w", err)
+	}
+
+	var firstErr error
+	for _, f := range files {
+		if err := s.Delete(ctx, f.ID); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // ListByEntity возвращает файлы, привязанные к конкретной сущности.
 // year — необязательный фильтр по году загрузки файла (created_at); 0 означает
 // «без фильтра», возвращаются файлы за все годы.

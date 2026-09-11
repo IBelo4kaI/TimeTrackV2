@@ -1,6 +1,7 @@
 package sickleave
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
@@ -132,6 +133,11 @@ func (h *Handler) DeleteSickLeave(c fiber.Ctx) error {
 	if err := h.service.DeleteSickLeave(c.RequestCtx(), id); err != nil {
 		return response.ServerError(c)
 	}
+
+	if err := h.fileService.DeleteByEntity(c.RequestCtx(), "sick_leave", id); err != nil {
+		fmt.Printf("delete sick leave files: %v\n", err)
+	}
+
 	return response.Deleted(c)
 }
 

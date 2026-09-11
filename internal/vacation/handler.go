@@ -3,6 +3,7 @@ package vacation
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -349,6 +350,10 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 	err = h.service.DeleteVacation(c.RequestCtx(), vacationID)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	if err := h.fileService.DeleteByEntity(c.RequestCtx(), "vacation", vacationID); err != nil {
+		fmt.Printf("delete vacation files: %v\n", err)
 	}
 
 	return response.Success(c, fiber.Map{

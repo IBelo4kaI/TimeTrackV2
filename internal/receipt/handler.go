@@ -2,6 +2,7 @@ package receipt
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"timetrack/internal/adapter/grpc"
 	"timetrack/internal/middleware"
@@ -25,11 +26,13 @@ func NewHandler(service Service, fileService *service.FileService, grpc *grpc.Cl
 func (h Handler) CreateReceipt(c fiber.Ctx) error {
 	var body CreateReceiptRequest
 	if err := c.Bind().Body(&body); err != nil {
+		fmt.Printf("%+v", err.Error())
 		return response.BadRequest(c)
 	}
 
 	r, err := h.service.Create(c.RequestCtx(), body)
 	if err != nil {
+		fmt.Printf("%+v", err.Error())
 		return mapError(c, err)
 	}
 
@@ -178,6 +181,10 @@ func (h Handler) DeleteReceipt(c fiber.Ctx) error {
 
 	if err := h.service.Delete(c.RequestCtx(), id); err != nil {
 		return mapError(c, err)
+	}
+
+	if err := h.fileService.DeleteByEntity(c.RequestCtx(), "receipt", id); err != nil {
+		fmt.Printf("delete receipt files: %v\n", err)
 	}
 
 	return response.Deleted(c)
