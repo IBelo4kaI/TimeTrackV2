@@ -29,7 +29,11 @@ INSERT INTO
     updated_at
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP());
+  -- created_at/updated_at приходят из Go (time.Now().UTC()), а не
+  -- UTC_TIMESTAMP() — та отдаёт только целые секунды (DATETIME(6) без долей
+  -- секунды в значении бесполезен), а sqlc к тому же не знает сигнатуру
+  -- UTC_TIMESTAMP(6) с аргументом (см. 023_receipts_timestamp_precision.sql).
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: CreateReceiptItem :exec
 INSERT INTO

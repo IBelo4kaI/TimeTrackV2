@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 
 	"github.com/google/uuid"
@@ -62,6 +63,7 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 	qtx := s.repo.WithTx(tx)
 
 	id := uuid.NewString()
+	now := time.Now().UTC()
 	if err := qtx.CreateReceipt(ctx, repo.CreateReceiptParams{
 		ID:                   id,
 		UserID:               req.UserID,
@@ -83,6 +85,8 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		Nds0:                 req.Nds0,
 		NdsNo:                req.NdsNo,
 		RawQr:                nullString(req.RawQR),
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}); err != nil {
 		return ReceiptWithItems{}, fmt.Errorf("create receipt: %w", err)
 	}
