@@ -92,3 +92,11 @@ ORDER BY
 DELETE FROM receipts
 WHERE
   id = ?;
+
+-- name: UpdateReceiptOwner :exec
+UPDATE receipts
+SET
+  user_id = ?,
+  updated_at = ?
+WHERE
+  id = ?;

@@ -48,4 +48,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 	router.Post("/:id/file",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.UploadReceiptFile)
+
+	// передача чека другому сотруднику; permission receipts:edit, владелец
+	// довалидируется в хендлере через RequireOwnerOrAll — свой чек может
+	// передать любой сотрудник, чужой только с receipts.all:edit.
+	router.Put("/:id/transfer",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		handler.TransferReceipt)
 }

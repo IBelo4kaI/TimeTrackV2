@@ -381,3 +381,23 @@ func (q *Queries) ListReceiptsByUser(ctx context.Context, userID string) ([]Rece
 	}
 	return items, nil
 }
+
+const updateReceiptOwner = `-- name: UpdateReceiptOwner :exec
+UPDATE receipts
+SET
+  user_id = ?,
+  updated_at = ?
+WHERE
+  id = ?
+`
+
+type UpdateReceiptOwnerParams struct {
+	UserID    string    `json:"userId"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string    `json:"id"`
+}
+
+func (q *Queries) UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error {
+	_, err := q.db.ExecContext(ctx, updateReceiptOwner, arg.UserID, arg.UpdatedAt, arg.ID)
+	return err
+}

@@ -190,6 +190,46 @@ func (h Handler) DeleteReceipt(c fiber.Ctx) error {
 	return response.Deleted(c)
 }
 
+// TransferReceipt godoc
+// PUT /v1/receipts/:id/transfer — передаёт чек другому сотруднику (меняет
+// userId). Свой чек можно передать при базовом receipts:edit, чужой —
+// только с receipts.all:edit (RequireOwnerOrAll), как у UploadReceiptFile.
+func (h Handler) TransferReceipt(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	var body TransferReceiptRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	current, err := h.service.GetByID(c.RequestCtx(), id)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
+		callerID,
+		current.UserID,
+	)
+	if !allowed {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому чеку"))
+	}
+
+	r, err := h.service.Transfer(c.RequestCtx(), id, body.UserID)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, r)
+}
+
 func mapError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -200,7 +240,9 @@ func mapError(c fiber.Ctx, err error) error {
 		errors.Is(err, ErrFiscalDataRequired),
 		errors.Is(err, ErrTotalSumInvalid),
 		errors.Is(err, ErrSellerInnRequired),
-		errors.Is(err, ErrNoItems):
+		errors.Is(err, ErrNoItems),
+		errors.Is(err, ErrNewOwnerRequired),
+		errors.Is(err, ErrSameOwner):
 		return response.Error(c, http.StatusBadRequest, err)
 	default:
 		return response.Error(c, http.StatusInternalServerError, err)

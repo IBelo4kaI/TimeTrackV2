@@ -53,3 +53,8 @@ type ReceiptWithItems struct {
 	repo.Receipt
 	Items []repo.ReceiptItem `json:"items"`
 }
+
+// TransferReceiptRequest — тело PUT /receipts/:id/transfer.
+type TransferReceiptRequest struct {
+	UserID string `json:"userId"`
+}

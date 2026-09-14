@@ -224,6 +224,7 @@ type Querier interface {
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
 	UpdateNewsPost(ctx context.Context, arg UpdateNewsPostParams) error
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
+	UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error

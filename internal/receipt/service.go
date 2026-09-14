@@ -20,6 +20,8 @@ var (
 	ErrTotalSumInvalid    = errors.New("некорректная сумма чека")
 	ErrSellerInnRequired  = errors.New("не указан ИНН продавца")
 	ErrNoItems            = errors.New("в чеке нет ни одной позиции")
+	ErrNewOwnerRequired   = errors.New("не указан сотрудник, которому передаётся чек")
+	ErrSameOwner          = errors.New("чек уже принадлежит этому сотруднику")
 )
 
 type Service interface {
@@ -28,6 +30,7 @@ type Service interface {
 	ListByUser(ctx context.Context, userID string) ([]repo.Receipt, error)
 	ListAll(ctx context.Context) ([]repo.Receipt, error)
 	Delete(ctx context.Context, id string) error
+	Transfer(ctx context.Context, id, newUserID string) (ReceiptWithItems, error)
 }
 
 type receiptService struct {
@@ -150,6 +153,34 @@ func (s *receiptService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete receipt: %w", err)
 	}
 	return nil
+}
+
+func (s *receiptService) Transfer(ctx context.Context, id, newUserID string) (ReceiptWithItems, error) {
+	if newUserID == "" {
+		return ReceiptWithItems{}, ErrNewOwnerRequired
+	}
+
+	r, err := s.repo.GetReceiptByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ReceiptWithItems{}, ErrNotFound
+		}
+		return ReceiptWithItems{}, err
+	}
+
+	if r.UserID == newUserID {
+		return ReceiptWithItems{}, ErrSameOwner
+	}
+
+	if err := s.repo.UpdateReceiptOwner(ctx, repo.UpdateReceiptOwnerParams{
+		UserID:    newUserID,
+		UpdatedAt: time.Now().UTC(),
+		ID:        id,
+	}); err != nil {
+		return ReceiptWithItems{}, fmt.Errorf("update receipt owner: %w", err)
+	}
+
+	return s.GetByID(ctx, id)
 }
 
 func validate(req CreateReceiptRequest) error {
