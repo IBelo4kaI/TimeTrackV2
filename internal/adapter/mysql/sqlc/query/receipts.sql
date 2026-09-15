@@ -20,10 +20,18 @@ INSERT INTO
     cash_total_sum,
     ecash_total_sum,
     taxation_type,
+    shift_number,
+    kkt_reg_id,
+    fiscal_document_format_ver,
+    machine_number,
+    retail_place,
+    operator,
+    prepaid_sum,
     nds20,
     nds10,
     nds0,
     nds_no,
+    nds22,
     raw_qr,
     created_at,
     updated_at
@@ -33,13 +41,13 @@ VALUES
   -- UTC_TIMESTAMP() — та отдаёт только целые секунды (DATETIME(6) без долей
   -- секунды в значении бесполезен), а sqlc к тому же не знает сигнатуру
   -- UTC_TIMESTAMP(6) с аргументом (см. 023_receipts_timestamp_precision.sql).
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: CreateReceiptItem :exec
 INSERT INTO
-  receipt_items (receipt_id, position_no, name, price, quantity, sum)
+  receipt_items (receipt_id, position_no, name, price, quantity, sum, nds_code)
 VALUES
-  (?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetReceiptByID :one
 SELECT

@@ -12,6 +12,11 @@ type ReceiptItemRequest struct {
 	Price    int64   `json:"price"`    // в копейках
 	Quantity float64 `json:"quantity"` // может быть дробным (вес)
 	Sum      int64   `json:"sum"`      // в копейках
+
+	// Код ставки НДС по ФФД (тег 1199) на эту позицию — 1/2/3/4/5/6 по
+	// спецификации + 11 (в проценты код разворачивает только фронт, см.
+	// getNdsRateLabel в receipt.utils.js)
+	NdsCode *int32 `json:"ndsCode"`
 }
 
 // CreateReceiptRequest — тело POST /receipts/create. Фронт сканирует QR,
@@ -41,6 +46,17 @@ type CreateReceiptRequest struct {
 	Nds10 int64 `json:"nds10"`
 	Nds0  int64 `json:"nds0"`
 	NdsNo int64 `json:"ndsNo"`
+	// Nds22 — новая ставка 22%, появившаяся у сервиса в отдельной структуре
+	// amountsReceiptNds (не в плоских nds20/nds10, как остальные)
+	Nds22 int64 `json:"nds22"`
+
+	ShiftNumber             *int32  `json:"shiftNumber"`             // номер смены
+	KktRegID                *string `json:"kktRegId"`                // рег. номер ККТ
+	FiscalDocumentFormatVer *int32  `json:"fiscalDocumentFormatVer"` // версия ФФД
+	MachineNumber           *string `json:"machineNumber"`           // № АВТ
+	RetailPlace             *string `json:"retailPlace"`             // место расчётов (не путать с адресом)
+	Operator                *string `json:"operator"`                // кассир
+	PrepaidSum              *int64  `json:"prepaidSum"`              // предоплата (аванс), в копейках
 
 	RawQR *string `json:"rawQr"` // исходная qr-строка, для отладки
 

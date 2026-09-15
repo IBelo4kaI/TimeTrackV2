@@ -397,28 +397,36 @@ type NotificationTemplate struct {
 }
 
 type Receipt struct {
-	ID                   string         `json:"id"`
-	UserID               string         `json:"userId"`
-	FiscalDriveNumber    string         `json:"fiscalDriveNumber"`
-	FiscalDocumentNumber string         `json:"fiscalDocumentNumber"`
-	FiscalSign           string         `json:"fiscalSign"`
-	TicketDate           time.Time      `json:"ticketDate"`
-	TotalSum             int64          `json:"totalSum"`
-	SellerInn            string         `json:"sellerInn"`
-	SellerName           sql.NullString `json:"sellerName"`
-	OperationType        int32          `json:"operationType"`
-	RetailPlaceAddress   sql.NullString `json:"retailPlaceAddress"`
-	RequestNumber        sql.NullString `json:"requestNumber"`
-	CashTotalSum         sql.NullInt64  `json:"cashTotalSum"`
-	EcashTotalSum        sql.NullInt64  `json:"ecashTotalSum"`
-	TaxationType         sql.NullInt32  `json:"taxationType"`
-	Nds20                int64          `json:"nds20"`
-	Nds10                int64          `json:"nds10"`
-	Nds0                 int64          `json:"nds0"`
-	NdsNo                int64          `json:"ndsNo"`
-	RawQr                sql.NullString `json:"rawQr"`
-	CreatedAt            time.Time      `json:"createdAt"`
-	UpdatedAt            time.Time      `json:"updatedAt"`
+	ID                      string         `json:"id"`
+	UserID                  string         `json:"userId"`
+	FiscalDriveNumber       string         `json:"fiscalDriveNumber"`
+	FiscalDocumentNumber    string         `json:"fiscalDocumentNumber"`
+	FiscalSign              string         `json:"fiscalSign"`
+	TicketDate              time.Time      `json:"ticketDate"`
+	TotalSum                int64          `json:"totalSum"`
+	SellerInn               string         `json:"sellerInn"`
+	SellerName              sql.NullString `json:"sellerName"`
+	OperationType           int32          `json:"operationType"`
+	RetailPlaceAddress      sql.NullString `json:"retailPlaceAddress"`
+	RequestNumber           sql.NullString `json:"requestNumber"`
+	CashTotalSum            sql.NullInt64  `json:"cashTotalSum"`
+	EcashTotalSum           sql.NullInt64  `json:"ecashTotalSum"`
+	TaxationType            sql.NullInt32  `json:"taxationType"`
+	Nds20                   int64          `json:"nds20"`
+	Nds10                   int64          `json:"nds10"`
+	Nds0                    int64          `json:"nds0"`
+	NdsNo                   int64          `json:"ndsNo"`
+	RawQr                   sql.NullString `json:"rawQr"`
+	CreatedAt               time.Time      `json:"createdAt"`
+	UpdatedAt               time.Time      `json:"updatedAt"`
+	ShiftNumber             sql.NullInt32  `json:"shiftNumber"`
+	KktRegID                sql.NullString `json:"kktRegId"`
+	FiscalDocumentFormatVer sql.NullInt32  `json:"fiscalDocumentFormatVer"`
+	MachineNumber           sql.NullString `json:"machineNumber"`
+	RetailPlace             sql.NullString `json:"retailPlace"`
+	Operator                sql.NullString `json:"operator"`
+	PrepaidSum              sql.NullInt64  `json:"prepaidSum"`
+	Nds22                   int64          `json:"nds22"`
 }
 
 type ReceiptItem struct {
@@ -429,6 +437,7 @@ type ReceiptItem struct {
 	Price      int64         `json:"price"`
 	Quantity   string        `json:"quantity"`
 	Sum        int64         `json:"sum"`
+	NdsCode    sql.NullInt32 `json:"ndsCode"`
 }
 
 type SickLeafe struct {

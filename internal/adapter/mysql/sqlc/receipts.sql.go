@@ -30,10 +30,18 @@ INSERT INTO
     cash_total_sum,
     ecash_total_sum,
     taxation_type,
+    shift_number,
+    kkt_reg_id,
+    fiscal_document_format_ver,
+    machine_number,
+    retail_place,
+    operator,
+    prepaid_sum,
     nds20,
     nds10,
     nds0,
     nds_no,
+    nds22,
     raw_qr,
     created_at,
     updated_at
@@ -43,32 +51,40 @@ VALUES
   -- UTC_TIMESTAMP() — та отдаёт только целые секунды (DATETIME(6) без долей
   -- секунды в значении бесполезен), а sqlc к тому же не знает сигнатуру
   -- UTC_TIMESTAMP(6) с аргументом (см. 023_receipts_timestamp_precision.sql).
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateReceiptParams struct {
-	ID                   string         `json:"id"`
-	UserID               string         `json:"userId"`
-	FiscalDriveNumber    string         `json:"fiscalDriveNumber"`
-	FiscalDocumentNumber string         `json:"fiscalDocumentNumber"`
-	FiscalSign           string         `json:"fiscalSign"`
-	TicketDate           time.Time      `json:"ticketDate"`
-	TotalSum             int64          `json:"totalSum"`
-	SellerInn            string         `json:"sellerInn"`
-	SellerName           sql.NullString `json:"sellerName"`
-	OperationType        int32          `json:"operationType"`
-	RetailPlaceAddress   sql.NullString `json:"retailPlaceAddress"`
-	RequestNumber        sql.NullString `json:"requestNumber"`
-	CashTotalSum         sql.NullInt64  `json:"cashTotalSum"`
-	EcashTotalSum        sql.NullInt64  `json:"ecashTotalSum"`
-	TaxationType         sql.NullInt32  `json:"taxationType"`
-	Nds20                int64          `json:"nds20"`
-	Nds10                int64          `json:"nds10"`
-	Nds0                 int64          `json:"nds0"`
-	NdsNo                int64          `json:"ndsNo"`
-	RawQr                sql.NullString `json:"rawQr"`
-	CreatedAt            time.Time      `json:"createdAt"`
-	UpdatedAt            time.Time      `json:"updatedAt"`
+	ID                      string         `json:"id"`
+	UserID                  string         `json:"userId"`
+	FiscalDriveNumber       string         `json:"fiscalDriveNumber"`
+	FiscalDocumentNumber    string         `json:"fiscalDocumentNumber"`
+	FiscalSign              string         `json:"fiscalSign"`
+	TicketDate              time.Time      `json:"ticketDate"`
+	TotalSum                int64          `json:"totalSum"`
+	SellerInn               string         `json:"sellerInn"`
+	SellerName              sql.NullString `json:"sellerName"`
+	OperationType           int32          `json:"operationType"`
+	RetailPlaceAddress      sql.NullString `json:"retailPlaceAddress"`
+	RequestNumber           sql.NullString `json:"requestNumber"`
+	CashTotalSum            sql.NullInt64  `json:"cashTotalSum"`
+	EcashTotalSum           sql.NullInt64  `json:"ecashTotalSum"`
+	TaxationType            sql.NullInt32  `json:"taxationType"`
+	ShiftNumber             sql.NullInt32  `json:"shiftNumber"`
+	KktRegID                sql.NullString `json:"kktRegId"`
+	FiscalDocumentFormatVer sql.NullInt32  `json:"fiscalDocumentFormatVer"`
+	MachineNumber           sql.NullString `json:"machineNumber"`
+	RetailPlace             sql.NullString `json:"retailPlace"`
+	Operator                sql.NullString `json:"operator"`
+	PrepaidSum              sql.NullInt64  `json:"prepaidSum"`
+	Nds20                   int64          `json:"nds20"`
+	Nds10                   int64          `json:"nds10"`
+	Nds0                    int64          `json:"nds0"`
+	NdsNo                   int64          `json:"ndsNo"`
+	Nds22                   int64          `json:"nds22"`
+	RawQr                   sql.NullString `json:"rawQr"`
+	CreatedAt               time.Time      `json:"createdAt"`
+	UpdatedAt               time.Time      `json:"updatedAt"`
 }
 
 // ============================================
@@ -91,10 +107,18 @@ func (q *Queries) CreateReceipt(ctx context.Context, arg CreateReceiptParams) er
 		arg.CashTotalSum,
 		arg.EcashTotalSum,
 		arg.TaxationType,
+		arg.ShiftNumber,
+		arg.KktRegID,
+		arg.FiscalDocumentFormatVer,
+		arg.MachineNumber,
+		arg.RetailPlace,
+		arg.Operator,
+		arg.PrepaidSum,
 		arg.Nds20,
 		arg.Nds10,
 		arg.Nds0,
 		arg.NdsNo,
+		arg.Nds22,
 		arg.RawQr,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -104,9 +128,9 @@ func (q *Queries) CreateReceipt(ctx context.Context, arg CreateReceiptParams) er
 
 const createReceiptItem = `-- name: CreateReceiptItem :exec
 INSERT INTO
-  receipt_items (receipt_id, position_no, name, price, quantity, sum)
+  receipt_items (receipt_id, position_no, name, price, quantity, sum, nds_code)
 VALUES
-  (?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateReceiptItemParams struct {
@@ -116,6 +140,7 @@ type CreateReceiptItemParams struct {
 	Price      int64         `json:"price"`
 	Quantity   string        `json:"quantity"`
 	Sum        int64         `json:"sum"`
+	NdsCode    sql.NullInt32 `json:"ndsCode"`
 }
 
 func (q *Queries) CreateReceiptItem(ctx context.Context, arg CreateReceiptItemParams) error {
@@ -126,6 +151,7 @@ func (q *Queries) CreateReceiptItem(ctx context.Context, arg CreateReceiptItemPa
 		arg.Price,
 		arg.Quantity,
 		arg.Sum,
+		arg.NdsCode,
 	)
 	return err
 }
@@ -143,7 +169,7 @@ func (q *Queries) DeleteReceipt(ctx context.Context, id string) error {
 
 const getReceiptByFiscalKey = `-- name: GetReceiptByFiscalKey :one
 SELECT
-  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at
+  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22
 FROM
   receipts
 WHERE
@@ -184,13 +210,21 @@ func (q *Queries) GetReceiptByFiscalKey(ctx context.Context, arg GetReceiptByFis
 		&i.RawQr,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ShiftNumber,
+		&i.KktRegID,
+		&i.FiscalDocumentFormatVer,
+		&i.MachineNumber,
+		&i.RetailPlace,
+		&i.Operator,
+		&i.PrepaidSum,
+		&i.Nds22,
 	)
 	return i, err
 }
 
 const getReceiptByID = `-- name: GetReceiptByID :one
 SELECT
-  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at
+  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22
 FROM
   receipts
 WHERE
@@ -223,13 +257,21 @@ func (q *Queries) GetReceiptByID(ctx context.Context, id string) (Receipt, error
 		&i.RawQr,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ShiftNumber,
+		&i.KktRegID,
+		&i.FiscalDocumentFormatVer,
+		&i.MachineNumber,
+		&i.RetailPlace,
+		&i.Operator,
+		&i.PrepaidSum,
+		&i.Nds22,
 	)
 	return i, err
 }
 
 const listAllReceipts = `-- name: ListAllReceipts :many
 SELECT
-  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at
+  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22
 FROM
   receipts
 ORDER BY
@@ -268,6 +310,14 @@ func (q *Queries) ListAllReceipts(ctx context.Context) ([]Receipt, error) {
 			&i.RawQr,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ShiftNumber,
+			&i.KktRegID,
+			&i.FiscalDocumentFormatVer,
+			&i.MachineNumber,
+			&i.RetailPlace,
+			&i.Operator,
+			&i.PrepaidSum,
+			&i.Nds22,
 		); err != nil {
 			return nil, err
 		}
@@ -284,7 +334,7 @@ func (q *Queries) ListAllReceipts(ctx context.Context) ([]Receipt, error) {
 
 const listReceiptItemsByReceipt = `-- name: ListReceiptItemsByReceipt :many
 SELECT
-  id, receipt_id, position_no, name, price, quantity, sum
+  id, receipt_id, position_no, name, price, quantity, sum, nds_code
 FROM
   receipt_items
 WHERE
@@ -311,6 +361,7 @@ func (q *Queries) ListReceiptItemsByReceipt(ctx context.Context, receiptID strin
 			&i.Price,
 			&i.Quantity,
 			&i.Sum,
+			&i.NdsCode,
 		); err != nil {
 			return nil, err
 		}
@@ -327,7 +378,7 @@ func (q *Queries) ListReceiptItemsByReceipt(ctx context.Context, receiptID strin
 
 const listReceiptsByUser = `-- name: ListReceiptsByUser :many
 SELECT
-  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at
+  id, user_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, ticket_date, total_sum, seller_inn, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22
 FROM
   receipts
 WHERE
@@ -368,6 +419,14 @@ func (q *Queries) ListReceiptsByUser(ctx context.Context, userID string) ([]Rece
 			&i.RawQr,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ShiftNumber,
+			&i.KktRegID,
+			&i.FiscalDocumentFormatVer,
+			&i.MachineNumber,
+			&i.RetailPlace,
+			&i.Operator,
+			&i.PrepaidSum,
+			&i.Nds22,
 		); err != nil {
 			return nil, err
 		}
