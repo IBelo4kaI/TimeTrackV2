@@ -427,6 +427,7 @@ type Receipt struct {
 	Operator                sql.NullString `json:"operator"`
 	PrepaidSum              sql.NullInt64  `json:"prepaidSum"`
 	Nds22                   int64          `json:"nds22"`
+	HasPaper                bool           `json:"hasPaper"`
 }
 
 type ReceiptItem struct {

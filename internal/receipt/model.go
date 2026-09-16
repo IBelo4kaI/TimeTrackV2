@@ -35,6 +35,11 @@ type CreateReceiptRequest struct {
 	SellerName    *string   `json:"sellerName"`
 	OperationType int32     `json:"operationType"` // 1-Приход,2-Возврат прихода,3-Расход,4-Возврат расхода
 
+	// Проверкачеков этого не знает — отмечает сам сотрудник на фронте, есть
+	// ли у него физический бумажный экземпляр (не то же самое, что
+	// прикреплённое фото чека)
+	HasPaper bool `json:"hasPaper"`
+
 	RetailPlaceAddress *string `json:"retailPlaceAddress"`
 	RequestNumber      *string `json:"requestNumber"`
 	CashTotalSum       *int64  `json:"cashTotalSum"`  // в копейках

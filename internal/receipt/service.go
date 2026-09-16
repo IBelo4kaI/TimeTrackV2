@@ -78,6 +78,7 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		SellerInn:               req.SellerINN,
 		SellerName:              nullString(req.SellerName),
 		OperationType:           req.OperationType,
+		HasPaper:                req.HasPaper,
 		RetailPlaceAddress:      nullString(req.RetailPlaceAddress),
 		RequestNumber:           nullString(req.RequestNumber),
 		CashTotalSum:            nullInt64(req.CashTotalSum),
