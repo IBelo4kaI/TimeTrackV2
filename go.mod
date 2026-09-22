@@ -8,6 +8,7 @@ require (
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/kljensen/snowball v0.10.0
 	golang.org/x/sync v0.22.0
 	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.12

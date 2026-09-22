@@ -79,3 +79,9 @@ type ReceiptWithItems struct {
 type TransferReceiptRequest struct {
 	UserID string `json:"userId"`
 }
+
+// SetCategoryRequest — тело PUT /receipts/:id/category. nil — снять
+// категорию (вернуть в "Без категории").
+type SetCategoryRequest struct {
+	CategoryID *int32 `json:"categoryId"`
+}

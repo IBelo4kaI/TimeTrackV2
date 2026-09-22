@@ -18,6 +18,7 @@ import (
 	"timetrack/internal/notification"
 	notificationtemplate "timetrack/internal/notification_template"
 	"timetrack/internal/receipt"
+	receiptcategory "timetrack/internal/receipt_category"
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
 	systemsetting "timetrack/internal/system_setting"
@@ -179,11 +180,17 @@ func (app *application) mount() *fiber.App {
 	workStandardService := workstandard.NewService(repo.New(app.db))
 	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
 
+	// Авто-категоризация чеков (локальные словари, без внешних API) — см.
+	// internal/receipt_category. Своя зависимость: receiptService дёргает
+	// её при создании чека и при ручной правке категории.
+	receiptCategoryService := receiptcategory.NewService(repo.New(app.db))
+	receiptcategory.SetupRoutes(v1, receiptCategoryService, app.grpcClient, app.config.prefix)
+
 	// Receipt routes — сотрудник сканирует QR на фронте, сам ходит во
 	// внешнее API и уже с готовым разобранным ответом идёт сюда (см.
 	// internal/receipt). Нужна транзакция (чек + позиции), поэтому сервису
 	// передаём ещё и app.db, как userTimeEntryService выше.
-	receiptService := receipt.NewService(repo.New(app.db), app.db)
+	receiptService := receipt.NewService(repo.New(app.db), app.db, receiptCategoryService)
 	receipt.SetupRoutes(v1, receiptService, fileService, app.grpcClient, app.config.prefix)
 
 	// Chat routes (SSE — требует единственного процесса, см. run() и

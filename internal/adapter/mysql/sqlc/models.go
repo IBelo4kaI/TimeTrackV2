@@ -278,6 +278,12 @@ type CalendarEvent struct {
 	UpdatedAt   time.Time      `json:"updatedAt"`
 }
 
+type Category struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	IsSystem bool   `json:"isSystem"`
+}
+
 type Chat struct {
 	ID              string         `json:"id"`
 	Type            ChatsType      `json:"type"`
@@ -362,6 +368,18 @@ type FileEntityRef struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+type KeywordCategory struct {
+	Keyword    string `json:"keyword"`
+	CategoryID int32  `json:"categoryId"`
+	IsSystem   bool   `json:"isSystem"`
+}
+
+type MerchantCategory struct {
+	Inn        string `json:"inn"`
+	CategoryID int32  `json:"categoryId"`
+	Source     string `json:"source"`
+}
+
 type NewsPost struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -428,6 +446,7 @@ type Receipt struct {
 	PrepaidSum              sql.NullInt64  `json:"prepaidSum"`
 	Nds22                   int64          `json:"nds22"`
 	HasPaper                bool           `json:"hasPaper"`
+	CategoryID              sql.NullInt32  `json:"categoryId"`
 }
 
 type ReceiptItem struct {

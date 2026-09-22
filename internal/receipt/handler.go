@@ -230,6 +230,59 @@ func (h Handler) TransferReceipt(c fiber.Ctx) error {
 	return response.Success(c, r)
 }
 
+// SetReceiptCategory godoc
+// PUT /v1/receipts/:id/category — ручная правка категории чека (см.
+// internal/receipt_category). Свой чек — при базовом receipts:edit, чужой —
+// только с receipts.all:edit (RequireOwnerOrAll), как у TransferReceipt.
+func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	var body SetCategoryRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	current, err := h.service.GetByID(c.RequestCtx(), id)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	allowed := middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
+		callerID,
+		current.UserID,
+	)
+	if !allowed {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому чеку"))
+	}
+
+	r, err := h.service.SetCategory(c.RequestCtx(), id, body.CategoryID)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, r)
+}
+
+// BackfillReceiptCategories godoc
+// POST /v1/receipts/backfill-categories — классифицирует задним числом все
+// уже сохранённые чеки без категории (см. BackfillCategories в service.go).
+// Только receipts.all:edit — массовая операция по чужим чекам тоже.
+func (h Handler) BackfillReceiptCategories(c fiber.Ctx) error {
+	updated, total, err := h.service.BackfillCategories(c.RequestCtx())
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	return response.Success(c, fiber.Map{"updated": updated, "total": total})
+}
+
 func mapError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, ErrNotFound):

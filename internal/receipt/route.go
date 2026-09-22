@@ -31,6 +31,13 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.GetReceiptsByUser)
 
+	// задним числом проставить категорию уже сохранённым чекам без неё
+	// (см. BackfillCategories) — до /:id, иначе Fiber принял бы
+	// "backfill-categories" за :id
+	router.Post("/backfill-categories",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
+		handler.BackfillReceiptCategories)
+
 	// карточка отдельного чека (с позициями); владелец довалидируется в
 	// хендлере через RequireOwnerOrAll
 	router.Get("/:id",
@@ -55,4 +62,10 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 	router.Put("/:id/transfer",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.TransferReceipt)
+
+	// ручная правка категории (см. internal/receipt_category); permission
+	// receipts:edit, владелец довалидируется в хендлере, как и transfer
+	router.Put("/:id/category",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		handler.SetReceiptCategory)
 }

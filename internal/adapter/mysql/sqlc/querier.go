@@ -28,6 +28,7 @@ type Querier interface {
 	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
+	CreateCategory(ctx context.Context, name string) (int64, error)
 	// ============================================
 	// chats queries
 	// ============================================
@@ -40,6 +41,7 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) error
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
 	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
+	CreateKeyword(ctx context.Context, arg CreateKeywordParams) error
 	CreateNewsPost(ctx context.Context, arg CreateNewsPostParams) error
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreateNotificationTemplate(ctx context.Context, arg CreateNotificationTemplateParams) error
@@ -108,6 +110,7 @@ type Querier interface {
 	GetFileCategoryByID(ctx context.Context, id string) (FileCategory, error)
 	GetFileCategoryByParentAndName(ctx context.Context, arg GetFileCategoryByParentAndNameParams) (FileCategory, error)
 	GetFileCategoryBySystemName(ctx context.Context, systemName sql.NullString) (FileCategory, error)
+	GetMerchantCategory(ctx context.Context, inn string) (MerchantCategory, error)
 	GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatisticsParams) (GetMonthlyStatisticsRow, error)
 	GetNewsPostByID(ctx context.Context, id string) (NewsPost, error)
 	GetNewsReadMark(ctx context.Context, userID string) (NewsReadMark, error)
@@ -159,6 +162,11 @@ type Querier interface {
 	HardDeleteFile(ctx context.Context, id string) error
 	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
 	ListAllReceipts(ctx context.Context) ([]Receipt, error)
+	// ============================================
+	// categories / merchant_category / keyword_category
+	// (авто-категоризация чеков, см. internal/receipt_category)
+	// ============================================
+	ListCategories(ctx context.Context) ([]Category, error)
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
@@ -170,6 +178,7 @@ type Querier interface {
 	ListFilesByEntityIDs(ctx context.Context, arg ListFilesByEntityIDsParams) ([]ListFilesByEntityIDsRow, error)
 	ListFilesByEntityType(ctx context.Context, arg ListFilesByEntityTypeParams) ([]ListFilesByEntityTypeRow, error)
 	ListFilesByUploader(ctx context.Context, arg ListFilesByUploaderParams) ([]ListFilesByUploaderRow, error)
+	ListKeywordCategories(ctx context.Context) ([]KeywordCategory, error)
 	// Сотрудники, о которых бэк вообще что-то знает локально (без похода в
 	// auth-сервис за полным списком — см. internal/timesheetreminder) — кто
 	// хоть раз вносил запись в табель, либо кому задан индивидуальный график.
@@ -181,6 +190,7 @@ type Querier interface {
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
+	ListReceiptsMissingCategory(ctx context.Context) ([]Receipt, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
@@ -224,6 +234,7 @@ type Querier interface {
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
 	UpdateNewsPost(ctx context.Context, arg UpdateNewsPostParams) error
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
+	UpdateReceiptCategoryID(ctx context.Context, arg UpdateReceiptCategoryIDParams) error
 	UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
@@ -240,6 +251,7 @@ type Querier interface {
 	// отдельно через CreateSystemSetting/сид-миграцию.
 	UpdateValueSystemSetting(ctx context.Context, arg UpdateValueSystemSettingParams) error
 	UpdateWorkStandard(ctx context.Context, arg UpdateWorkStandardParams) error
+	UpsertMerchantCategory(ctx context.Context, arg UpsertMerchantCategoryParams) error
 	UpsertNewsReadMark(ctx context.Context, userID string) error
 }
 
