@@ -111,14 +111,6 @@ SET
 WHERE
   id = ?;
 
--- name: ListReceiptsMissingCategory :many
-SELECT
-  *
-FROM
-  receipts
-WHERE
-  category_id IS NULL;
-
 -- name: UpdateReceiptsCategoryBySellerInn :execrows
 -- Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
 -- продавца — вызывается при правке merchant_category (см.

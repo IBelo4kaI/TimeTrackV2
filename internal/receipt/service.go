@@ -36,11 +36,12 @@ type Service interface {
 	// категорию). При непустом categoryID запоминает выбор как
 	// user_override в словаре продавцов (см. receiptcategory.Service).
 	SetCategory(ctx context.Context, id string, categoryID *int32) (ReceiptWithItems, error)
-	// BackfillCategories — классифицирует задним числом все уже сохранённые
-	// чеки без категории (category_id IS NULL) — тем же алгоритмом и с тем
-	// же самообучением словаря продавцов, что и Create. Возвращает сколько
-	// чеков реально получили категорию (остальные — "Без категории", ни
-	// ИНН, ни позиции ни с чем не совпали).
+	// BackfillCategories — перепрогоняет через классификацию ВСЕ уже
+	// сохранённые чеки (не только "Без категории" — и те, что уже
+	// классифицированы, тоже: словари категорий/ключевых слов меняются со
+	// временем, старая категория чека могла устареть). Тот же алгоритм и
+	// то же самообучение словаря продавцов, что и в Create. Возвращает,
+	// сколько чеков реально сменили категорию.
 	BackfillCategories(ctx context.Context) (updated int, total int, err error)
 }
 
@@ -238,11 +239,14 @@ func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID 
 
 	// Снятие категории (categoryID == nil) — только у этого чека, словарь
 	// продавца не трогаем (это не значит "этот продавец вообще без
-	// категории"). Непустой выбор — самообучение, см. комментарий у
-	// SetCategory в service.go интерфейсе.
+	// категории"). Непустой выбор — как и правка через "Продавцы" в
+	// настройках (UpdateMerchant): запоминаем override И сразу переносим
+	// категорию на ВСЕ чеки этого продавца, а не только на будущие —
+	// иначе "Категоризировать" не подхватит уже категоризированные чеки
+	// с устаревшей категорией (Backfill трогает только "Без категории").
 	if categoryID != nil {
-		if err := s.categoryService.SetOverride(ctx, r.SellerInn, *categoryID); err != nil {
-			fmt.Printf("set merchant category override: %v\n", err)
+		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn, *categoryID); err != nil {
+			fmt.Printf("update merchant category override: %v\n", err)
 		}
 	}
 
@@ -250,9 +254,9 @@ func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID 
 }
 
 func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, error) {
-	receipts, err := s.repo.ListReceiptsMissingCategory(ctx)
+	receipts, err := s.repo.ListAllReceipts(ctx)
 	if err != nil {
-		return 0, 0, fmt.Errorf("list receipts missing category: %w", err)
+		return 0, 0, fmt.Errorf("list receipts: %w", err)
 	}
 
 	updated := 0
@@ -274,7 +278,12 @@ func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, erro
 			continue
 		}
 		if classified.CategoryID == nil {
+			// Не определилось — старую категорию (если была) не трогаем:
+			// это не сигнал "снять категорию", а просто "нечего сказать".
 			continue
+		}
+		if r.CategoryID.Valid && r.CategoryID.Int32 == *classified.CategoryID {
+			continue // уже такая же — писать нечего
 		}
 
 		if err := s.repo.UpdateReceiptCategoryID(ctx, repo.UpdateReceiptCategoryIDParams{

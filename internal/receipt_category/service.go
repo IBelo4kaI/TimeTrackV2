@@ -30,19 +30,16 @@ type Service interface {
 	// Preview — та же классификация, но без самообучения (см. classify.go)
 	// — для показа определившейся категории ДО сохранения чека.
 	Preview(ctx context.Context, sellerInn string, items []ItemForClassify) (ClassifyResult, error)
-	// SetOverride — сотрудник вручную поправил категорию чека: запоминаем
-	// маппинг ИНН -> категория с source='user_override' (перезаписывает
-	// прежний, каким бы он ни был), чтобы будущие чеки от этого продавца
-	// сразу попадали в шаг 1 алгоритма с правильной категорией.
-	SetOverride(ctx context.Context, sellerInn string, categoryID int32) error
 
 	// ListMerchants — словарь "ИНН продавца -> категория" целиком, для
 	// экрана настроек "Категории и слова" (вкладка "Продавцы").
 	ListMerchants(ctx context.Context) ([]repo.ListMerchantCategoriesRow, error)
-	// UpdateMerchant — правка уже существующей связи продавец -> категория
-	// (или создание новой вручную). В отличие от SetOverride (правка
-	// категории ОДНОГО чека), сразу переносит новую категорию на ВСЕ уже
-	// сохранённые чеки этого продавца — возвращает, сколько чеков задело.
+	// UpdateMerchant — сотрудник вручную поправил категорию продавца (через
+	// экран "Продавцы" ИЛИ через категорию одного чека — оба пути идут
+	// сюда, см. receipt.SetCategory): запоминает маппинг ИНН -> категория с
+	// source='user_override' (перезаписывает прежний, каким бы он ни был) и
+	// сразу переносит новую категорию на ВСЕ уже сохранённые чеки этого
+	// продавца, а не только на будущие — возвращает, сколько чеков задело.
 	UpdateMerchant(ctx context.Context, sellerInn string, categoryID int32) (updatedReceipts int64, err error)
 }
 
@@ -146,17 +143,6 @@ func (s *service) CreateKeyword(ctx context.Context, keyword string, categoryID 
 	}
 
 	return repo.KeywordCategory{Keyword: keyword, CategoryID: categoryID, IsSystem: false}, nil
-}
-
-func (s *service) SetOverride(ctx context.Context, sellerInn string, categoryID int32) error {
-	if sellerInn == "" {
-		return nil
-	}
-	return s.repo.UpsertMerchantCategory(ctx, repo.UpsertMerchantCategoryParams{
-		Inn:        sellerInn,
-		CategoryID: categoryID,
-		Source:     "user_override",
-	})
 }
 
 func (s *service) ListMerchants(ctx context.Context) ([]repo.ListMerchantCategoriesRow, error) {

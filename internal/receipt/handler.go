@@ -271,9 +271,10 @@ func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
 }
 
 // BackfillReceiptCategories godoc
-// POST /v1/receipts/backfill-categories — классифицирует задним числом все
-// уже сохранённые чеки без категории (см. BackfillCategories в service.go).
-// Только receipts.all:edit — массовая операция по чужим чекам тоже.
+// POST /v1/receipts/backfill-categories — перепрогоняет через классификацию
+// ВСЕ уже сохранённые чеки, не только без категории (см. BackfillCategories
+// в service.go). Только receipts.all:edit — массовая операция по чужим
+// чекам тоже.
 func (h Handler) BackfillReceiptCategories(c fiber.Ctx) error {
 	updated, total, err := h.service.BackfillCategories(c.RequestCtx())
 	if err != nil {

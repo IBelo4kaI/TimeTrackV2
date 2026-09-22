@@ -31,8 +31,8 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.GetReceiptsByUser)
 
-	// задним числом проставить категорию уже сохранённым чекам без неё
-	// (см. BackfillCategories) — до /:id, иначе Fiber принял бы
+	// задним числом перепрогнать классификацию по ВСЕМ уже сохранённым
+	// чекам (см. BackfillCategories) — до /:id, иначе Fiber принял бы
 	// "backfill-categories" за :id
 	router.Post("/backfill-categories",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),

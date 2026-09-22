@@ -194,7 +194,6 @@ type Querier interface {
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
-	ListReceiptsMissingCategory(ctx context.Context) ([]Receipt, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
