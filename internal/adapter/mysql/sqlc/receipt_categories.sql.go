@@ -126,6 +126,85 @@ func (q *Queries) ListKeywordCategories(ctx context.Context) ([]KeywordCategory,
 	return items, nil
 }
 
+const listMerchantCategories = `-- name: ListMerchantCategories :many
+SELECT
+  mc.inn,
+  mc.category_id,
+  mc.source,
+  (
+    SELECT
+      r.seller_name
+    FROM
+      receipts r
+    WHERE
+      r.seller_inn = mc.inn
+    ORDER BY
+      r.updated_at DESC
+    LIMIT
+      1
+  ) AS seller_name
+FROM
+  merchant_category mc
+ORDER BY
+  mc.inn
+`
+
+type ListMerchantCategoriesRow struct {
+	Inn        string         `json:"inn"`
+	CategoryID int32          `json:"categoryId"`
+	Source     string         `json:"source"`
+	SellerName sql.NullString `json:"sellerName"`
+}
+
+// seller_name — не своя колонка (merchant_category знает только ИНН), берём
+// с последнего по времени чека от этого продавца, просто для отображения
+// в UI (см. экран настроек "Категории и слова" -> "Продавцы").
+func (q *Queries) ListMerchantCategories(ctx context.Context) ([]ListMerchantCategoriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMerchantCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMerchantCategoriesRow
+	for rows.Next() {
+		var i ListMerchantCategoriesRow
+		if err := rows.Scan(
+			&i.Inn,
+			&i.CategoryID,
+			&i.Source,
+			&i.SellerName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const renameCategory = `-- name: RenameCategory :exec
+UPDATE categories
+SET
+  name = ?
+WHERE
+  id = ?
+`
+
+type RenameCategoryParams struct {
+	Name string `json:"name"`
+	ID   int32  `json:"id"`
+}
+
+func (q *Queries) RenameCategory(ctx context.Context, arg RenameCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, renameCategory, arg.Name, arg.ID)
+	return err
+}
+
 const updateReceiptCategoryID = `-- name: UpdateReceiptCategoryID :exec
 UPDATE receipts
 SET

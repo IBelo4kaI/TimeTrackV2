@@ -185,6 +185,10 @@ type Querier interface {
 	// Ограничение: сотрудник, который вообще ничего ни разу не вносил, сюда не
 	// попадёт — и не получит напоминание, хотя ему оно нужнее всего.
 	ListKnownUserIDs(ctx context.Context) ([]string, error)
+	// seller_name — не своя колонка (merchant_category знает только ИНН), берём
+	// с последнего по времени чека от этого продавца, просто для отображения
+	// в UI (см. экран настроек "Категории и слова" -> "Продавцы").
+	ListMerchantCategories(ctx context.Context) ([]ListMerchantCategoriesRow, error)
 	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
@@ -215,6 +219,7 @@ type Querier interface {
 	// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
 	MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
+	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
@@ -236,6 +241,10 @@ type Querier interface {
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
 	UpdateReceiptCategoryID(ctx context.Context, arg UpdateReceiptCategoryIDParams) error
 	UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error
+	// Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
+	// продавца — вызывается при правке merchant_category (см.
+	// receiptcategory.Service.UpdateMerchant), а не только у одного чека.
+	UpdateReceiptsCategoryBySellerInn(ctx context.Context, arg UpdateReceiptsCategoryBySellerInnParams) (int64, error)
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error

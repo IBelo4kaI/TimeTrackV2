@@ -3,6 +3,7 @@ package receiptcategory
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"timetrack/internal/response"
 
 	"github.com/gofiber/fiber/v3"
@@ -38,6 +39,27 @@ func (h Handler) CreateCategory(c fiber.Ctx) error {
 	}
 
 	category, err := h.service.CreateCategory(c.RequestCtx(), body.Name)
+	if err != nil {
+		return mapError(c, err)
+	}
+	return response.Success(c, category)
+}
+
+// RenameCategory godoc
+// PUT /v1/receipt-categories/:id — переименовывает категорию (системную или
+// пользовательскую — is_system не меняется, правится только название).
+func (h Handler) RenameCategory(c fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 32)
+	if err != nil {
+		return response.BadRequest(c)
+	}
+
+	var body CreateCategoryRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	category, err := h.service.RenameCategory(c.RequestCtx(), int32(id), body.Name)
 	if err != nil {
 		return mapError(c, err)
 	}
@@ -95,11 +117,49 @@ func (h Handler) Preview(c fiber.Ctx) error {
 	return response.Success(c, PreviewResponse{CategoryID: result.CategoryID})
 }
 
+// ListMerchants godoc
+// GET /v1/receipt-categories/merchants — словарь "ИНН продавца -> категория"
+// целиком, для экрана настроек "Категории и слова" (вкладка "Продавцы").
+func (h Handler) ListMerchants(c fiber.Ctx) error {
+	merchants, err := h.service.ListMerchants(c.RequestCtx())
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+	return response.Success(c, merchants)
+}
+
+// UpdateMerchant godoc
+// PUT /v1/receipt-categories/merchants/:inn — правит связь продавец ->
+// категория и сразу переносит новую категорию на все уже сохранённые чеки
+// этого продавца (см. UpdateMerchant в service.go).
+func (h Handler) UpdateMerchant(c fiber.Ctx) error {
+	inn := c.Params("inn")
+	if inn == "" {
+		return response.BadRequest(c)
+	}
+
+	var body UpdateMerchantRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	updated, err := h.service.UpdateMerchant(c.RequestCtx(), inn, body.CategoryID)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, fiber.Map{"updatedReceipts": updated})
+}
+
 func mapError(c fiber.Ctx, err error) error {
 	switch {
+	case errors.Is(err, ErrCategoryNotFound):
+		return response.Error(c, http.StatusNotFound, err)
 	case errors.Is(err, ErrCategoryDuplicate), errors.Is(err, ErrKeywordDuplicate):
 		return response.Error(c, http.StatusConflict, err)
-	case errors.Is(err, ErrNameRequired), errors.Is(err, ErrKeywordRequired):
+	case errors.Is(err, ErrNameRequired),
+		errors.Is(err, ErrKeywordRequired),
+		errors.Is(err, ErrSellerInnRequired):
 		return response.Error(c, http.StatusBadRequest, err)
 	default:
 		return response.Error(c, http.StatusInternalServerError, err)

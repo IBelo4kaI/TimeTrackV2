@@ -2,8 +2,10 @@ package receiptcategory
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
+	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 )
 
@@ -12,11 +14,14 @@ var (
 	ErrKeywordRequired   = errors.New("не указано ключевое слово")
 	ErrCategoryDuplicate = errors.New("категория с таким названием уже существует")
 	ErrKeywordDuplicate  = errors.New("такое ключевое слово уже есть в словаре")
+	ErrSellerInnRequired = errors.New("не указан ИНН продавца")
+	ErrCategoryNotFound  = errors.New("категория не найдена")
 )
 
 type Service interface {
 	ListCategories(ctx context.Context) ([]repo.Category, error)
 	CreateCategory(ctx context.Context, name string) (repo.Category, error)
+	RenameCategory(ctx context.Context, id int32, name string) (repo.Category, error)
 
 	ListKeywords(ctx context.Context) ([]repo.KeywordCategory, error)
 	CreateKeyword(ctx context.Context, keyword string, categoryID int32) (repo.KeywordCategory, error)
@@ -30,6 +35,15 @@ type Service interface {
 	// прежний, каким бы он ни был), чтобы будущие чеки от этого продавца
 	// сразу попадали в шаг 1 алгоритма с правильной категорией.
 	SetOverride(ctx context.Context, sellerInn string, categoryID int32) error
+
+	// ListMerchants — словарь "ИНН продавца -> категория" целиком, для
+	// экрана настроек "Категории и слова" (вкладка "Продавцы").
+	ListMerchants(ctx context.Context) ([]repo.ListMerchantCategoriesRow, error)
+	// UpdateMerchant — правка уже существующей связи продавец -> категория
+	// (или создание новой вручную). В отличие от SetOverride (правка
+	// категории ОДНОГО чека), сразу переносит новую категорию на ВСЕ уже
+	// сохранённые чеки этого продавца — возвращает, сколько чеков задело.
+	UpdateMerchant(ctx context.Context, sellerInn string, categoryID int32) (updatedReceipts int64, err error)
 }
 
 type service struct {
@@ -66,6 +80,42 @@ func (s *service) CreateCategory(ctx context.Context, name string) (repo.Categor
 	}
 
 	return repo.Category{ID: int32(id), Name: name, IsSystem: false}, nil
+}
+
+func (s *service) RenameCategory(ctx context.Context, id int32, name string) (repo.Category, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return repo.Category{}, ErrNameRequired
+	}
+
+	existing, err := s.repo.ListCategories(ctx)
+	if err != nil {
+		return repo.Category{}, err
+	}
+
+	var found *repo.Category
+	for i, c := range existing {
+		if c.ID == id {
+			found = &existing[i]
+			continue
+		}
+		if strings.EqualFold(c.Name, name) {
+			return repo.Category{}, ErrCategoryDuplicate
+		}
+	}
+	if found == nil {
+		return repo.Category{}, ErrCategoryNotFound
+	}
+
+	if err := s.repo.RenameCategory(ctx, repo.RenameCategoryParams{
+		Name: name,
+		ID:   id,
+	}); err != nil {
+		return repo.Category{}, err
+	}
+
+	found.Name = name
+	return *found, nil
 }
 
 func (s *service) ListKeywords(ctx context.Context) ([]repo.KeywordCategory, error) {
@@ -106,5 +156,31 @@ func (s *service) SetOverride(ctx context.Context, sellerInn string, categoryID 
 		Inn:        sellerInn,
 		CategoryID: categoryID,
 		Source:     "user_override",
+	})
+}
+
+func (s *service) ListMerchants(ctx context.Context) ([]repo.ListMerchantCategoriesRow, error) {
+	return s.repo.ListMerchantCategories(ctx)
+}
+
+func (s *service) UpdateMerchant(ctx context.Context, sellerInn string, categoryID int32) (int64, error) {
+	if sellerInn == "" {
+		return 0, ErrSellerInnRequired
+	}
+
+	if err := s.repo.UpsertMerchantCategory(ctx, repo.UpsertMerchantCategoryParams{
+		Inn:        sellerInn,
+		CategoryID: categoryID,
+		Source:     "user_override",
+	}); err != nil {
+		return 0, err
+	}
+
+	// Связь продавец -> категория поменялась — переносим новую категорию и
+	// на все уже сохранённые чеки этого продавца, а не только на будущие.
+	return s.repo.UpdateReceiptsCategoryBySellerInn(ctx, repo.UpdateReceiptsCategoryBySellerInnParams{
+		CategoryID: sql.NullInt32{Int32: categoryID, Valid: true},
+		UpdatedAt:  time.Now().UTC(),
+		SellerInn:  sellerInn,
 	})
 }

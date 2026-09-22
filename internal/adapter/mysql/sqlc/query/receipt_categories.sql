@@ -17,6 +17,13 @@ INSERT INTO
 VALUES
   (?, 0);
 
+-- name: RenameCategory :exec
+UPDATE categories
+SET
+  name = ?
+WHERE
+  id = ?;
+
 -- name: GetMerchantCategory :one
 SELECT
   *
@@ -36,6 +43,31 @@ VALUES
   source =
 VALUES
   (source);
+
+-- name: ListMerchantCategories :many
+-- seller_name — не своя колонка (merchant_category знает только ИНН), берём
+-- с последнего по времени чека от этого продавца, просто для отображения
+-- в UI (см. экран настроек "Категории и слова" -> "Продавцы").
+SELECT
+  mc.inn,
+  mc.category_id,
+  mc.source,
+  (
+    SELECT
+      r.seller_name
+    FROM
+      receipts r
+    WHERE
+      r.seller_inn = mc.inn
+    ORDER BY
+      r.updated_at DESC
+    LIMIT
+      1
+  ) AS seller_name
+FROM
+  merchant_category mc
+ORDER BY
+  mc.inn;
 
 -- name: ListKeywordCategories :many
 SELECT

@@ -539,3 +539,29 @@ func (q *Queries) UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwner
 	_, err := q.db.ExecContext(ctx, updateReceiptOwner, arg.UserID, arg.UpdatedAt, arg.ID)
 	return err
 }
+
+const updateReceiptsCategoryBySellerInn = `-- name: UpdateReceiptsCategoryBySellerInn :execrows
+UPDATE receipts
+SET
+  category_id = ?,
+  updated_at = ?
+WHERE
+  seller_inn = ?
+`
+
+type UpdateReceiptsCategoryBySellerInnParams struct {
+	CategoryID sql.NullInt32 `json:"categoryId"`
+	UpdatedAt  time.Time     `json:"updatedAt"`
+	SellerInn  string        `json:"sellerInn"`
+}
+
+// Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
+// продавца — вызывается при правке merchant_category (см.
+// receiptcategory.Service.UpdateMerchant), а не только у одного чека.
+func (q *Queries) UpdateReceiptsCategoryBySellerInn(ctx context.Context, arg UpdateReceiptsCategoryBySellerInnParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateReceiptsCategoryBySellerInn, arg.CategoryID, arg.UpdatedAt, arg.SellerInn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

@@ -28,3 +28,8 @@ type PreviewItemInput struct {
 type PreviewResponse struct {
 	CategoryID *int32 `json:"categoryId"`
 }
+
+// UpdateMerchantRequest — тело PUT /receipt-categories/merchants/:inn.
+type UpdateMerchantRequest struct {
+	CategoryID int32 `json:"categoryId"`
+}

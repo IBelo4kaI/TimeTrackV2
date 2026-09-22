@@ -19,6 +19,9 @@ func SetupRoutes(fiberRouter fiber.Router, service Service, grpc *grpc.Client, p
 	router.Get("/keywords",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.ListKeywords)
+	router.Get("/merchants",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
+		handler.ListMerchants)
 
 	// предпросмотр категории при сканировании, до сохранения чека —
 	// receipts:create, как и сам POST /receipts/create
@@ -34,4 +37,10 @@ func SetupRoutes(fiberRouter fiber.Router, service Service, grpc *grpc.Client, p
 	router.Post("/keywords",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
 		handler.CreateKeyword)
+	router.Put("/merchants/:inn",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
+		handler.UpdateMerchant)
+	router.Put("/:id",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
+		handler.RenameCategory)
 }

@@ -118,3 +118,14 @@ FROM
   receipts
 WHERE
   category_id IS NULL;
+
+-- name: UpdateReceiptsCategoryBySellerInn :execrows
+-- Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
+-- продавца — вызывается при правке merchant_category (см.
+-- receiptcategory.Service.UpdateMerchant), а не только у одного чека.
+UPDATE receipts
+SET
+  category_id = ?,
+  updated_at = ?
+WHERE
+  seller_inn = ?;
