@@ -139,7 +139,8 @@ SELECT
     WHERE
       r.seller_inn = mc.inn
     ORDER BY
-      r.updated_at DESC
+      (r.seller_name IS NULL) ASC,
+      r.ticket_date DESC
     LIMIT
       1
   ) AS seller_name
@@ -157,8 +158,13 @@ type ListMerchantCategoriesRow struct {
 }
 
 // seller_name — не своя колонка (merchant_category знает только ИНН), берём
-// с последнего по времени чека от этого продавца, просто для отображения
-// в UI (см. экран настроек "Категории и слова" -> "Продавцы").
+// с чека этого продавца, просто для отображения в UI (см. экран настроек
+// "Категории и слова" -> "Продавцы"). Сортируем по ticket_date (дата самой
+// покупки), а не updated_at — тот меняется у всех чеков разом при массовой
+// перекатегоризации (BackfillCategories/UpdateMerchant), из-за чего "самый
+// свежий" чек и его seller_name раньше менялись от одного этого, а не от
+// новых покупок. seller_name IS NULL — в конец, чтобы не показывать пусто,
+// когда есть чек с реальным именем продавца.
 func (q *Queries) ListMerchantCategories(ctx context.Context) ([]ListMerchantCategoriesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMerchantCategories)
 	if err != nil {

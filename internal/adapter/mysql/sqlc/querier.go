@@ -186,8 +186,13 @@ type Querier interface {
 	// попадёт — и не получит напоминание, хотя ему оно нужнее всего.
 	ListKnownUserIDs(ctx context.Context) ([]string, error)
 	// seller_name — не своя колонка (merchant_category знает только ИНН), берём
-	// с последнего по времени чека от этого продавца, просто для отображения
-	// в UI (см. экран настроек "Категории и слова" -> "Продавцы").
+	// с чека этого продавца, просто для отображения в UI (см. экран настроек
+	// "Категории и слова" -> "Продавцы"). Сортируем по ticket_date (дата самой
+	// покупки), а не updated_at — тот меняется у всех чеков разом при массовой
+	// перекатегоризации (BackfillCategories/UpdateMerchant), из-за чего "самый
+	// свежий" чек и его seller_name раньше менялись от одного этого, а не от
+	// новых покупок. seller_name IS NULL — в конец, чтобы не показывать пусто,
+	// когда есть чек с реальным именем продавца.
 	ListMerchantCategories(ctx context.Context) ([]ListMerchantCategoriesRow, error)
 	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
