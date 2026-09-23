@@ -7,6 +7,7 @@ SELECT
   v.total_days,
   COALESCE(v.description, '') as description,
   v.status,
+  v.approval_email_sent_at,
   v.vacation_type_id,
   COALESCE(t.name, '') as vacation_type_name,
   COALESCE(t.color_code, '') as vacation_type_color,
@@ -23,6 +24,13 @@ WHERE
 UPDATE vacations
 SET
   status = ?
+WHERE
+  id = ?;
+
+-- name: MarkVacationApprovalEmailSent :exec
+UPDATE vacations
+SET
+  approval_email_sent_at = ?
 WHERE
   id = ?;
 

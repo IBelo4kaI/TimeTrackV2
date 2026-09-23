@@ -29,6 +29,11 @@ func main() {
 			secretKey:           env.GetVKSecretKey(),
 			communityScreenName: env.GetVKCommunityScreenName(),
 		},
+		smtpEncryptionKey: env.GetSMTPEncryptionKey(),
+		auth: authConfig{
+			host:   env.GetAuthServiceHost(),
+			apiKey: env.GetAuthServiceAPIKey(),
+		},
 	}
 
 	db, err := sql.Open("mysql", cfg.db.dsn)

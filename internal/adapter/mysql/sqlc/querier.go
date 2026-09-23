@@ -222,6 +222,7 @@ type Querier interface {
 	// Прочитать разом все уведомления по сущности (например, все накопленные
 	// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
 	MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error
+	MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error

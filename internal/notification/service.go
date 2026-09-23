@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	repo "timetrack/internal/adapter/mysql/sqlc"
@@ -22,6 +23,10 @@ const (
 	vacationAdminRecipientsSettingKey    = "notification_vacation_admin_user_ids"
 	sickLeaveAdminRecipientsSettingKey   = "notification_sick_leave_admin_user_ids"
 	vacationApprovedRecipientsSettingKey = "notification_vacation_approved_user_ids"
+	// vacationApprovedEmailSettingKey — email для письма с утверждённой
+	// заявкой и сканом (см. vacationService.SendApprovalEmailIfReady).
+	// Одно значение, а не JSON-список, в отличие от остальных ключей выше.
+	vacationApprovedEmailSettingKey = "notification_vacation_approved_email"
 )
 
 type Service interface {
@@ -60,6 +65,10 @@ type Service interface {
 	// GetVacationAdminRecipients: тем шлют про НОВЫЕ заявки, этим — про уже
 	// утверждённые (например, бухгалтерия).
 	GetVacationApprovedRecipients(ctx context.Context) ([]string, error)
+	// GetVacationApprovedEmail — почта для письма с утверждённой заявкой и
+	// сканом заявления (см. vacationService.SendApprovalEmailIfReady).
+	// Пустая строка, если не настроена — вызывающая сторона просто не шлёт.
+	GetVacationApprovedEmail(ctx context.Context) (string, error)
 
 	// SSE
 	Subscribe(userID string) chan Event
@@ -214,6 +223,20 @@ func (s *service) GetSickLeaveAdminRecipients(ctx context.Context) ([]string, er
 
 func (s *service) GetVacationApprovedRecipients(ctx context.Context) ([]string, error) {
 	return s.getRecipients(ctx, vacationApprovedRecipientsSettingKey)
+}
+
+func (s *service) GetVacationApprovedEmail(ctx context.Context) (string, error) {
+	setting, err := s.repo.GetSystemSettingByKey(ctx, vacationApprovedEmailSettingKey)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !setting.SettingValue.Valid {
+		return "", nil
+	}
+	return strings.TrimSpace(setting.SettingValue.String), nil
 }
 
 func (s *service) Subscribe(userID string) chan Event {

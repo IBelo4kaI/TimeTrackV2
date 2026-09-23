@@ -222,13 +222,8 @@ func (h *Handler) ApproveVacation(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	var body struct {
-		ApplicantName string `json:"applicantName"`
-	}
-	_ = c.Bind().Body(&body) // тело необязательно — applicantName просто для текста уведомления
-
 	// Используем UpdateVacationStatus с статусом "approved"
-	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, repo.VacationsStatusApproved, body.ApplicantName)
+	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, repo.VacationsStatusApproved)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
@@ -246,8 +241,7 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 	}
 
 	var body struct {
-		Status        string `json:"status"`
-		ApplicantName string `json:"applicantName"`
+		Status string `json:"status"`
 	}
 
 	if err := c.Bind().Body(&body); err != nil {
@@ -268,7 +262,7 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 			fiber.NewError(http.StatusBadRequest, "Invalid status. Must be one of: pending, approved, rejected"))
 	}
 
-	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, status, body.ApplicantName)
+	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, status)
 	if err != nil {
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
@@ -407,6 +401,13 @@ func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 	})
 	if err != nil {
 		return response.ServerError(c)
+	}
+
+	// Если заявка уже утверждена — этот файл может быть тем самым сканом,
+	// которого не хватало для письма (см. SendApprovalEmailIfReady).
+	// Best-effort — не должно ронять сам аплоад.
+	if err := h.service.SendApprovalEmailIfReady(c.RequestCtx(), id); err != nil {
+		fmt.Printf("vacation: send approval email failed: %v\n", err)
 	}
 
 	return c.Status(http.StatusCreated).JSON(fiber.Map{

@@ -60,3 +60,23 @@ func (e *Env) GetVKSecretKey() string {
 func (e *Env) GetVKCommunityScreenName() string {
 	return os.Getenv("VK_COMMUNITY_SCREEN_NAME")
 }
+
+// GetAuthServiceHost — базовый адрес сервиса авторизации (без завершающего
+// слэша), напр. "http://localhost:8382" — см. internal/authservice.
+func (e *Env) GetAuthServiceHost() string {
+	return os.Getenv("AUTH_SERVICE_HOST")
+}
+
+// GetAuthServiceAPIKey — отправляется как значение cookie "session" в
+// запросах к сервису авторизации (см. authservice.Service.GetAllUsers).
+func (e *Env) GetAuthServiceAPIKey() string {
+	return os.Getenv("AUTH_SERVICE_API_KEY")
+}
+
+// GetSMTPEncryptionKey — ключ для шифрования пароля SMTP в system_settings
+// (сам хост/порт/логин/пароль настраиваются в "Настройках", не в env — см.
+// internal/smtp_settings). Пароль хранится AES-GCM, ключ шифрования — sha256
+// от этой строки, так что подойдёт любой секрет любой длины.
+func (e *Env) GetSMTPEncryptionKey() string {
+	return os.Getenv("SMTP_ENCRYPTION_KEY")
+}

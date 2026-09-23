@@ -5,13 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/authservice"
 	"timetrack/internal/date"
+	"timetrack/internal/mail"
 	"timetrack/internal/notification"
 	"timetrack/internal/parser"
+	"timetrack/internal/service"
 	usertimeentry "timetrack/internal/user_time_entry"
 	"timetrack/internal/vk"
 
@@ -24,6 +28,9 @@ type vacationService struct {
 	userTimeEntryService usertimeentry.Service
 	notificationService  notification.Service
 	vkService            vk.Service
+	fileService          *service.FileService
+	mailService          mail.Service
+	authService          authservice.Service
 	frontendURL          string
 }
 
@@ -42,27 +49,69 @@ type Service interface {
 	GetVacationsByYear(ctx context.Context, userId string, year int) (*[]repo.GetVacationsByYearRow, error)
 	GetVacationByID(ctx context.Context, vacationID string) (*repo.GetVacationByIDRow, error)
 	CreateVacationReport(ctx context.Context, vacation VacationCreateRequest) error
-	// applicantName — см. VacationCreateRequest.ApplicantName, тот же приём:
-	// фронт уже знает ФИО заявителя (из usersAll по item.userId), передаёт
-	// только для текста уведомления об утверждении, нигде не хранится.
-	ApproveVacation(ctx context.Context, vacationID, applicantName string) error
-	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus, applicantName string) error
+	// ФИО заявителя для текста уведомлений/письма теперь резолвится на бэке
+	// через authService (см. resolveApplicantName), фронт его больше не
+	// передаёт.
+	ApproveVacation(ctx context.Context, vacationID string) error
+	UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error
 	UpdateVacationType(ctx context.Context, vacationID string, vacationTypeID string) error
 	DeleteVacation(ctx context.Context, vacationID string) error
+	// SendApprovalEmailIfReady — письмо со сканом заявления на почту из
+	// настроек, только если заявка уже утверждена И к ней прикреплён файл
+	// (оба условия сразу). Вызывается и при утверждении, и после загрузки
+	// файла — какое бы условие ни наступило вторым. Best-effort у
+	// вызывающей стороны, сама возвращает ошибку, чтобы было что логировать.
+	SendApprovalEmailIfReady(ctx context.Context, vacationID string) error
 }
 
 // defaultVacationTypeSystemName — тип отпуска, назначаемый по умолчанию, если клиент его не указал.
 const defaultVacationTypeSystemName = "paid"
 
-func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, frontendURL string) Service {
+func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, fileService *service.FileService, mailService mail.Service, authService authservice.Service, frontendURL string) Service {
 	return &vacationService{
 		repo:                 repo,
 		db:                   db,
 		userTimeEntryService: userTimeEntryService,
 		notificationService:  notificationService,
 		vkService:            vkService,
+		fileService:          fileService,
+		mailService:          mailService,
+		authService:          authService,
 		frontendURL:          frontendURL,
 	}
+}
+
+// resolveApplicantName — ФИО по userID через сервис авторизации (см.
+// internal/authservice), тем же форматом "Фамилия Имя Отчество", что раньше
+// собирал фронт. Best-effort: сеть/сервис недоступны — просто пустая строка,
+// вызывающая сторона уже умеет подставлять "Сотрудник" по умолчанию
+// (notifyApprovedThirdParties/SendApprovalEmailIfReady).
+func (s *vacationService) resolveApplicantName(ctx context.Context, userID string) string {
+	users, err := s.authService.GetAllUsers(ctx)
+	if err != nil {
+		fmt.Printf("vacation: resolve applicant name failed: %v\n", err)
+		return ""
+	}
+
+	for _, u := range users {
+		if u.ID != userID {
+			continue
+		}
+
+		patronymic := ""
+		if u.Patronymic != nil {
+			patronymic = *u.Patronymic
+		}
+
+		parts := make([]string, 0, 3)
+		for _, p := range []string{u.Surname, u.Name, patronymic} {
+			if p != "" {
+				parts = append(parts, p)
+			}
+		}
+		return strings.Join(parts, " ")
+	}
+	return ""
 }
 
 func (s *vacationService) GetVacationsByYear(ctx context.Context, userId string, year int) (*[]repo.GetVacationsByYearRow, error) {
@@ -156,7 +205,7 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		typeName = full.VacationTypeName
 	}
 
-	body := vacationNotificationBody(vacation.ApplicantName, dates, typeName, vacation.Description)
+	body := vacationNotificationBody(s.resolveApplicantName(ctx, vacation.UserID), dates, typeName, vacation.Description)
 
 	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск", body)
 
@@ -179,6 +228,18 @@ func vacationNotificationBody(applicantName, dates, typeName, description string
 		lines = append(lines, "Описание: "+description)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// vacationApprovalEmailBody — отдельный формат для письма со сканом (см.
+// SendApprovalEmailIfReady), не переиспользует vacationNotificationBody —
+// другой набор строк и порядок специально под письмо.
+func vacationApprovalEmailBody(applicantName, dates string, totalDays int, typeName string) string {
+	return strings.Join([]string{
+		"От: " + applicantName,
+		"Период: " + dates,
+		fmt.Sprintf("Кол-во дней: %d", totalDays),
+		"Тип: " + typeName,
+	}, "\n")
 }
 
 // notifyAdminsNewApplication — и в notifications (таблица), и в VK, тем, кто
@@ -682,7 +743,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 	return nil
 }
 
-func (s *vacationService) ApproveVacation(ctx context.Context, vacationID, applicantName string) error {
+func (s *vacationService) ApproveVacation(ctx context.Context, vacationID string) error {
 	// Получаем отпуск по ID
 	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
 	if err != nil {
@@ -709,12 +770,17 @@ func (s *vacationService) ApproveVacation(ctx context.Context, vacationID, appli
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
+	applicantName := s.resolveApplicantName(ctx, vacation.UserID)
 	s.notifyApplicantStatusChanged(ctx, vacation, repo.VacationsStatusApproved, applicantName)
+
+	if err := s.SendApprovalEmailIfReady(ctx, vacationID); err != nil {
+		fmt.Printf("vacation: send approval email failed: %v\n", err)
+	}
 
 	return nil
 }
 
-func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus, applicantName string) error {
+func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error {
 	// Получаем отпуск по ID
 	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
 	if err != nil {
@@ -723,7 +789,7 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 
 	// Если новый статус "approved", вызываем метод ApproveVacation
 	if newStatus == repo.VacationsStatusApproved {
-		return s.ApproveVacation(ctx, vacationID, applicantName)
+		return s.ApproveVacation(ctx, vacationID)
 	}
 
 	// Если текущий статус "approved" и новый статус не "approved",
@@ -744,7 +810,11 @@ func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID s
 		return fmt.Errorf("failed to update vacation status: %w", err)
 	}
 
-	s.notifyApplicantStatusChanged(ctx, vacation, newStatus, applicantName)
+	// applicantName нужен только для approved-ветки (см.
+	// notifyApplicantStatusChanged) — та обрабатывается отдельно в
+	// ApproveVacation выше, сюда попадают только rejected/pending, для них
+	// ФИО не используется, резолвить не нужно.
+	s.notifyApplicantStatusChanged(ctx, vacation, newStatus, "")
 
 	return nil
 }
@@ -798,6 +868,76 @@ func (s *vacationService) notifyApprovedThirdParties(ctx context.Context, vacati
 
 	s.notificationService.CreateMany(ctx, recipients, title, body, repo.NotificationsTypeInfo, "vacation", vacation.ID)
 	s.vkService.NotifyMany(ctx, recipients, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))
+}
+
+// SendApprovalEmailIfReady — см. описание в Service. Условие — заявка уже
+// approved И к ней есть хотя бы один прикреплённый файл (по умолчанию
+// единственный тип файла на vacation — скан заявления, см.
+// entityCategorySystemName в internal/service/file.go). approval_email_sent_at
+// не даёт отправить письмо повторно на следующий файл/повторный вызов.
+func (s *vacationService) SendApprovalEmailIfReady(ctx context.Context, vacationID string) error {
+	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
+	if err != nil {
+		return fmt.Errorf("get vacation: %w", err)
+	}
+
+	if vacation.Status != repo.VacationsStatusApproved {
+		return nil
+	}
+	if vacation.ApprovalEmailSentAt.Valid {
+		return nil
+	}
+
+	files, err := s.fileService.ListByEntity(ctx, "vacation", vacationID, 0)
+	if err != nil {
+		return fmt.Errorf("list vacation files: %w", err)
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	to, err := s.notificationService.GetVacationApprovedEmail(ctx)
+	if err != nil {
+		return fmt.Errorf("get destination email: %w", err)
+	}
+	if to == "" {
+		return nil
+	}
+
+	attachments := make([]mail.Attachment, 0, len(files))
+	for _, f := range files {
+		data, err := os.ReadFile(f.StoragePath)
+		if err != nil {
+			return fmt.Errorf("read attachment %s: %w", f.ID, err)
+		}
+		attachments = append(attachments, mail.Attachment{
+			Filename: f.OriginalName,
+			MimeType: f.MimeType,
+			Data:     data,
+		})
+	}
+
+	who := s.resolveApplicantName(ctx, vacation.UserID)
+	if who == "" {
+		who = "Сотрудник"
+	}
+
+	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
+	subject := fmt.Sprintf("Отпуск - %s", who)
+	body := vacationApprovalEmailBody(who, dates, int(vacation.TotalDays), vacation.VacationTypeName)
+
+	if err := s.mailService.Send(ctx, to, subject, body, attachments); err != nil {
+		return fmt.Errorf("send approval email: %w", err)
+	}
+
+	if err := s.repo.MarkVacationApprovalEmailSent(ctx, repo.MarkVacationApprovalEmailSentParams{
+		ApprovalEmailSentAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+		ID:                  vacationID,
+	}); err != nil {
+		return fmt.Errorf("mark approval email sent: %w", err)
+	}
+
+	return nil
 }
 
 func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string) error {

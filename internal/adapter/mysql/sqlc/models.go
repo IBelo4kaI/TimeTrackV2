@@ -501,18 +501,19 @@ type UserVkLink struct {
 }
 
 type Vacation struct {
-	ID              string          `json:"id"`
-	UserID          string          `json:"userId"`
-	StartDate       time.Time       `json:"startDate"`
-	EndDate         time.Time       `json:"endDate"`
-	TotalDays       int32           `json:"totalDays"`
-	Description     sql.NullString  `json:"description"`
-	CreatedAt       sql.NullTime    `json:"createdAt"`
-	UpdatedAt       sql.NullTime    `json:"updatedAt"`
-	ManagerComment  sql.NullString  `json:"managerComment"`
-	StatusUpdatedAt sql.NullTime    `json:"statusUpdatedAt"`
-	Status          VacationsStatus `json:"status"`
-	VacationTypeID  sql.NullString  `json:"vacationTypeId"`
+	ID                  string          `json:"id"`
+	UserID              string          `json:"userId"`
+	StartDate           time.Time       `json:"startDate"`
+	EndDate             time.Time       `json:"endDate"`
+	TotalDays           int32           `json:"totalDays"`
+	Description         sql.NullString  `json:"description"`
+	CreatedAt           sql.NullTime    `json:"createdAt"`
+	UpdatedAt           sql.NullTime    `json:"updatedAt"`
+	ManagerComment      sql.NullString  `json:"managerComment"`
+	StatusUpdatedAt     sql.NullTime    `json:"statusUpdatedAt"`
+	Status              VacationsStatus `json:"status"`
+	VacationTypeID      sql.NullString  `json:"vacationTypeId"`
+	ApprovalEmailSentAt sql.NullTime    `json:"approvalEmailSentAt"`
 }
 
 type VacationType struct {

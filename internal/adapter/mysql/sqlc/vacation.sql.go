@@ -201,6 +201,7 @@ SELECT
   v.total_days,
   COALESCE(v.description, '') as description,
   v.status,
+  v.approval_email_sent_at,
   v.vacation_type_id,
   COALESCE(t.name, '') as vacation_type_name,
   COALESCE(t.color_code, '') as vacation_type_color,
@@ -222,6 +223,7 @@ type GetVacationByIDRow struct {
 	TotalDays                  int32           `json:"totalDays"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
+	ApprovalEmailSentAt        sql.NullTime    `json:"approvalEmailSentAt"`
 	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
 	VacationTypeName           string          `json:"vacationTypeName"`
 	VacationTypeColor          string          `json:"vacationTypeColor"`
@@ -241,6 +243,7 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.TotalDays,
 		&i.Description,
 		&i.Status,
+		&i.ApprovalEmailSentAt,
 		&i.VacationTypeID,
 		&i.VacationTypeName,
 		&i.VacationTypeColor,
@@ -411,6 +414,24 @@ func (q *Queries) ListVacationCalendarByYear(ctx context.Context, arg ListVacati
 		return nil, err
 	}
 	return items, nil
+}
+
+const markVacationApprovalEmailSent = `-- name: MarkVacationApprovalEmailSent :exec
+UPDATE vacations
+SET
+  approval_email_sent_at = ?
+WHERE
+  id = ?
+`
+
+type MarkVacationApprovalEmailSentParams struct {
+	ApprovalEmailSentAt sql.NullTime `json:"approvalEmailSentAt"`
+	ID                  string       `json:"id"`
+}
+
+func (q *Queries) MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error {
+	_, err := q.db.ExecContext(ctx, markVacationApprovalEmailSent, arg.ApprovalEmailSentAt, arg.ID)
+	return err
 }
 
 const updateVacationStatus = `-- name: UpdateVacationStatus :exec

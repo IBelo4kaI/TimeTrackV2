@@ -7,12 +7,14 @@ import (
 	"time"
 	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/authservice"
 	"timetrack/internal/calendar"
 	calendarevent "timetrack/internal/calendar_event"
 	"timetrack/internal/chat"
 	daytype "timetrack/internal/day_type"
 	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
+	"timetrack/internal/mail"
 	"timetrack/internal/middleware"
 	"timetrack/internal/news"
 	"timetrack/internal/notification"
@@ -21,6 +23,7 @@ import (
 	receiptcategory "timetrack/internal/receipt_category"
 	"timetrack/internal/service"
 	sickleave "timetrack/internal/sick_leave"
+	smtpsettings "timetrack/internal/smtp_settings"
 	systemsetting "timetrack/internal/system_setting"
 	"timetrack/internal/timesheetreminder"
 	usertimeentry "timetrack/internal/user_time_entry"
@@ -42,11 +45,13 @@ type application struct {
 }
 
 type config struct {
-	addr        string
-	db          dbConfig
-	prefix      string
-	frontendURL string
-	vk          vkConfig
+	addr              string
+	db                dbConfig
+	prefix            string
+	frontendURL       string
+	vk                vkConfig
+	smtpEncryptionKey string
+	auth              authConfig
 }
 
 type dbConfig struct {
@@ -58,6 +63,11 @@ type vkConfig struct {
 	confirmationString  string
 	secretKey           string
 	communityScreenName string
+}
+
+type authConfig struct {
+	host   string
+	apiKey string
 }
 
 func (app *application) mount() *fiber.App {
@@ -88,6 +98,19 @@ func (app *application) mount() *fiber.App {
 
 	fileService := service.NewFileService(app.db, "docs")
 
+	// SMTP-настройки (хост/порт/логин/пароль/from) — в system_settings, а
+	// не в env, см. internal/smtp_settings. Та же permission-сущность
+	// "system_settings", что у общих настроек.
+	smtpSettingsService := smtpsettings.NewService(repo.New(app.db), app.config.smtpEncryptionKey)
+	smtpsettings.SetupRoutes(v1, smtpSettingsService, app.grpcClient, app.config.prefix)
+
+	mailService := mail.NewService(smtpSettingsService)
+
+	// Резолв ФИО по userID через сервис авторизации (HTTP, не gRPC) — см.
+	// internal/authservice. Раньше ФИО для текста уведомлений передавал
+	// фронт (уже знал из usersAll), теперь vacation резолвит сам.
+	authService := authservice.NewService(app.config.auth.host, app.config.auth.apiKey)
+
 	// VK-бот и notifications нужны раньше vacation/sick_leave — те шлют в
 	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication
 	// в соответствующих service.go).
@@ -111,7 +134,7 @@ func (app *application) mount() *fiber.App {
 	news.SetupRoutes(v1, newsService, app.grpcClient, app.config.prefix)
 
 	// Vacation routes
-	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, app.config.frontendURL)
+	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.grpcClient, app.config.prefix)
 
 	// Напоминание заполнить табель — свой тикер в процессе, без внешнего
