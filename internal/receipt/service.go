@@ -19,7 +19,6 @@ var (
 	ErrUserRequired       = errors.New("не указан пользователь, отсканировавший чек")
 	ErrFiscalDataRequired = errors.New("не переданы фискальные реквизиты чека (ФН/ФД/ФПД)")
 	ErrTotalSumInvalid    = errors.New("некорректная сумма чека")
-	ErrSellerInnRequired  = errors.New("не указан ИНН продавца")
 	ErrNoItems            = errors.New("в чеке нет ни одной позиции")
 	ErrNewOwnerRequired   = errors.New("не указан сотрудник, которому передаётся чек")
 	ErrSameOwner          = errors.New("чек уже принадлежит этому сотруднику")
@@ -60,25 +59,36 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		return ReceiptWithItems{}, err
 	}
 
-	if _, err := s.repo.GetReceiptByFiscalKey(ctx, repo.GetReceiptByFiscalKeyParams{
-		FiscalDriveNumber:    req.FiscalDriveNumber,
-		FiscalDocumentNumber: req.FiscalDocumentNumber,
-		FiscalSign:           req.FiscalSign,
-	}); err == nil {
-		return ReceiptWithItems{}, ErrDuplicate
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return ReceiptWithItems{}, err
+	// Проверка на дубликат — только когда есть фискальные реквизиты (скан):
+	// у ручных чеков их нет, сравнивать/дедуплицировать по ним нечего.
+	if req.FiscalDriveNumber != nil {
+		if _, err := s.repo.GetReceiptByFiscalKey(ctx, repo.GetReceiptByFiscalKeyParams{
+			FiscalDriveNumber:    nullString(req.FiscalDriveNumber),
+			FiscalDocumentNumber: nullString(req.FiscalDocumentNumber),
+			FiscalSign:           nullString(req.FiscalSign),
+		}); err == nil {
+			return ReceiptWithItems{}, ErrDuplicate
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return ReceiptWithItems{}, err
+		}
+	}
+
+	sellerINN := ""
+	if req.SellerINN != nil {
+		sellerINN = *req.SellerINN
 	}
 
 	// Классификация — локальными словарями (ИНН продавца, потом ключевые
 	// слова позиций), см. internal/receipt_category. До открытия транзакции
 	// ниже: сама может писать в merchant_category (самообучение), это
-	// отдельная операция, чек ещё не обязан существовать в БД.
+	// отдельная операция, чек ещё не обязан существовать в БД. Пустой ИНН
+	// (ручной ввод) Classify обрабатывает штатно — просто пропускает шаг
+	// поиска по словарю продавцов.
 	classifyItems := make([]receiptcategory.ItemForClassify, len(req.Items))
 	for i, item := range req.Items {
 		classifyItems[i] = receiptcategory.ItemForClassify{Name: item.Name}
 	}
-	classified, err := s.categoryService.Classify(ctx, req.SellerINN, classifyItems)
+	classified, err := s.categoryService.Classify(ctx, sellerINN, classifyItems)
 	if err != nil {
 		return ReceiptWithItems{}, fmt.Errorf("classify receipt: %w", err)
 	}
@@ -96,12 +106,12 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 	if err := qtx.CreateReceipt(ctx, repo.CreateReceiptParams{
 		ID:                      id,
 		UserID:                  req.UserID,
-		FiscalDriveNumber:       req.FiscalDriveNumber,
-		FiscalDocumentNumber:    req.FiscalDocumentNumber,
-		FiscalSign:              req.FiscalSign,
+		FiscalDriveNumber:       nullString(req.FiscalDriveNumber),
+		FiscalDocumentNumber:    nullString(req.FiscalDocumentNumber),
+		FiscalSign:              nullString(req.FiscalSign),
 		TicketDate:              req.TicketDate,
 		TotalSum:                req.TotalSum,
-		SellerInn:               req.SellerINN,
+		SellerInn:               nullString(req.SellerINN),
 		SellerName:              nullString(req.SellerName),
 		OperationType:           req.OperationType,
 		HasPaper:                req.HasPaper,
@@ -244,8 +254,10 @@ func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID 
 	// категорию на ВСЕ чеки этого продавца, а не только на будущие —
 	// иначе "Категоризировать" не подхватит уже категоризированные чеки
 	// с устаревшей категорией (Backfill трогает только "Без категории").
-	if categoryID != nil {
-		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn, *categoryID); err != nil {
+	// Без ИНН (ручной чек) обновлять словарь продавцов нечем — только сам
+	// чек, UpdateMerchant тут не вызываем (ему обязателен непустой ИНН).
+	if categoryID != nil && r.SellerInn.Valid && r.SellerInn.String != "" {
+		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn.String, *categoryID); err != nil {
 			fmt.Printf("update merchant category override: %v\n", err)
 		}
 	}
@@ -272,7 +284,7 @@ func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, erro
 			classifyItems[i] = receiptcategory.ItemForClassify{Name: item.Name}
 		}
 
-		classified, err := s.categoryService.Classify(ctx, r.SellerInn, classifyItems)
+		classified, err := s.categoryService.Classify(ctx, r.SellerInn.String, classifyItems)
 		if err != nil {
 			fmt.Printf("backfill category: classify receipt %s: %v\n", r.ID, err)
 			continue
@@ -300,18 +312,25 @@ func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, erro
 	return updated, len(receipts), nil
 }
 
+// validate — ИНН продавца больше не обязателен (см. CreateReceiptRequest):
+// чек можно ввести вручную, когда QR нет/не читается. Фискальные реквизиты
+// в этом случае тоже не заполняются, но смешивать нельзя — либо все три
+// указаны (скан), либо все три отсутствуют (ручной ввод).
 func validate(req CreateReceiptRequest) error {
 	if req.UserID == "" {
 		return ErrUserRequired
 	}
-	if req.FiscalDriveNumber == "" || req.FiscalDocumentNumber == "" || req.FiscalSign == "" {
+	fiscalFieldsPresent := 0
+	for _, v := range []*string{req.FiscalDriveNumber, req.FiscalDocumentNumber, req.FiscalSign} {
+		if v != nil && *v != "" {
+			fiscalFieldsPresent++
+		}
+	}
+	if fiscalFieldsPresent != 0 && fiscalFieldsPresent != 3 {
 		return ErrFiscalDataRequired
 	}
 	if req.TotalSum <= 0 {
 		return ErrTotalSumInvalid
-	}
-	if req.SellerINN == "" {
-		return ErrSellerInnRequired
 	}
 	if len(req.Items) == 0 {
 		return ErrNoItems

@@ -167,6 +167,6 @@ func (s *service) UpdateMerchant(ctx context.Context, sellerInn string, category
 	return s.repo.UpdateReceiptsCategoryBySellerInn(ctx, repo.UpdateReceiptsCategoryBySellerInnParams{
 		CategoryID: sql.NullInt32{Int32: categoryID, Valid: true},
 		UpdatedAt:  time.Now().UTC(),
-		SellerInn:  sellerInn,
+		SellerInn:  sql.NullString{String: sellerInn, Valid: true},
 	})
 }

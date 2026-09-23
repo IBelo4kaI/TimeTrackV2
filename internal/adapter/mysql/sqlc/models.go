@@ -417,12 +417,8 @@ type NotificationTemplate struct {
 type Receipt struct {
 	ID                      string         `json:"id"`
 	UserID                  string         `json:"userId"`
-	FiscalDriveNumber       string         `json:"fiscalDriveNumber"`
-	FiscalDocumentNumber    string         `json:"fiscalDocumentNumber"`
-	FiscalSign              string         `json:"fiscalSign"`
 	TicketDate              time.Time      `json:"ticketDate"`
 	TotalSum                int64          `json:"totalSum"`
-	SellerInn               string         `json:"sellerInn"`
 	SellerName              sql.NullString `json:"sellerName"`
 	OperationType           int32          `json:"operationType"`
 	RetailPlaceAddress      sql.NullString `json:"retailPlaceAddress"`
@@ -447,6 +443,10 @@ type Receipt struct {
 	Nds22                   int64          `json:"nds22"`
 	HasPaper                bool           `json:"hasPaper"`
 	CategoryID              sql.NullInt32  `json:"categoryId"`
+	FiscalDriveNumber       sql.NullString `json:"fiscalDriveNumber"`
+	FiscalDocumentNumber    sql.NullString `json:"fiscalDocumentNumber"`
+	FiscalSign              sql.NullString `json:"fiscalSign"`
+	SellerInn               sql.NullString `json:"sellerInn"`
 }
 
 type ReceiptItem struct {

@@ -293,7 +293,6 @@ func mapError(c fiber.Ctx, err error) error {
 	case errors.Is(err, ErrUserRequired),
 		errors.Is(err, ErrFiscalDataRequired),
 		errors.Is(err, ErrTotalSumInvalid),
-		errors.Is(err, ErrSellerInnRequired),
 		errors.Is(err, ErrNoItems),
 		errors.Is(err, ErrNewOwnerRequired),
 		errors.Is(err, ErrSameOwner):

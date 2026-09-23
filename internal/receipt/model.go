@@ -19,19 +19,23 @@ type ReceiptItemRequest struct {
 	NdsCode *int32 `json:"ndsCode"`
 }
 
-// CreateReceiptRequest — тело POST /receipts/create. Фронт сканирует QR,
-// сам ходит во внешнее API и присылает сюда уже готовый разобранный ответ +
-// userId сотрудника, который отсканировал чек.
+// CreateReceiptRequest — тело POST /receipts/create. Два источника: обычно
+// фронт сканирует QR, сам ходит во внешнее API и присылает уже готовый
+// разобранный ответ + userId сотрудника; либо сотрудник вводит чек вручную
+// (когда QR нет/не читается) — тогда фискальные реквизиты и ИНН продавца
+// не заполнены (см. validate — при ручном вводе они не обязательны).
 type CreateReceiptRequest struct {
 	UserID string `json:"userId"`
 
-	FiscalDriveNumber    string `json:"fiscalDriveNumber"`
-	FiscalDocumentNumber string `json:"fiscalDocumentNumber"`
-	FiscalSign           string `json:"fiscalSign"`
+	// Фискальные реквизиты — либо все три заполнены (скан), либо все три
+	// пустые (ручной ввод), см. validate.
+	FiscalDriveNumber    *string `json:"fiscalDriveNumber"`
+	FiscalDocumentNumber *string `json:"fiscalDocumentNumber"`
+	FiscalSign           *string `json:"fiscalSign"`
 
 	TicketDate    time.Time `json:"ticketDate"`
 	TotalSum      int64     `json:"totalSum"` // в копейках
-	SellerINN     string    `json:"sellerInn"`
+	SellerINN     *string   `json:"sellerInn"`
 	SellerName    *string   `json:"sellerName"`
 	OperationType int32     `json:"operationType"` // 1-Приход,2-Возврат прихода,3-Расход,4-Возврат расхода
 
