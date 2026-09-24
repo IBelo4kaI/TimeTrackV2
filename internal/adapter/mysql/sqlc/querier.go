@@ -63,6 +63,9 @@ type Querier interface {
 	CreateWorkStandard(ctx context.Context, arg CreateWorkStandardParams) error
 	DeleteAllFileEntityRefsByFile(ctx context.Context, fileID string) error
 	DeleteAllNotificationsByUser(ctx context.Context, userID string) error
+	// Ретроактивное обновление по продавцу (см. receiptcategory.Service.
+	// UpdateMerchant) — только чеки, где категории не выбраны вручную.
+	DeleteAutoCategoryLinksBySellerInn(ctx context.Context, sellerInn sql.NullString) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	// Каскадно удаляет chat_participants и chat_messages (ON DELETE CASCADE,
 	// см. миграцию 011_add_chats.sql).
@@ -73,6 +76,7 @@ type Querier interface {
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	DeleteNotificationTemplate(ctx context.Context, id string) error
 	DeleteReceipt(ctx context.Context, id string) error
+	DeleteReceiptCategoryLinks(ctx context.Context, receiptID string) error
 	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
 	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
@@ -160,7 +164,10 @@ type Querier interface {
 	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	HardDeleteFile(ctx context.Context, id string) error
+	InsertAutoCategoryLinkBySellerInn(ctx context.Context, arg InsertAutoCategoryLinkBySellerInnParams) (int64, error)
+	InsertReceiptCategoryLink(ctx context.Context, arg InsertReceiptCategoryLinkParams) error
 	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
+	ListAllReceiptCategoryLinks(ctx context.Context) ([]ReceiptCategory, error)
 	ListAllReceipts(ctx context.Context) ([]Receipt, error)
 	// ============================================
 	// categories / merchant_category / keyword_category
@@ -197,6 +204,8 @@ type Querier interface {
 	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
+	ListReceiptCategoryIDs(ctx context.Context, receiptID string) ([]int32, error)
+	ListReceiptCategoryLinksByUser(ctx context.Context, userID string) ([]ReceiptCategory, error)
 	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
@@ -227,6 +236,7 @@ type Querier interface {
 	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
+	SetReceiptCategoriesManual(ctx context.Context, arg SetReceiptCategoriesManualParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error
@@ -244,13 +254,8 @@ type Querier interface {
 	UpdateNameDayType(ctx context.Context, arg UpdateNameDayTypeParams) error
 	UpdateNewsPost(ctx context.Context, arg UpdateNewsPostParams) error
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
-	UpdateReceiptCategoryID(ctx context.Context, arg UpdateReceiptCategoryIDParams) error
 	UpdateReceiptObjectID(ctx context.Context, arg UpdateReceiptObjectIDParams) error
 	UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error
-	// Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
-	// продавца — вызывается при правке merchant_category (см.
-	// receiptcategory.Service.UpdateMerchant), а не только у одного чека.
-	UpdateReceiptsCategoryBySellerInn(ctx context.Context, arg UpdateReceiptsCategoryBySellerInnParams) (int64, error)
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error

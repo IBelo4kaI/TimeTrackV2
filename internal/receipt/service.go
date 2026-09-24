@@ -27,14 +27,16 @@ var (
 type Service interface {
 	Create(ctx context.Context, req CreateReceiptRequest) (ReceiptWithItems, error)
 	GetByID(ctx context.Context, id string) (ReceiptWithItems, error)
-	ListByUser(ctx context.Context, userID string) ([]repo.Receipt, error)
-	ListAll(ctx context.Context) ([]repo.Receipt, error)
+	ListByUser(ctx context.Context, userID string) ([]ReceiptListItem, error)
+	ListAll(ctx context.Context) ([]ReceiptListItem, error)
 	Delete(ctx context.Context, id string) error
 	Transfer(ctx context.Context, id, newUserID string) (ReceiptWithItems, error)
-	// SetCategory — ручная правка категории чека (categoryID == nil снимает
-	// категорию). При непустом categoryID запоминает выбор как
-	// user_override в словаре продавцов (см. receiptcategory.Service).
-	SetCategory(ctx context.Context, id string, categoryID *int32) (ReceiptWithItems, error)
+	// SetCategories — ручной выбор категорий чека (пустой массив — "без
+	// категории"). Чек помечается categories_manual: автоклассификация его
+	// больше не перезаписывает. learn — можно ли при выборе ровно одной
+	// категории запомнить её в словаре продавцов (и переставить на чеки
+	// этого продавца без ручного выбора).
+	SetCategories(ctx context.Context, id string, categoryIDs []int32, learn bool) (ReceiptWithItems, error)
 	// SetObject — привязка чека к объекту из Reference Service (nil снимает).
 	SetObject(ctx context.Context, id string, objectID *string) (ReceiptWithItems, error)
 	// BackfillCategories — перепрогоняет через классификацию ВСЕ уже
@@ -90,9 +92,19 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 	for i, item := range req.Items {
 		classifyItems[i] = receiptcategory.ItemForClassify{Name: item.Name}
 	}
-	classified, err := s.categoryService.Classify(ctx, sellerINN, classifyItems)
-	if err != nil {
-		return ReceiptWithItems{}, fmt.Errorf("classify receipt: %w", err)
+	// Ручной выбор категорий (в том числе пустой) — автоклассификация не нужна.
+	manual := req.CategoryIDs != nil
+	var categoryIDs []int32
+	if manual {
+		categoryIDs = *req.CategoryIDs
+	} else {
+		classified, err := s.categoryService.Classify(ctx, sellerINN, classifyItems)
+		if err != nil {
+			return ReceiptWithItems{}, fmt.Errorf("classify receipt: %w", err)
+		}
+		if classified.CategoryID != nil {
+			categoryIDs = []int32{*classified.CategoryID}
+		}
 	}
 
 	tx, err := s.db.Begin()
@@ -117,7 +129,7 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		SellerName:              nullString(req.SellerName),
 		OperationType:           req.OperationType,
 		HasPaper:                req.HasPaper,
-		CategoryID:              nullInt32(classified.CategoryID),
+		CategoriesManual:        manual,
 		ObjectID:                nullString(req.ObjectID),
 		RetailPlaceAddress:      nullString(req.RetailPlaceAddress),
 		RequestNumber:           nullString(req.RequestNumber),
@@ -141,6 +153,15 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		UpdatedAt:               now,
 	}); err != nil {
 		return ReceiptWithItems{}, fmt.Errorf("create receipt: %w", err)
+	}
+
+	for _, categoryID := range categoryIDs {
+		if err := qtx.InsertReceiptCategoryLink(ctx, repo.InsertReceiptCategoryLinkParams{
+			ReceiptID:  id,
+			CategoryID: categoryID,
+		}); err != nil {
+			return ReceiptWithItems{}, fmt.Errorf("link receipt category: %w", err)
+		}
 	}
 
 	for i, item := range req.Items {
@@ -179,15 +200,62 @@ func (s *receiptService) GetByID(ctx context.Context, id string) (ReceiptWithIte
 		return ReceiptWithItems{}, err
 	}
 
-	return ReceiptWithItems{Receipt: r, Items: items}, nil
+	categoryIDs, err := s.repo.ListReceiptCategoryIDs(ctx, id)
+	if err != nil {
+		return ReceiptWithItems{}, err
+	}
+
+	return ReceiptWithItems{Receipt: r, CategoryIDs: emptyIfNil(categoryIDs), Items: items}, nil
 }
 
-func (s *receiptService) ListByUser(ctx context.Context, userID string) ([]repo.Receipt, error) {
-	return s.repo.ListReceiptsByUser(ctx, userID)
+func (s *receiptService) ListByUser(ctx context.Context, userID string) ([]ReceiptListItem, error) {
+	receipts, err := s.repo.ListReceiptsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	links, err := s.repo.ListReceiptCategoryLinksByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	byReceipt := make(map[string][]int32, len(links))
+	for _, l := range links {
+		byReceipt[l.ReceiptID] = append(byReceipt[l.ReceiptID], l.CategoryID)
+	}
+	return withCategories(receipts, byReceipt), nil
 }
 
-func (s *receiptService) ListAll(ctx context.Context) ([]repo.Receipt, error) {
-	return s.repo.ListAllReceipts(ctx)
+func (s *receiptService) ListAll(ctx context.Context) ([]ReceiptListItem, error) {
+	receipts, err := s.repo.ListAllReceipts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	links, err := s.repo.ListAllReceiptCategoryLinks(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	byReceipt := make(map[string][]int32, len(links))
+	for _, l := range links {
+		byReceipt[l.ReceiptID] = append(byReceipt[l.ReceiptID], l.CategoryID)
+	}
+	return withCategories(receipts, byReceipt), nil
+}
+
+func withCategories(receipts []repo.Receipt, byReceipt map[string][]int32) []ReceiptListItem {
+	out := make([]ReceiptListItem, len(receipts))
+	for i, r := range receipts {
+		out[i] = ReceiptListItem{Receipt: r, CategoryIDs: emptyIfNil(byReceipt[r.ID])}
+	}
+	return out
+}
+
+// emptyIfNil — на фронт всегда массив ([]), а не null.
+func emptyIfNil(ids []int32) []int32 {
+	if ids == nil {
+		return []int32{}
+	}
+	return ids
 }
 
 func (s *receiptService) Delete(ctx context.Context, id string) error {
@@ -233,7 +301,7 @@ func (s *receiptService) Transfer(ctx context.Context, id, newUserID string) (Re
 	return s.GetByID(ctx, id)
 }
 
-func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID *int32) (ReceiptWithItems, error) {
+func (s *receiptService) SetCategories(ctx context.Context, id string, categoryIDs []int32, learn bool) (ReceiptWithItems, error) {
 	r, err := s.repo.GetReceiptByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -242,25 +310,41 @@ func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID 
 		return ReceiptWithItems{}, err
 	}
 
-	if err := s.repo.UpdateReceiptCategoryID(ctx, repo.UpdateReceiptCategoryIDParams{
-		CategoryID: nullInt32(categoryID),
-		UpdatedAt:  time.Now().UTC(),
-		ID:         id,
+	tx, err := s.db.Begin()
+	if err != nil {
+		return ReceiptWithItems{}, err
+	}
+	defer tx.Rollback()
+	qtx := s.repo.WithTx(tx)
+
+	if err := qtx.DeleteReceiptCategoryLinks(ctx, id); err != nil {
+		return ReceiptWithItems{}, fmt.Errorf("clear receipt categories: %w", err)
+	}
+	for _, categoryID := range categoryIDs {
+		if err := qtx.InsertReceiptCategoryLink(ctx, repo.InsertReceiptCategoryLinkParams{
+			ReceiptID:  id,
+			CategoryID: categoryID,
+		}); err != nil {
+			return ReceiptWithItems{}, fmt.Errorf("link receipt category: %w", err)
+		}
+	}
+	if err := qtx.SetReceiptCategoriesManual(ctx, repo.SetReceiptCategoriesManualParams{
+		CategoriesManual: true,
+		UpdatedAt:        time.Now().UTC(),
+		ID:               id,
 	}); err != nil {
-		return ReceiptWithItems{}, fmt.Errorf("update receipt category: %w", err)
+		return ReceiptWithItems{}, fmt.Errorf("mark categories manual: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ReceiptWithItems{}, err
 	}
 
-	// Снятие категории (categoryID == nil) — только у этого чека, словарь
-	// продавца не трогаем (это не значит "этот продавец вообще без
-	// категории"). Непустой выбор — как и правка через "Продавцы" в
-	// настройках (UpdateMerchant): запоминаем override И сразу переносим
-	// категорию на ВСЕ чеки этого продавца, а не только на будущие —
-	// иначе "Категоризировать" не подхватит уже категоризированные чеки
-	// с устаревшей категорией (Backfill трогает только "Без категории").
-	// Без ИНН (ручной чек) обновлять словарь продавцов нечем — только сам
-	// чек, UpdateMerchant тут не вызываем (ему обязателен непустой ИНН).
-	if categoryID != nil && r.SellerInn.Valid && r.SellerInn.String != "" {
-		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn.String, *categoryID); err != nil {
+	// Словарь продавцов учим только при ровно одной категории (с несколькими
+	// непонятно, какую запоминать), есть ИНН и разрешено вызывающей стороной
+	// (право receipts.all:edit, см. handler). Заодно UpdateMerchant переносит
+	// категорию на остальные чеки продавца — кроме выбранных вручную.
+	if learn && len(categoryIDs) == 1 && r.SellerInn.Valid && r.SellerInn.String != "" {
+		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn.String, categoryIDs[0]); err != nil {
 			fmt.Printf("update merchant category override: %v\n", err)
 		}
 	}
@@ -295,6 +379,11 @@ func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, erro
 
 	updated := 0
 	for _, r := range receipts {
+		// Категории выбраны вручную — автоматика чек не трогает.
+		if r.CategoriesManual {
+			continue
+		}
+
 		items, err := s.repo.ListReceiptItemsByReceipt(ctx, r.ID)
 		if err != nil {
 			fmt.Printf("backfill category: list items for receipt %s: %v\n", r.ID, err)
@@ -316,14 +405,22 @@ func (s *receiptService) BackfillCategories(ctx context.Context) (int, int, erro
 			// это не сигнал "снять категорию", а просто "нечего сказать".
 			continue
 		}
-		if r.CategoryID.Valid && r.CategoryID.Int32 == *classified.CategoryID {
+		current, err := s.repo.ListReceiptCategoryIDs(ctx, r.ID)
+		if err != nil {
+			fmt.Printf("backfill category: list categories for receipt %s: %v\n", r.ID, err)
+			continue
+		}
+		if len(current) == 1 && current[0] == *classified.CategoryID {
 			continue // уже такая же — писать нечего
 		}
 
-		if err := s.repo.UpdateReceiptCategoryID(ctx, repo.UpdateReceiptCategoryIDParams{
-			CategoryID: nullInt32(classified.CategoryID),
-			UpdatedAt:  time.Now().UTC(),
-			ID:         r.ID,
+		if err := s.repo.DeleteReceiptCategoryLinks(ctx, r.ID); err != nil {
+			fmt.Printf("backfill category: clear receipt %s: %v\n", r.ID, err)
+			continue
+		}
+		if err := s.repo.InsertReceiptCategoryLink(ctx, repo.InsertReceiptCategoryLinkParams{
+			ReceiptID:  r.ID,
+			CategoryID: *classified.CategoryID,
 		}); err != nil {
 			fmt.Printf("backfill category: update receipt %s: %v\n", r.ID, err)
 			continue

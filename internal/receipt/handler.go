@@ -262,7 +262,17 @@ func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
 		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому чеку"))
 	}
 
-	r, err := h.service.SetCategory(c.RequestCtx(), id, body.CategoryID)
+	// Словарь продавцов учим только по выбору бухгалтерии (receipts.all:edit),
+	// а не любого сотрудника — иначе одна ошибка перекатегоризирует чеки
+	// всех остальных.
+	learn := middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"})
+
+	categoryIDs := body.CategoryIDs
+	if categoryIDs == nil {
+		categoryIDs = []int32{}
+	}
+
+	r, err := h.service.SetCategories(c.RequestCtx(), id, categoryIDs, learn)
 	if err != nil {
 		return mapError(c, err)
 	}

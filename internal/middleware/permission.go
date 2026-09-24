@@ -170,4 +170,28 @@ func RequireOwnerOrAll(
 	return resp.IsAccess
 }
 
+// HasAll — есть ли у вызывающего право <entity>.all:<action> (доступ к
+// чужим записям). Тот же запрос, что и в RequireOwnerOrAll для чужой записи,
+// только без конкретного владельца.
+func HasAll(c fiber.Ctx, client *grpcClient.Client, p Params) bool {
+	token := c.Cookies(SessionCookieName)
+	if token == "" {
+		return false
+	}
+
+	anyone := "all"
+	resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
+		SessionToken: token,
+		Service:      p.Service,
+		Entity:       p.Entity,
+		Action:       p.Action,
+		UserId:       &anyone,
+	})
+	if err != nil {
+		return false
+	}
+
+	return resp.IsAccess
+}
+
 // fiber:context-methods migrated

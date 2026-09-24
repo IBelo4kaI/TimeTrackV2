@@ -87,10 +87,79 @@ INSERT INTO
 VALUES
   (?, ?, 0);
 
--- name: UpdateReceiptCategoryID :exec
+-- name: ListReceiptCategoryIDs :many
+SELECT
+  category_id
+FROM
+  receipt_categories
+WHERE
+  receipt_id = ?
+ORDER BY
+  category_id;
+
+-- name: ListReceiptCategoryLinksByUser :many
+SELECT
+  rc.receipt_id,
+  rc.category_id
+FROM
+  receipt_categories rc
+  JOIN receipts r ON r.id = rc.receipt_id
+WHERE
+  r.user_id = ?
+ORDER BY
+  rc.category_id;
+
+-- name: ListAllReceiptCategoryLinks :many
+SELECT
+  receipt_id,
+  category_id
+FROM
+  receipt_categories
+ORDER BY
+  category_id;
+
+-- name: DeleteReceiptCategoryLinks :exec
+DELETE FROM receipt_categories
+WHERE
+  receipt_id = ?;
+
+-- name: InsertReceiptCategoryLink :exec
+INSERT IGNORE INTO
+  receipt_categories (receipt_id, category_id)
+VALUES
+  (?, ?);
+
+-- name: SetReceiptCategoriesManual :exec
 UPDATE receipts
 SET
-  category_id = ?,
+  categories_manual = ?,
   updated_at = ?
 WHERE
   id = ?;
+
+-- name: DeleteAutoCategoryLinksBySellerInn :exec
+-- Ретроактивное обновление по продавцу (см. receiptcategory.Service.
+-- UpdateMerchant) — только чеки, где категории не выбраны вручную.
+DELETE FROM receipt_categories
+WHERE
+  receipt_id IN (
+    SELECT
+      id
+    FROM
+      receipts
+    WHERE
+      seller_inn = ?
+      AND categories_manual = FALSE
+  );
+
+-- name: InsertAutoCategoryLinkBySellerInn :execrows
+INSERT IGNORE INTO
+  receipt_categories (receipt_id, category_id)
+SELECT
+  id,
+  ?
+FROM
+  receipts
+WHERE
+  seller_inn = ?
+  AND categories_manual = FALSE;

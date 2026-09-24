@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
-	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 )
 
@@ -164,9 +163,13 @@ func (s *service) UpdateMerchant(ctx context.Context, sellerInn string, category
 
 	// Связь продавец -> категория поменялась — переносим новую категорию и
 	// на все уже сохранённые чеки этого продавца, а не только на будущие.
-	return s.repo.UpdateReceiptsCategoryBySellerInn(ctx, repo.UpdateReceiptsCategoryBySellerInnParams{
-		CategoryID: sql.NullInt32{Int32: categoryID, Valid: true},
-		UpdatedAt:  time.Now().UTC(),
-		SellerInn:  sql.NullString{String: sellerInn, Valid: true},
+	// Чеки с категориями, выбранными вручную (categories_manual), не трогаем.
+	inn := sql.NullString{String: sellerInn, Valid: true}
+	if err := s.repo.DeleteAutoCategoryLinksBySellerInn(ctx, inn); err != nil {
+		return 0, err
+	}
+	return s.repo.InsertAutoCategoryLinkBySellerInn(ctx, repo.InsertAutoCategoryLinkBySellerInnParams{
+		CategoryID: categoryID,
+		SellerInn:  inn,
 	})
 }

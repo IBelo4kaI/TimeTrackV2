@@ -43,6 +43,38 @@ func (q *Queries) CreateKeyword(ctx context.Context, arg CreateKeywordParams) er
 	return err
 }
 
+const deleteAutoCategoryLinksBySellerInn = `-- name: DeleteAutoCategoryLinksBySellerInn :exec
+DELETE FROM receipt_categories
+WHERE
+  receipt_id IN (
+    SELECT
+      id
+    FROM
+      receipts
+    WHERE
+      seller_inn = ?
+      AND categories_manual = FALSE
+  )
+`
+
+// Ретроактивное обновление по продавцу (см. receiptcategory.Service.
+// UpdateMerchant) — только чеки, где категории не выбраны вручную.
+func (q *Queries) DeleteAutoCategoryLinksBySellerInn(ctx context.Context, sellerInn sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteAutoCategoryLinksBySellerInn, sellerInn)
+	return err
+}
+
+const deleteReceiptCategoryLinks = `-- name: DeleteReceiptCategoryLinks :exec
+DELETE FROM receipt_categories
+WHERE
+  receipt_id = ?
+`
+
+func (q *Queries) DeleteReceiptCategoryLinks(ctx context.Context, receiptID string) error {
+	_, err := q.db.ExecContext(ctx, deleteReceiptCategoryLinks, receiptID)
+	return err
+}
+
 const getMerchantCategory = `-- name: GetMerchantCategory :one
 SELECT
   inn, category_id, source
@@ -57,6 +89,82 @@ func (q *Queries) GetMerchantCategory(ctx context.Context, inn string) (Merchant
 	var i MerchantCategory
 	err := row.Scan(&i.Inn, &i.CategoryID, &i.Source)
 	return i, err
+}
+
+const insertAutoCategoryLinkBySellerInn = `-- name: InsertAutoCategoryLinkBySellerInn :execrows
+INSERT IGNORE INTO
+  receipt_categories (receipt_id, category_id)
+SELECT
+  id,
+  ?
+FROM
+  receipts
+WHERE
+  seller_inn = ?
+  AND categories_manual = FALSE
+`
+
+type InsertAutoCategoryLinkBySellerInnParams struct {
+	CategoryID int32          `json:"categoryId"`
+	SellerInn  sql.NullString `json:"sellerInn"`
+}
+
+func (q *Queries) InsertAutoCategoryLinkBySellerInn(ctx context.Context, arg InsertAutoCategoryLinkBySellerInnParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, insertAutoCategoryLinkBySellerInn, arg.CategoryID, arg.SellerInn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const insertReceiptCategoryLink = `-- name: InsertReceiptCategoryLink :exec
+INSERT IGNORE INTO
+  receipt_categories (receipt_id, category_id)
+VALUES
+  (?, ?)
+`
+
+type InsertReceiptCategoryLinkParams struct {
+	ReceiptID  string `json:"receiptId"`
+	CategoryID int32  `json:"categoryId"`
+}
+
+func (q *Queries) InsertReceiptCategoryLink(ctx context.Context, arg InsertReceiptCategoryLinkParams) error {
+	_, err := q.db.ExecContext(ctx, insertReceiptCategoryLink, arg.ReceiptID, arg.CategoryID)
+	return err
+}
+
+const listAllReceiptCategoryLinks = `-- name: ListAllReceiptCategoryLinks :many
+SELECT
+  receipt_id,
+  category_id
+FROM
+  receipt_categories
+ORDER BY
+  category_id
+`
+
+func (q *Queries) ListAllReceiptCategoryLinks(ctx context.Context) ([]ReceiptCategory, error) {
+	rows, err := q.db.QueryContext(ctx, listAllReceiptCategoryLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReceiptCategory
+	for rows.Next() {
+		var i ReceiptCategory
+		if err := rows.Scan(&i.ReceiptID, &i.CategoryID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCategories = `-- name: ListCategories :many
@@ -193,6 +301,76 @@ func (q *Queries) ListMerchantCategories(ctx context.Context) ([]ListMerchantCat
 	return items, nil
 }
 
+const listReceiptCategoryIDs = `-- name: ListReceiptCategoryIDs :many
+SELECT
+  category_id
+FROM
+  receipt_categories
+WHERE
+  receipt_id = ?
+ORDER BY
+  category_id
+`
+
+func (q *Queries) ListReceiptCategoryIDs(ctx context.Context, receiptID string) ([]int32, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptCategoryIDs, receiptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int32
+	for rows.Next() {
+		var category_id int32
+		if err := rows.Scan(&category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReceiptCategoryLinksByUser = `-- name: ListReceiptCategoryLinksByUser :many
+SELECT
+  rc.receipt_id,
+  rc.category_id
+FROM
+  receipt_categories rc
+  JOIN receipts r ON r.id = rc.receipt_id
+WHERE
+  r.user_id = ?
+ORDER BY
+  rc.category_id
+`
+
+func (q *Queries) ListReceiptCategoryLinksByUser(ctx context.Context, userID string) ([]ReceiptCategory, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptCategoryLinksByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReceiptCategory
+	for rows.Next() {
+		var i ReceiptCategory
+		if err := rows.Scan(&i.ReceiptID, &i.CategoryID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renameCategory = `-- name: RenameCategory :exec
 UPDATE categories
 SET
@@ -211,23 +389,23 @@ func (q *Queries) RenameCategory(ctx context.Context, arg RenameCategoryParams) 
 	return err
 }
 
-const updateReceiptCategoryID = `-- name: UpdateReceiptCategoryID :exec
+const setReceiptCategoriesManual = `-- name: SetReceiptCategoriesManual :exec
 UPDATE receipts
 SET
-  category_id = ?,
+  categories_manual = ?,
   updated_at = ?
 WHERE
   id = ?
 `
 
-type UpdateReceiptCategoryIDParams struct {
-	CategoryID sql.NullInt32 `json:"categoryId"`
-	UpdatedAt  time.Time     `json:"updatedAt"`
-	ID         string        `json:"id"`
+type SetReceiptCategoriesManualParams struct {
+	CategoriesManual bool      `json:"categoriesManual"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               string    `json:"id"`
 }
 
-func (q *Queries) UpdateReceiptCategoryID(ctx context.Context, arg UpdateReceiptCategoryIDParams) error {
-	_, err := q.db.ExecContext(ctx, updateReceiptCategoryID, arg.CategoryID, arg.UpdatedAt, arg.ID)
+func (q *Queries) SetReceiptCategoriesManual(ctx context.Context, arg SetReceiptCategoriesManualParams) error {
+	_, err := q.db.ExecContext(ctx, setReceiptCategoriesManual, arg.CategoriesManual, arg.UpdatedAt, arg.ID)
 	return err
 }
 

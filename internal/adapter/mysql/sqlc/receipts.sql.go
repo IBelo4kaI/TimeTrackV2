@@ -26,7 +26,7 @@ INSERT INTO
     seller_name,
     operation_type,
     has_paper,
-    category_id,
+    categories_manual,
     object_id,
     retail_place_address,
     request_number,
@@ -69,7 +69,7 @@ type CreateReceiptParams struct {
 	SellerName              sql.NullString `json:"sellerName"`
 	OperationType           int32          `json:"operationType"`
 	HasPaper                bool           `json:"hasPaper"`
-	CategoryID              sql.NullInt32  `json:"categoryId"`
+	CategoriesManual        bool           `json:"categoriesManual"`
 	ObjectID                sql.NullString `json:"objectId"`
 	RetailPlaceAddress      sql.NullString `json:"retailPlaceAddress"`
 	RequestNumber           sql.NullString `json:"requestNumber"`
@@ -109,7 +109,7 @@ func (q *Queries) CreateReceipt(ctx context.Context, arg CreateReceiptParams) er
 		arg.SellerName,
 		arg.OperationType,
 		arg.HasPaper,
-		arg.CategoryID,
+		arg.CategoriesManual,
 		arg.ObjectID,
 		arg.RetailPlaceAddress,
 		arg.RequestNumber,
@@ -178,7 +178,7 @@ func (q *Queries) DeleteReceipt(ctx context.Context, id string) error {
 
 const getReceiptByFiscalKey = `-- name: GetReceiptByFiscalKey :one
 SELECT
-  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, category_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id
+  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id, categories_manual
 FROM
   receipts
 WHERE
@@ -224,19 +224,19 @@ func (q *Queries) GetReceiptByFiscalKey(ctx context.Context, arg GetReceiptByFis
 		&i.PrepaidSum,
 		&i.Nds22,
 		&i.HasPaper,
-		&i.CategoryID,
 		&i.FiscalDriveNumber,
 		&i.FiscalDocumentNumber,
 		&i.FiscalSign,
 		&i.SellerInn,
 		&i.ObjectID,
+		&i.CategoriesManual,
 	)
 	return i, err
 }
 
 const getReceiptByID = `-- name: GetReceiptByID :one
 SELECT
-  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, category_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id
+  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id, categories_manual
 FROM
   receipts
 WHERE
@@ -274,19 +274,19 @@ func (q *Queries) GetReceiptByID(ctx context.Context, id string) (Receipt, error
 		&i.PrepaidSum,
 		&i.Nds22,
 		&i.HasPaper,
-		&i.CategoryID,
 		&i.FiscalDriveNumber,
 		&i.FiscalDocumentNumber,
 		&i.FiscalSign,
 		&i.SellerInn,
 		&i.ObjectID,
+		&i.CategoriesManual,
 	)
 	return i, err
 }
 
 const listAllReceipts = `-- name: ListAllReceipts :many
 SELECT
-  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, category_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id
+  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id, categories_manual
 FROM
   receipts
 ORDER BY
@@ -330,12 +330,12 @@ func (q *Queries) ListAllReceipts(ctx context.Context) ([]Receipt, error) {
 			&i.PrepaidSum,
 			&i.Nds22,
 			&i.HasPaper,
-			&i.CategoryID,
 			&i.FiscalDriveNumber,
 			&i.FiscalDocumentNumber,
 			&i.FiscalSign,
 			&i.SellerInn,
 			&i.ObjectID,
+			&i.CategoriesManual,
 		); err != nil {
 			return nil, err
 		}
@@ -396,7 +396,7 @@ func (q *Queries) ListReceiptItemsByReceipt(ctx context.Context, receiptID strin
 
 const listReceiptsByUser = `-- name: ListReceiptsByUser :many
 SELECT
-  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, category_id, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id
+  id, user_id, ticket_date, total_sum, seller_name, operation_type, retail_place_address, request_number, cash_total_sum, ecash_total_sum, taxation_type, nds20, nds10, nds0, nds_no, raw_qr, created_at, updated_at, shift_number, kkt_reg_id, fiscal_document_format_ver, machine_number, retail_place, operator, prepaid_sum, nds22, has_paper, fiscal_drive_number, fiscal_document_number, fiscal_sign, seller_inn, object_id, categories_manual
 FROM
   receipts
 WHERE
@@ -442,12 +442,12 @@ func (q *Queries) ListReceiptsByUser(ctx context.Context, userID string) ([]Rece
 			&i.PrepaidSum,
 			&i.Nds22,
 			&i.HasPaper,
-			&i.CategoryID,
 			&i.FiscalDriveNumber,
 			&i.FiscalDocumentNumber,
 			&i.FiscalSign,
 			&i.SellerInn,
 			&i.ObjectID,
+			&i.CategoriesManual,
 		); err != nil {
 			return nil, err
 		}
@@ -500,30 +500,4 @@ type UpdateReceiptOwnerParams struct {
 func (q *Queries) UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error {
 	_, err := q.db.ExecContext(ctx, updateReceiptOwner, arg.UserID, arg.UpdatedAt, arg.ID)
 	return err
-}
-
-const updateReceiptsCategoryBySellerInn = `-- name: UpdateReceiptsCategoryBySellerInn :execrows
-UPDATE receipts
-SET
-  category_id = ?,
-  updated_at = ?
-WHERE
-  seller_inn = ?
-`
-
-type UpdateReceiptsCategoryBySellerInnParams struct {
-	CategoryID sql.NullInt32  `json:"categoryId"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
-	SellerInn  sql.NullString `json:"sellerInn"`
-}
-
-// Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
-// продавца — вызывается при правке merchant_category (см.
-// receiptcategory.Service.UpdateMerchant), а не только у одного чека.
-func (q *Queries) UpdateReceiptsCategoryBySellerInn(ctx context.Context, arg UpdateReceiptsCategoryBySellerInnParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, updateReceiptsCategoryBySellerInn, arg.CategoryID, arg.UpdatedAt, arg.SellerInn)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }

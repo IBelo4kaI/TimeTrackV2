@@ -442,12 +442,17 @@ type Receipt struct {
 	PrepaidSum              sql.NullInt64  `json:"prepaidSum"`
 	Nds22                   int64          `json:"nds22"`
 	HasPaper                bool           `json:"hasPaper"`
-	CategoryID              sql.NullInt32  `json:"categoryId"`
 	FiscalDriveNumber       sql.NullString `json:"fiscalDriveNumber"`
 	FiscalDocumentNumber    sql.NullString `json:"fiscalDocumentNumber"`
 	FiscalSign              sql.NullString `json:"fiscalSign"`
 	SellerInn               sql.NullString `json:"sellerInn"`
 	ObjectID                sql.NullString `json:"objectId"`
+	CategoriesManual        bool           `json:"categoriesManual"`
+}
+
+type ReceiptCategory struct {
+	ReceiptID  string `json:"receiptId"`
+	CategoryID int32  `json:"categoryId"`
 }
 
 type ReceiptItem struct {

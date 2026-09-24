@@ -73,6 +73,12 @@ type CreateReceiptRequest struct {
 	// необязательный, существование там не проверяем (см. 033_receipts_object_id.sql).
 	ObjectID *string `json:"objectId"`
 
+	// CategoryIDs — категории, выбранные вручную. nil — не указаны, категория
+	// определяется автоматически (одна); непустой/пустой массив — ручной
+	// выбор (в том числе "без категории"), автоклассификация такой чек больше
+	// не трогает (см. receipts.categories_manual).
+	CategoryIDs *[]int32 `json:"categoryIds"`
+
 	Items []ReceiptItemRequest `json:"items"`
 }
 
@@ -80,7 +86,14 @@ type CreateReceiptRequest struct {
 // GET /receipts/:id — фронту сразу нужны позиции для отображения.
 type ReceiptWithItems struct {
 	repo.Receipt
-	Items []repo.ReceiptItem `json:"items"`
+	CategoryIDs []int32            `json:"categoryIds"`
+	Items       []repo.ReceiptItem `json:"items"`
+}
+
+// ReceiptListItem — строка списка чеков: сам чек + id его категорий.
+type ReceiptListItem struct {
+	repo.Receipt
+	CategoryIDs []int32 `json:"categoryIds"`
 }
 
 // TransferReceiptRequest — тело PUT /receipts/:id/transfer.
@@ -88,10 +101,10 @@ type TransferReceiptRequest struct {
 	UserID string `json:"userId"`
 }
 
-// SetCategoryRequest — тело PUT /receipts/:id/category. nil — снять
-// категорию (вернуть в "Без категории").
+// SetCategoryRequest — тело PUT /receipts/:id/category. Пустой массив —
+// "Без категории".
 type SetCategoryRequest struct {
-	CategoryID *int32 `json:"categoryId"`
+	CategoryIDs []int32 `json:"categoryIds"`
 }
 
 // SetObjectRequest — тело PUT /receipts/:id/object. nil — снять объект.

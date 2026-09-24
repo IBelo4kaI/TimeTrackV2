@@ -16,7 +16,7 @@ INSERT INTO
     seller_name,
     operation_type,
     has_paper,
-    category_id,
+    categories_manual,
     object_id,
     retail_place_address,
     request_number,
@@ -119,14 +119,3 @@ SET
   updated_at = ?
 WHERE
   id = ?;
-
--- name: UpdateReceiptsCategoryBySellerInn :execrows
--- Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
--- продавца — вызывается при правке merchant_category (см.
--- receiptcategory.Service.UpdateMerchant), а не только у одного чека.
-UPDATE receipts
-SET
-  category_id = ?,
-  updated_at = ?
-WHERE
-  seller_inn = ?;
