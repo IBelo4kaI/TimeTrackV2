@@ -17,6 +17,7 @@ INSERT INTO
     operation_type,
     has_paper,
     category_id,
+    object_id,
     retail_place_address,
     request_number,
     cash_total_sum,
@@ -43,7 +44,7 @@ VALUES
   -- UTC_TIMESTAMP() — та отдаёт только целые секунды (DATETIME(6) без долей
   -- секунды в значении бесполезен), а sqlc к тому же не знает сигнатуру
   -- UTC_TIMESTAMP(6) с аргументом (см. 023_receipts_timestamp_precision.sql).
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: CreateReceiptItem :exec
 INSERT INTO
@@ -100,6 +101,14 @@ ORDER BY
 
 -- name: DeleteReceipt :exec
 DELETE FROM receipts
+WHERE
+  id = ?;
+
+-- name: UpdateReceiptObjectID :exec
+UPDATE receipts
+SET
+  object_id = ?,
+  updated_at = ?
 WHERE
   id = ?;
 

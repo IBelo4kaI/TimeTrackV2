@@ -35,6 +35,8 @@ type Service interface {
 	// категорию). При непустом categoryID запоминает выбор как
 	// user_override в словаре продавцов (см. receiptcategory.Service).
 	SetCategory(ctx context.Context, id string, categoryID *int32) (ReceiptWithItems, error)
+	// SetObject — привязка чека к объекту из Reference Service (nil снимает).
+	SetObject(ctx context.Context, id string, objectID *string) (ReceiptWithItems, error)
 	// BackfillCategories — перепрогоняет через классификацию ВСЕ уже
 	// сохранённые чеки (не только "Без категории" — и те, что уже
 	// классифицированы, тоже: словари категорий/ключевых слов меняются со
@@ -116,6 +118,7 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		OperationType:           req.OperationType,
 		HasPaper:                req.HasPaper,
 		CategoryID:              nullInt32(classified.CategoryID),
+		ObjectID:                nullString(req.ObjectID),
 		RetailPlaceAddress:      nullString(req.RetailPlaceAddress),
 		RequestNumber:           nullString(req.RequestNumber),
 		CashTotalSum:            nullInt64(req.CashTotalSum),
@@ -260,6 +263,25 @@ func (s *receiptService) SetCategory(ctx context.Context, id string, categoryID 
 		if _, err := s.categoryService.UpdateMerchant(ctx, r.SellerInn.String, *categoryID); err != nil {
 			fmt.Printf("update merchant category override: %v\n", err)
 		}
+	}
+
+	return s.GetByID(ctx, id)
+}
+
+func (s *receiptService) SetObject(ctx context.Context, id string, objectID *string) (ReceiptWithItems, error) {
+	if _, err := s.repo.GetReceiptByID(ctx, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ReceiptWithItems{}, ErrNotFound
+		}
+		return ReceiptWithItems{}, err
+	}
+
+	if err := s.repo.UpdateReceiptObjectID(ctx, repo.UpdateReceiptObjectIDParams{
+		ObjectID:  nullString(objectID),
+		UpdatedAt: time.Now().UTC(),
+		ID:        id,
+	}); err != nil {
+		return ReceiptWithItems{}, fmt.Errorf("update receipt object: %w", err)
 	}
 
 	return s.GetByID(ctx, id)

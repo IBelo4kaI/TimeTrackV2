@@ -68,4 +68,9 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 	router.Put("/:id/category",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.SetReceiptCategory)
+
+	// привязка чека к объекту (Reference Service); права как у category
+	router.Put("/:id/object",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		handler.SetReceiptObject)
 }

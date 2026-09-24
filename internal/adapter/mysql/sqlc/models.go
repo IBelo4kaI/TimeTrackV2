@@ -447,6 +447,7 @@ type Receipt struct {
 	FiscalDocumentNumber    sql.NullString `json:"fiscalDocumentNumber"`
 	FiscalSign              sql.NullString `json:"fiscalSign"`
 	SellerInn               sql.NullString `json:"sellerInn"`
+	ObjectID                sql.NullString `json:"objectId"`
 }
 
 type ReceiptItem struct {

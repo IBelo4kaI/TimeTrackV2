@@ -270,6 +270,44 @@ func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
 	return response.Success(c, r)
 }
 
+// SetReceiptObject godoc
+// PUT /v1/receipts/:id/object — привязка чека к объекту из Reference Service.
+// Права как у SetReceiptCategory: свой чек — receipts:edit, чужой — receipts.all:edit.
+func (h Handler) SetReceiptObject(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c)
+	}
+
+	var body SetObjectRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+
+	current, err := h.service.GetByID(c.RequestCtx(), id)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	if !middleware.RequireOwnerOrAll(
+		c,
+		h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
+		callerID,
+		current.UserID,
+	) {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому чеку"))
+	}
+
+	r, err := h.service.SetObject(c.RequestCtx(), id, body.ObjectID)
+	if err != nil {
+		return mapError(c, err)
+	}
+
+	return response.Success(c, r)
+}
+
 // BackfillReceiptCategories godoc
 // POST /v1/receipts/backfill-categories — перепрогоняет через классификацию
 // ВСЕ уже сохранённые чеки, не только без категории (см. BackfillCategories

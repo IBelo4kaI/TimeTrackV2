@@ -245,6 +245,7 @@ type Querier interface {
 	UpdateNewsPost(ctx context.Context, arg UpdateNewsPostParams) error
 	UpdateNotificationTemplate(ctx context.Context, arg UpdateNotificationTemplateParams) error
 	UpdateReceiptCategoryID(ctx context.Context, arg UpdateReceiptCategoryIDParams) error
+	UpdateReceiptObjectID(ctx context.Context, arg UpdateReceiptObjectIDParams) error
 	UpdateReceiptOwner(ctx context.Context, arg UpdateReceiptOwnerParams) error
 	// Ретроактивно переносит категорию на ВСЕ уже сохранённые чеки этого
 	// продавца — вызывается при правке merchant_category (см.

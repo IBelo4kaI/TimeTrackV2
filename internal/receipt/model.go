@@ -69,6 +69,10 @@ type CreateReceiptRequest struct {
 
 	RawQR *string `json:"rawQr"` // исходная qr-строка, для отладки
 
+	// ObjectID — объект из Reference Service, на который потрачены деньги;
+	// необязательный, существование там не проверяем (см. 033_receipts_object_id.sql).
+	ObjectID *string `json:"objectId"`
+
 	Items []ReceiptItemRequest `json:"items"`
 }
 
@@ -88,4 +92,9 @@ type TransferReceiptRequest struct {
 // категорию (вернуть в "Без категории").
 type SetCategoryRequest struct {
 	CategoryID *int32 `json:"categoryId"`
+}
+
+// SetObjectRequest — тело PUT /receipts/:id/object. nil — снять объект.
+type SetObjectRequest struct {
+	ObjectID *string `json:"objectId"`
 }
