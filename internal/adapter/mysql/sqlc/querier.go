@@ -27,6 +27,11 @@ type Querier interface {
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountVacationsByType(ctx context.Context, vacationTypeID sql.NullString) (int64, error)
+	// ============================================
+	// business_cards / business_card_assignments queries
+	// ============================================
+	CreateBusinessCard(ctx context.Context, arg CreateBusinessCardParams) error
+	CreateBusinessCardAssignment(ctx context.Context, arg CreateBusinessCardAssignmentParams) error
 	CreateCalendarEvents(ctx context.Context, arg CreateCalendarEventsParams) (sql.Result, error)
 	CreateCategory(ctx context.Context, name string) (int64, error)
 	// ============================================
@@ -66,6 +71,7 @@ type Querier interface {
 	// Ретроактивное обновление по продавцу (см. receiptcategory.Service.
 	// UpdateMerchant) — только чеки, где категории не выбраны вручную.
 	DeleteAutoCategoryLinksBySellerInn(ctx context.Context, sellerInn sql.NullString) error
+	DeleteBusinessCard(ctx context.Context, id string) error
 	DeleteCalendarEvents(ctx context.Context, id string) error
 	// Каскадно удаляет chat_participants и chat_messages (ON DELETE CASCADE,
 	// см. миграцию 011_add_chats.sql).
@@ -84,9 +90,12 @@ type Querier interface {
 	DeleteVacation(ctx context.Context, id string) error
 	DeleteVacationType(ctx context.Context, id string) error
 	DeleteWorkStandard(ctx context.Context, id string) error
+	GetActiveBusinessCardAssignment(ctx context.Context, cardID string) (BusinessCardAssignment, error)
 	GetActiveVacationTypes(ctx context.Context) ([]VacationType, error)
 	GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error)
 	GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUsersVacationsByYearParams) ([]GetAllUsersVacationsByYearRow, error)
+	GetBusinessCardByID(ctx context.Context, id string) (BusinessCard, error)
+	GetBusinessCardForUpdate(ctx context.Context, id string) (string, error)
 	GetCalendarEventsByDate(ctx context.Context, eventDate time.Time) (GetCalendarEventsByDateRow, error)
 	GetCalendarEventsById(ctx context.Context, id string) (GetCalendarEventsByIdRow, error)
 	// ============================================
@@ -167,8 +176,11 @@ type Querier interface {
 	InsertAutoCategoryLinkBySellerInn(ctx context.Context, arg InsertAutoCategoryLinkBySellerInnParams) (int64, error)
 	InsertReceiptCategoryLink(ctx context.Context, arg InsertReceiptCategoryLinkParams) error
 	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
+	ListAllBusinessCards(ctx context.Context) ([]ListAllBusinessCardsRow, error)
 	ListAllReceiptCategoryLinks(ctx context.Context) ([]ReceiptCategory, error)
 	ListAllReceipts(ctx context.Context) ([]Receipt, error)
+	ListBusinessCardAssignments(ctx context.Context, cardID string) ([]BusinessCardAssignment, error)
+	ListBusinessCardsByUser(ctx context.Context, userID string) ([]ListBusinessCardsByUserRow, error)
 	// ============================================
 	// categories / merchant_category / keyword_category
 	// (авто-категоризация чеков, см. internal/receipt_category)
@@ -205,8 +217,10 @@ type Querier interface {
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
 	ListReceiptCategoryIDs(ctx context.Context, receiptID string) ([]int32, error)
+	ListReceiptCategoryLinksByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]ReceiptCategory, error)
 	ListReceiptCategoryLinksByUser(ctx context.Context, userID string) ([]ReceiptCategory, error)
 	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
+	ListReceiptsByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]Receipt, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
@@ -232,6 +246,7 @@ type Querier interface {
 	// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
 	MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error
 	MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error
+	ReleaseBusinessCardAssignment(ctx context.Context, arg ReleaseBusinessCardAssignmentParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
@@ -242,6 +257,7 @@ type Querier interface {
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error
 	UnlinkUserVK(ctx context.Context, userID string) error
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
+	UpdateBusinessCard(ctx context.Context, arg UpdateBusinessCardParams) error
 	UpdateCalendarEvents(ctx context.Context, arg UpdateCalendarEventsParams) error
 	UpdateChatName(ctx context.Context, arg UpdateChatNameParams) error
 	UpdateChatParticipantRole(ctx context.Context, arg UpdateChatParticipantRoleParams) error

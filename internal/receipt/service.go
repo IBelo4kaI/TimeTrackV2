@@ -22,6 +22,7 @@ var (
 	ErrNoItems            = errors.New("в чеке нет ни одной позиции")
 	ErrNewOwnerRequired   = errors.New("не указан сотрудник, которому передаётся чек")
 	ErrSameOwner          = errors.New("чек уже принадлежит этому сотруднику")
+	ErrCardNotAssigned    = errors.New("эта карта не выдана сотруднику")
 )
 
 type Service interface {
@@ -29,6 +30,9 @@ type Service interface {
 	GetByID(ctx context.Context, id string) (ReceiptWithItems, error)
 	ListByUser(ctx context.Context, userID string) ([]ReceiptListItem, error)
 	ListAll(ctx context.Context) ([]ReceiptListItem, error)
+	// ListByBusinessCard — чеки, оплаченные картой; вторым значением текущий
+	// владелец карты ("" — не выдана), для проверки доступа в хендлере.
+	ListByBusinessCard(ctx context.Context, cardID string) ([]ReceiptListItem, string, error)
 	Delete(ctx context.Context, id string) error
 	Transfer(ctx context.Context, id, newUserID string) (ReceiptWithItems, error)
 	// SetCategories — ручной выбор категорий чека (пустой массив — "без
@@ -82,6 +86,19 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		sellerINN = *req.SellerINN
 	}
 
+	if req.BusinessCardID != nil && *req.BusinessCardID != "" {
+		a, err := s.repo.GetActiveBusinessCardAssignment(ctx, *req.BusinessCardID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ReceiptWithItems{}, ErrCardNotAssigned
+			}
+			return ReceiptWithItems{}, err
+		}
+		if a.UserID != req.UserID {
+			return ReceiptWithItems{}, ErrCardNotAssigned
+		}
+	}
+
 	// Классификация — локальными словарями (ИНН продавца, потом ключевые
 	// слова позиций), см. internal/receipt_category. До открытия транзакции
 	// ниже: сама может писать в merchant_category (самообучение), это
@@ -131,6 +148,7 @@ func (s *receiptService) Create(ctx context.Context, req CreateReceiptRequest) (
 		HasPaper:                req.HasPaper,
 		CategoriesManual:        manual,
 		ObjectID:                nullString(req.ObjectID),
+		BusinessCardID:          nullString(req.BusinessCardID),
 		RetailPlaceAddress:      nullString(req.RetailPlaceAddress),
 		RequestNumber:           nullString(req.RequestNumber),
 		CashTotalSum:            nullInt64(req.CashTotalSum),
@@ -223,6 +241,32 @@ func (s *receiptService) ListByUser(ctx context.Context, userID string) ([]Recei
 		byReceipt[l.ReceiptID] = append(byReceipt[l.ReceiptID], l.CategoryID)
 	}
 	return withCategories(receipts, byReceipt), nil
+}
+
+func (s *receiptService) ListByBusinessCard(ctx context.Context, cardID string) ([]ReceiptListItem, string, error) {
+	owner := ""
+	a, err := s.repo.GetActiveBusinessCardAssignment(ctx, cardID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, "", err
+	}
+	if err == nil {
+		owner = a.UserID
+	}
+
+	receipts, err := s.repo.ListReceiptsByBusinessCard(ctx, sql.NullString{String: cardID, Valid: true})
+	if err != nil {
+		return nil, "", err
+	}
+	links, err := s.repo.ListReceiptCategoryLinksByBusinessCard(ctx, sql.NullString{String: cardID, Valid: true})
+	if err != nil {
+		return nil, "", err
+	}
+
+	byReceipt := make(map[string][]int32, len(links))
+	for _, l := range links {
+		byReceipt[l.ReceiptID] = append(byReceipt[l.ReceiptID], l.CategoryID)
+	}
+	return withCategories(receipts, byReceipt), owner, nil
 }
 
 func (s *receiptService) ListAll(ctx context.Context) ([]ReceiptListItem, error) {

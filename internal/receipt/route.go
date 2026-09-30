@@ -26,6 +26,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read", RequireAll: true}),
 		handler.GetAllReceipts)
 
+	// чеки по корпоративной карте; доступ довалидируется в хендлере
+	router.Get("/card/:cardId",
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
+		handler.GetReceiptsByBusinessCard)
+
 	// список чеков конкретного сотрудника
 	router.Get("/user/:userId",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),

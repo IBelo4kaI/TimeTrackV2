@@ -56,6 +56,33 @@ func (h Handler) GetReceiptsByUser(c fiber.Ctx) error {
 	return response.Success(c, receipts)
 }
 
+// GetReceiptsByBusinessCard godoc
+// GET /v1/receipts/card/:cardId — чеки, оплаченные корпоративной картой.
+// Текущему владельцу карты достаточно receipts:read, остальным нужен .all.
+func (h Handler) GetReceiptsByBusinessCard(c fiber.Ctx) error {
+	cardID := c.Params("cardId")
+	if cardID == "" {
+		return response.BadRequest(c)
+	}
+
+	receipts, owner, err := h.service.ListByBusinessCard(c.RequestCtx(), cardID)
+	if err != nil {
+		return response.Error(c, http.StatusInternalServerError, err)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	if owner == "" {
+		owner = "unassigned"
+	}
+	if !middleware.RequireOwnerOrAll(c, h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "read"},
+		callerID, owner) {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этой карте"))
+	}
+
+	return response.Success(c, receipts)
+}
+
 // GetAllReceipts godoc
 // GET /v1/receipts/all — чеки ВСЕХ сотрудников, для бухгалтерии.
 func (h Handler) GetAllReceipts(c fiber.Ctx) error {
@@ -343,7 +370,8 @@ func mapError(c fiber.Ctx, err error) error {
 		errors.Is(err, ErrTotalSumInvalid),
 		errors.Is(err, ErrNoItems),
 		errors.Is(err, ErrNewOwnerRequired),
-		errors.Is(err, ErrSameOwner):
+		errors.Is(err, ErrSameOwner),
+		errors.Is(err, ErrCardNotAssigned):
 		return response.Error(c, http.StatusBadRequest, err)
 	default:
 		return response.Error(c, http.StatusInternalServerError, err)

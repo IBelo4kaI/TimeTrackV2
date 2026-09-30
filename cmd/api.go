@@ -8,6 +8,7 @@ import (
 	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/authservice"
+	businesscard "timetrack/internal/business_card"
 	"timetrack/internal/calendar"
 	calendarevent "timetrack/internal/calendar_event"
 	"timetrack/internal/chat"
@@ -215,6 +216,10 @@ func (app *application) mount() *fiber.App {
 	// передаём ещё и app.db, как userTimeEntryService выше.
 	receiptService := receipt.NewService(repo.New(app.db), app.db, receiptCategoryService)
 	receipt.SetupRoutes(v1, receiptService, fileService, app.grpcClient, app.config.prefix)
+
+	// Корпоративные карты — номер шифруется тем же ключом, что и пароль SMTP
+	businessCardService := businesscard.NewService(repo.New(app.db), app.db, app.config.smtpEncryptionKey)
+	businesscard.SetupRoutes(v1, businessCardService, app.grpcClient, app.config.prefix)
 
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)

@@ -269,6 +269,29 @@ func (ns NullVacationsStatus) Value() (driver.Value, error) {
 	return string(ns.VacationsStatus), nil
 }
 
+type BusinessCard struct {
+	ID            string         `json:"id"`
+	CardNumberEnc string         `json:"cardNumberEnc"`
+	Last4         string         `json:"last4"`
+	Label         sql.NullString `json:"label"`
+	Bank          sql.NullString `json:"bank"`
+	HolderName    sql.NullString `json:"holderName"`
+	Expiry        sql.NullString `json:"expiry"`
+	CardLimit     sql.NullInt64  `json:"cardLimit"`
+	Status        string         `json:"status"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+}
+
+type BusinessCardAssignment struct {
+	ID         int64        `json:"id"`
+	CardID     string       `json:"cardId"`
+	UserID     string       `json:"userId"`
+	AssignedBy string       `json:"assignedBy"`
+	AssignedAt time.Time    `json:"assignedAt"`
+	ReleasedAt sql.NullTime `json:"releasedAt"`
+}
+
 type CalendarEvent struct {
 	ID          string         `json:"id"`
 	EventDate   time.Time      `json:"eventDate"`
@@ -448,6 +471,7 @@ type Receipt struct {
 	SellerInn               sql.NullString `json:"sellerInn"`
 	ObjectID                sql.NullString `json:"objectId"`
 	CategoriesManual        bool           `json:"categoriesManual"`
+	BusinessCardID          sql.NullString `json:"businessCardId"`
 }
 
 type ReceiptCategory struct {

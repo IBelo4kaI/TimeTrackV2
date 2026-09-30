@@ -335,6 +335,42 @@ func (q *Queries) ListReceiptCategoryIDs(ctx context.Context, receiptID string) 
 	return items, nil
 }
 
+const listReceiptCategoryLinksByBusinessCard = `-- name: ListReceiptCategoryLinksByBusinessCard :many
+SELECT
+  rc.receipt_id,
+  rc.category_id
+FROM
+  receipt_categories rc
+  JOIN receipts r ON r.id = rc.receipt_id
+WHERE
+  r.business_card_id = ?
+ORDER BY
+  rc.category_id
+`
+
+func (q *Queries) ListReceiptCategoryLinksByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]ReceiptCategory, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptCategoryLinksByBusinessCard, businessCardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReceiptCategory
+	for rows.Next() {
+		var i ReceiptCategory
+		if err := rows.Scan(&i.ReceiptID, &i.CategoryID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReceiptCategoryLinksByUser = `-- name: ListReceiptCategoryLinksByUser :many
 SELECT
   rc.receipt_id,

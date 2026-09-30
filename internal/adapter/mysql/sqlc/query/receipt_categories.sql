@@ -163,3 +163,15 @@ FROM
 WHERE
   seller_inn = ?
   AND categories_manual = FALSE;
+
+-- name: ListReceiptCategoryLinksByBusinessCard :many
+SELECT
+  rc.receipt_id,
+  rc.category_id
+FROM
+  receipt_categories rc
+  JOIN receipts r ON r.id = rc.receipt_id
+WHERE
+  r.business_card_id = ?
+ORDER BY
+  rc.category_id;
