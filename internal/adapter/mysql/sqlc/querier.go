@@ -219,9 +219,11 @@ type Querier interface {
 	ListReceiptCategoryIDs(ctx context.Context, receiptID string) ([]int32, error)
 	ListReceiptCategoryLinksByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]ReceiptCategory, error)
 	ListReceiptCategoryLinksByUser(ctx context.Context, userID string) ([]ReceiptCategory, error)
+	ListReceiptIDsByUser(ctx context.Context, userID string) ([]string, error)
 	ListReceiptItemsByReceipt(ctx context.Context, receiptID string) ([]ReceiptItem, error)
 	ListReceiptsByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]Receipt, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
+	ListSickLeaveIDsByUser(ctx context.Context, userID string) ([]string, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
@@ -234,6 +236,7 @@ type Querier interface {
 	// всем сотрудникам time:vacation.all:read (тот открывает куда более
 	// чувствительный полный список + доступ к менеджерским действиям).
 	ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error)
+	ListVacationIDsByUser(ctx context.Context, userID string) ([]string, error)
 	// Только собственные индивидуальные нормы вызывающего — см.
 	// time:work_standards_mine:read, узкое разрешение для страницы календаря
 	// (в отличие от work_standards:read, которое отдаёт нормы всех и есть

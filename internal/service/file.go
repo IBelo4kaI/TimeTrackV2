@@ -197,6 +197,42 @@ func (s *FileService) ListByEntityType(ctx context.Context, entityType string, y
 	return files, nil
 }
 
+// ListByEntityTypeForUser — то же, что ListByEntityType, но только файлы,
+// привязанные к сущностям пользователя (его отпуск/чек/больничный). Кто
+// файл загрузил, значения не имеет; для типов без владельца — пусто.
+func (s *FileService) ListByEntityTypeForUser(ctx context.Context, entityType, userID string, year int) ([]repo.ListFilesByEntityTypeRow, error) {
+	files, err := s.ListByEntityType(ctx, entityType, year)
+	if err != nil {
+		return nil, err
+	}
+
+	var owned []string
+	switch entityType {
+	case "vacation":
+		owned, err = s.repo.ListVacationIDsByUser(ctx, userID)
+	case "receipt":
+		owned, err = s.repo.ListReceiptIDsByUser(ctx, userID)
+	case "sick_leave":
+		owned, err = s.repo.ListSickLeaveIDsByUser(ctx, userID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list owned entities: %w", err)
+	}
+
+	ownedSet := make(map[string]struct{}, len(owned))
+	for _, id := range owned {
+		ownedSet[id] = struct{}{}
+	}
+
+	result := make([]repo.ListFilesByEntityTypeRow, 0, len(files))
+	for _, f := range files {
+		if _, isOwner := ownedSet[f.EntityID]; isOwner {
+			result = append(result, f)
+		}
+	}
+	return result, nil
+}
+
 // ListByCategory возвращает файлы, привязанные к указанной категории. year — см. ListByEntity.
 func (s *FileService) ListByCategory(ctx context.Context, categoryID string, year int) ([]repo.ListFilesByCategoryRow, error) {
 	files, err := s.repo.ListFilesByCategory(ctx, repo.ListFilesByCategoryParams{

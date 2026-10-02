@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -13,10 +15,12 @@ import (
 
 type FileHandler struct {
 	service *service.FileService
+	grpc    *grpc.Client
+	prefix  string
 }
 
-func NewFileHandler(fileService *service.FileService) *FileHandler {
-	return &FileHandler{service: fileService}
+func NewFileHandler(fileService *service.FileService, grpc *grpc.Client, prefix string) *FileHandler {
+	return &FileHandler{service: fileService, grpc: grpc, prefix: prefix}
 }
 
 // UploadFile godoc
@@ -114,8 +118,11 @@ func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 }
 
 // ListFilesByEntityType godoc
-// GET /v1/files/entity/:entityType?year=2026
+// GET /v1/files/entity/:entityType?year=2026&scope=my|all
 // year — необязательный query-параметр; без него возвращаются файлы за все годы.
+// scope=my — только привязанные к сущностям вызывающего (его отпуск/чек/больничный);
+// без scope или scope=all — все, если есть право <entity>.all:read (для
+// отпусков — vacation.all, для остальных типов — files.all), иначе свои.
 func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 	entityType := c.Params("entityType")
 
@@ -128,7 +135,31 @@ func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	files, err := h.service.ListByEntityType(c.RequestCtx(), entityType, year)
+	scope := c.Query("scope")
+	if scope != "" && scope != "my" && scope != "all" {
+		return response.BadRequest(c)
+	}
+
+	allEntity := "files"
+	if entityType == "vacation" {
+		allEntity = "vacation"
+	}
+	canSeeAll := middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: allEntity, Action: "read"})
+
+	if scope == "all" && !canSeeAll {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к документам других сотрудников"))
+	}
+
+	if scope == "all" || (scope == "" && canSeeAll) {
+		files, err := h.service.ListByEntityType(c.RequestCtx(), entityType, year)
+		if err != nil {
+			return response.ServerError(c)
+		}
+		return response.Success(c, files)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	files, err := h.service.ListByEntityTypeForUser(c.RequestCtx(), entityType, callerID, year)
 	if err != nil {
 		return response.ServerError(c)
 	}

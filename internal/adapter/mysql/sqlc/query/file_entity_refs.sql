@@ -82,3 +82,27 @@ WHERE
   AND f.is_deleted = FALSE
 ORDER BY
   r.created_at;
+
+-- name: ListVacationIDsByUser :many
+SELECT
+  id
+FROM
+  vacations
+WHERE
+  user_id = ?;
+
+-- name: ListReceiptIDsByUser :many
+SELECT
+  id
+FROM
+  receipts
+WHERE
+  user_id = ?;
+
+-- name: ListSickLeaveIDsByUser :many
+SELECT
+  id
+FROM
+  sick_leaves
+WHERE
+  user_id = ?;

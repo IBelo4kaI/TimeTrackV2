@@ -150,7 +150,7 @@ func (app *application) mount() *fiber.App {
 	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.grpcClient, app.config.prefix)
 
 	// File routes
-	fileHandler := handler.NewFileHandler(fileService)
+	fileHandler := handler.NewFileHandler(fileService, app.grpcClient, app.config.prefix)
 	fileRouter := v1.Group("/files")
 
 	// permission files:create

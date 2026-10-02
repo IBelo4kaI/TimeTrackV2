@@ -298,3 +298,99 @@ func (q *Queries) ListFilesByEntityType(ctx context.Context, arg ListFilesByEnti
 	}
 	return items, nil
 }
+
+const listReceiptIDsByUser = `-- name: ListReceiptIDsByUser :many
+SELECT
+  id
+FROM
+  receipts
+WHERE
+  user_id = ?
+`
+
+func (q *Queries) ListReceiptIDsByUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listReceiptIDsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSickLeaveIDsByUser = `-- name: ListSickLeaveIDsByUser :many
+SELECT
+  id
+FROM
+  sick_leaves
+WHERE
+  user_id = ?
+`
+
+func (q *Queries) ListSickLeaveIDsByUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSickLeaveIDsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVacationIDsByUser = `-- name: ListVacationIDsByUser :many
+SELECT
+  id
+FROM
+  vacations
+WHERE
+  user_id = ?
+`
+
+func (q *Queries) ListVacationIDsByUser(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listVacationIDsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
