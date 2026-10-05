@@ -106,3 +106,49 @@ FROM
   sick_leaves
 WHERE
   user_id = ?;
+
+-- name: ListEntityRefsByFile :many
+SELECT
+  entity_type,
+  entity_id
+FROM
+  file_entity_refs
+WHERE
+  file_id = ?;
+
+-- name: GetVacationOwnerID :one
+SELECT
+  user_id
+FROM
+  vacations
+WHERE
+  id = ?;
+
+-- name: GetReceiptOwnerID :one
+SELECT
+  user_id
+FROM
+  receipts
+WHERE
+  id = ?;
+
+-- name: GetSickLeaveOwnerID :one
+SELECT
+  user_id
+FROM
+  sick_leaves
+WHERE
+  id = ?;
+
+-- name: IsChatMessageParticipant :one
+SELECT
+  EXISTS (
+    SELECT
+      1
+    FROM
+      chat_messages m
+      INNER JOIN chat_participants p ON p.chat_id = m.chat_id
+    WHERE
+      m.id = ?
+      AND p.user_id = ?
+  ) AS is_participant;

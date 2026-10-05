@@ -41,6 +41,118 @@ func (q *Queries) DeleteAllFileEntityRefsByFile(ctx context.Context, fileID stri
 	return err
 }
 
+const getReceiptOwnerID = `-- name: GetReceiptOwnerID :one
+SELECT
+  user_id
+FROM
+  receipts
+WHERE
+  id = ?
+`
+
+func (q *Queries) GetReceiptOwnerID(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getReceiptOwnerID, id)
+	var user_id string
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getSickLeaveOwnerID = `-- name: GetSickLeaveOwnerID :one
+SELECT
+  user_id
+FROM
+  sick_leaves
+WHERE
+  id = ?
+`
+
+func (q *Queries) GetSickLeaveOwnerID(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getSickLeaveOwnerID, id)
+	var user_id string
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getVacationOwnerID = `-- name: GetVacationOwnerID :one
+SELECT
+  user_id
+FROM
+  vacations
+WHERE
+  id = ?
+`
+
+func (q *Queries) GetVacationOwnerID(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getVacationOwnerID, id)
+	var user_id string
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const isChatMessageParticipant = `-- name: IsChatMessageParticipant :one
+SELECT
+  EXISTS (
+    SELECT
+      1
+    FROM
+      chat_messages m
+      INNER JOIN chat_participants p ON p.chat_id = m.chat_id
+    WHERE
+      m.id = ?
+      AND p.user_id = ?
+  ) AS is_participant
+`
+
+type IsChatMessageParticipantParams struct {
+	ID     uint64 `json:"id"`
+	UserID string `json:"userId"`
+}
+
+func (q *Queries) IsChatMessageParticipant(ctx context.Context, arg IsChatMessageParticipantParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isChatMessageParticipant, arg.ID, arg.UserID)
+	var is_participant bool
+	err := row.Scan(&is_participant)
+	return is_participant, err
+}
+
+const listEntityRefsByFile = `-- name: ListEntityRefsByFile :many
+SELECT
+  entity_type,
+  entity_id
+FROM
+  file_entity_refs
+WHERE
+  file_id = ?
+`
+
+type ListEntityRefsByFileRow struct {
+	EntityType string `json:"entityType"`
+	EntityID   string `json:"entityId"`
+}
+
+func (q *Queries) ListEntityRefsByFile(ctx context.Context, fileID string) ([]ListEntityRefsByFileRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEntityRefsByFile, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEntityRefsByFileRow
+	for rows.Next() {
+		var i ListEntityRefsByFileRow
+		if err := rows.Scan(&i.EntityType, &i.EntityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFilesByEntity = `-- name: ListFilesByEntity :many
 SELECT
   f.id,

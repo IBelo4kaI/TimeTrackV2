@@ -132,7 +132,9 @@ type Querier interface {
 	GetPublicSystemSettings(ctx context.Context) ([]SystemSetting, error)
 	GetReceiptByFiscalKey(ctx context.Context, arg GetReceiptByFiscalKeyParams) (Receipt, error)
 	GetReceiptByID(ctx context.Context, id string) (Receipt, error)
+	GetReceiptOwnerID(ctx context.Context, id string) (string, error)
 	GetSickLeaveByID(ctx context.Context, id string) (GetSickLeaveByIDRow, error)
+	GetSickLeaveOwnerID(ctx context.Context, id string) (string, error)
 	GetSickLeavesByYear(ctx context.Context, arg GetSickLeavesByYearParams) ([]GetSickLeavesByYearRow, error)
 	GetSystemSettingByKey(ctx context.Context, settingKey string) (SystemSetting, error)
 	GetSystemSettingByKeyAndCategory(ctx context.Context, arg GetSystemSettingByKeyAndCategoryParams) (SystemSetting, error)
@@ -156,6 +158,7 @@ type Querier interface {
 	GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error)
 	GetVacationDaysByMonth(ctx context.Context, arg GetVacationDaysByMonthParams) (interface{}, error)
 	GetVacationDaysByYear(ctx context.Context, arg GetVacationDaysByYearParams) (interface{}, error)
+	GetVacationOwnerID(ctx context.Context, id string) (string, error)
 	GetVacationTypeByID(ctx context.Context, id string) (VacationType, error)
 	GetVacationTypeBySystemName(ctx context.Context, systemName string) (VacationType, error)
 	// ============================================
@@ -175,6 +178,7 @@ type Querier interface {
 	HardDeleteFile(ctx context.Context, id string) error
 	InsertAutoCategoryLinkBySellerInn(ctx context.Context, arg InsertAutoCategoryLinkBySellerInnParams) (int64, error)
 	InsertReceiptCategoryLink(ctx context.Context, arg InsertReceiptCategoryLinkParams) error
+	IsChatMessageParticipant(ctx context.Context, arg IsChatMessageParticipantParams) (bool, error)
 	LinkUserVK(ctx context.Context, arg LinkUserVKParams) error
 	ListAllBusinessCards(ctx context.Context) ([]ListAllBusinessCardsRow, error)
 	ListAllReceiptCategoryLinks(ctx context.Context) ([]ReceiptCategory, error)
@@ -189,6 +193,7 @@ type Querier interface {
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
+	ListEntityRefsByFile(ctx context.Context, fileID string) ([]ListEntityRefsByFileRow, error)
 	ListFilesByCategory(ctx context.Context, arg ListFilesByCategoryParams) ([]ListFilesByCategoryRow, error)
 	ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error)
 	// Вложения сразу для НЕСКОЛЬКИХ сущностей одного типа за один запрос —
