@@ -1,10 +1,14 @@
 package sickleave
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
+	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
 
@@ -14,10 +18,12 @@ import (
 type Handler struct {
 	service     Service
 	fileService *service.FileService
+	grpc        *grpc.Client
+	prefix      string
 }
 
-func NewHandler(svc Service, fileService *service.FileService) *Handler {
-	return &Handler{service: svc, fileService: fileService}
+func NewHandler(svc Service, fileService *service.FileService, grpc *grpc.Client, prefix string) *Handler {
+	return &Handler{service: svc, fileService: fileService, grpc: grpc, prefix: prefix}
 }
 
 func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
@@ -124,10 +130,35 @@ func (h *Handler) UpdateSickLeaveStatus(c fiber.Ctx) error {
 	return response.Updated(c)
 }
 
+// authorizeOwnerOrAll — доступ к больничному: свой — по базовому праву
+// (его уже проверил Require на роуте), чужой — только с sick_leaves.all:<action>
+// (тот же приём, что у чеков и отпусков).
+func (h *Handler) authorizeOwnerOrAll(c fiber.Ctx, id, action string) error {
+	row, err := h.service.GetSickLeaveByID(c.RequestCtx(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return response.Error(c, http.StatusNotFound, errors.New("больничный не найден"))
+		}
+		return response.ServerError(c)
+	}
+
+	callerID, _ := c.Locals("user_id").(string)
+	if !middleware.RequireOwnerOrAll(c, h.grpc,
+		middleware.Params{Service: h.prefix, Entity: "sick_leaves", Action: action},
+		callerID, row.UserID) {
+		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому больничному"))
+	}
+	return nil
+}
+
 func (h *Handler) DeleteSickLeave(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.BadRequest(c)
+	}
+
+	if err := h.authorizeOwnerOrAll(c, id, "delete"); err != nil {
+		return err
 	}
 
 	if err := h.service.DeleteSickLeave(c.RequestCtx(), id); err != nil {
@@ -147,6 +178,10 @@ func (h *Handler) UploadSickLeaveFile(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return response.Error(c, http.StatusBadRequest, fiber.NewError(http.StatusBadRequest, "ID больничного не указан"))
+	}
+
+	if err := h.authorizeOwnerOrAll(c, id, "edit"); err != nil {
+		return err
 	}
 
 	fileHeader, err := c.FormFile("file")

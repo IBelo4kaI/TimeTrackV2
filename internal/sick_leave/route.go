@@ -9,7 +9,7 @@ import (
 )
 
 func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) {
-	handler := NewHandler(service, fileService)
+	handler := NewHandler(service, fileService, grpc, prefix)
 	router := fiber.Group("/sick-leaves")
 
 	// permission sick_leaves:create
@@ -33,17 +33,20 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "read"}),
 		handler.GetSickLeavesByYear)
 
-	// permission sick_leaves:edit
+	// статус официальный/неофициальный ставит только тот, кто управляет чужими
+	// больничными (sick_leaves.all:edit) — не владелец по базовому edit
 	router.Put("/:id/status",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "edit"}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "edit", RequireAll: true}),
 		handler.UpdateSickLeaveStatus)
 
-	// загрузка файла; просмотр: GET /v1/files/entity/sick_leave/:id, удаление: DELETE /v1/files/:id
+	// загрузка файла (свой — sick_leaves:edit, чужой — sick_leaves.all:edit,
+	// владелец проверяется в хендлере); просмотр: GET /v1/files/entity/sick_leave/:id, удаление: DELETE /v1/files/:id
 	router.Post("/:id/file",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "edit"}),
 		handler.UploadSickLeaveFile)
 
-	// permission sick_leaves:delete
+	// permission sick_leaves:delete (чужой — sick_leaves.all:delete, владелец
+	// проверяется в хендлере)
 	router.Delete("/:id",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "sick_leaves", Action: "delete"}),
 		handler.DeleteSickLeave)
