@@ -20,9 +20,9 @@ WHERE
 GROUP BY
   user_id;
 
--- name: CountNotificationsSentToday :one
--- Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
--- created_at теперь буквальный UTC, см. 018_notification_timestamp_utc.sql).
+-- name: CountNotificationsByEntity :one
+-- Дедуп: напоминание за месяц шлётся один раз — не повторяем, если уже
+-- отправляли это пользователю за эту сущность (см. internal/timesheetreminder).
 SELECT
   COUNT(*)
 FROM
@@ -30,5 +30,4 @@ FROM
 WHERE
   user_id = ?
   AND entity_type = ?
-  AND entity_id = ?
-  AND DATE(created_at) = DATE(UTC_TIMESTAMP());
+  AND entity_id = ?;

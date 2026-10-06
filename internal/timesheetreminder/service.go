@@ -1,7 +1,7 @@
-// Package timesheetreminder — напоминание сотруднику заполнить табель:
-// мягкое в последние дни текущего месяца (за ещё не прошедшие дни, конечно,
-// не спрашиваем) и более настойчивое (повторяется раз в день, пока не
-// заполнено) в первые дни следующего месяца — про уже закрытый предыдущий.
+// Package timesheetreminder — напоминание сотруднику заполнить табель за
+// уже закрытый предыдущий месяц: одно на сотрудника и месяц, в первые дни
+// следующего (окно из нескольких дней нужно только на случай, если сервер в
+// первый день был недоступен).
 // Списка "все сотрудники" в проекте нет (в auth-сервис за ним намеренно не
 // ходим, см. cmd/api.go) — проверяем только тех, о ком бэк и так уже что-то
 // знает локально (см. ListKnownUserIDs): кто хоть раз вносил запись в
@@ -25,11 +25,9 @@ import (
 const (
 	entityType = "timesheet"
 
-	// softWindowDays — мягкое напоминание в последние N дней текущего месяца.
-	softWindowDays = 3
-	// hardWindowDays — настойчивое напоминание в первые N дней следующего
-	// месяца, про предыдущий (уже закрытый) месяц.
-	hardWindowDays = 7
+	// reminderWindowDays — напоминание в первые N дней месяца про предыдущий
+	// (уже закрытый); слать его нужно один раз, окно — страховка на сбои.
+	reminderWindowDays = 7
 	// runAtHour — час (UTC), в который тикер фактически выполняет проверку;
 	// остальные тики в течение суток — no-op (см. Run).
 	runAtHour = 6
@@ -41,12 +39,11 @@ var monthNames = [...]string{
 }
 
 // GapResult — один сотрудник с незаполненными днями за конкретный месяц.
-// Notified — реально ли ушло уведомление именно сейчас (false, если раньше
-// сегодня уже слали — см. CountNotificationsSentToday, — пропуски при этом
+// Notified — реально ли ушло уведомление именно сейчас (false, если за этот
+// месяц его уже слали — см. CountNotificationsByEntity, — пропуски при этом
 // у него всё равно есть и он всё равно попадает в список).
 type GapResult struct {
 	UserID   string `json:"userId"`
-	Kind     string `json:"kind"` // "soft" | "hard"
 	Year     int    `json:"year"`
 	Month    int    `json:"month"`
 	Gaps     int    `json:"gaps"`
@@ -99,79 +96,57 @@ func (s *Service) Run(ctx context.Context, now time.Time) {
 }
 
 // RunNow — принудительный прогон прямо сейчас (см. handler.go — POST
-// /timesheet-reminder/run), в обход не только часового/суточного гейта из
-// Run, но и календарного окна (последние/первые дни месяца, см.
-// runDailyCheck) — иначе в любой другой день ручной запуск молча ничего
-// не делал бы, что бесполезно и для проверки, и как операционная кнопка
-// "проверить прямо сейчас". Дедуп по notifications в БД
-// (CountNotificationsSentToday) при этом никуда не девается: повторный
-// запуск в тот же день для уже уведомлённого пользователя+месяца ничего
-// не задублирует.
-// RunNow — см. комментарий выше, дополнительно возвращает список тех, у
-// кого нашлись пропуски (в т.ч. если уведомление сегодня уже уходило и
-// сейчас подавлено дедупом — пропуски у человека всё равно есть).
+// /timesheet-reminder/run), в обход часового/суточного гейта из Run и
+// календарного окна (первые дни месяца) — иначе в любой другой день ручной
+// запуск молча ничего не делал бы. Дедуп по notifications в БД при этом
+// никуда не девается: за один месяц сотрудник уведомляется один раз.
+// Возвращает всех, у кого нашлись пропуски (в т.ч. если уведомление уже
+// уходило и сейчас подавлено дедупом).
 func (s *Service) RunNow(ctx context.Context) []GapResult {
-	now := time.Now().UTC()
-	return s.checkAllUsers(ctx, now, true, true)
+	return s.checkAllUsers(ctx, time.Now().UTC())
 }
 
 func (s *Service) runDailyCheck(ctx context.Context, now time.Time) {
-	lastDayOfCurrentMonth := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day()
-	inSoftWindow := now.Day() > lastDayOfCurrentMonth-softWindowDays
-	inHardWindow := now.Day() <= hardWindowDays
-
-	if !inSoftWindow && !inHardWindow {
+	if now.Day() > reminderWindowDays {
 		return
 	}
 
-	s.checkAllUsers(ctx, now, inSoftWindow, inHardWindow)
+	s.checkAllUsers(ctx, now)
 }
 
-func (s *Service) checkAllUsers(ctx context.Context, now time.Time, checkSoft, checkHard bool) []GapResult {
+func (s *Service) checkAllUsers(ctx context.Context, now time.Time) []GapResult {
 	userIDs, err := s.repo.ListKnownUserIDs(ctx)
 	if err != nil {
 		s.logger.Error("timesheet reminder: list users failed", "err", err)
 		return nil
 	}
 
+	prevMonth := now.AddDate(0, -1, 0)
+
 	var results []GapResult
 	for _, userID := range userIDs {
-		if checkSoft {
-			if r, ok := s.checkAndNotify(ctx, userID, now.Year(), int(now.Month()), now, "soft"); ok {
-				results = append(results, r)
-			}
-		}
-		if checkHard {
-			prevMonth := now.AddDate(0, -1, 0)
-			if r, ok := s.checkAndNotify(ctx, userID, prevMonth.Year(), int(prevMonth.Month()), now, "hard"); ok {
-				results = append(results, r)
-			}
+		if r, ok := s.checkAndNotify(ctx, userID, prevMonth.Year(), int(prevMonth.Month())); ok {
+			results = append(results, r)
 		}
 	}
 	return results
 }
 
 // checkAndNotify — считает пропуски в табеле пользователя за конкретный
-// месяц; если они есть — шлёт напоминание (не чаще раза в день на
-// пользователя+месяц+режим, см. CountNotificationsSentToday) и возвращает
+// (закрытый) месяц; если они есть — шлёт напоминание, но один раз на
+// пользователя и месяц (см. CountNotificationsByEntity), и возвращает
 // (GapResult, true) в любом случае, отправилось реально уведомление или
-// подавлено дедупом (это в GapResult.Notified). now нужен только для
-// "soft": ещё не наступившие дни текущего месяца не считаем.
-func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear, targetMonth int, now time.Time, kind string) (GapResult, bool) {
+// подавлено дедупом (это в GapResult.Notified).
+func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear, targetMonth int) (GapResult, bool) {
 	days, err := s.calendarService.GetCalendarDays(ctx, userID, targetMonth, targetYear)
 	if err != nil {
 		s.logger.Error("timesheet reminder: get calendar days failed", "err", err, "userId", userID)
 		return GapResult{}, false
 	}
 
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-
 	gaps := 0
 	for _, day := range days.Days {
 		if day.IsWeekend || day.UserTimeId != "" {
-			continue
-		}
-		if kind == "soft" && !day.Date.Before(today) {
 			continue
 		}
 		gaps++
@@ -180,11 +155,13 @@ func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear,
 		return GapResult{}, false
 	}
 
-	result := GapResult{UserID: userID, Kind: kind, Year: targetYear, Month: targetMonth, Gaps: gaps}
+	result := GapResult{UserID: userID, Year: targetYear, Month: targetMonth, Gaps: gaps}
 
-	entityID := fmt.Sprintf("%s:%04d-%02d", kind, targetYear, targetMonth)
+	// Формат ключа прежний ("hard:"), чтобы не слать повторно за месяцы, по
+	// которым напоминание уже ушло до перехода на одно напоминание
+	entityID := fmt.Sprintf("hard:%04d-%02d", targetYear, targetMonth)
 
-	sentToday, err := s.repo.CountNotificationsSentToday(ctx, repo.CountNotificationsSentTodayParams{
+	sent, err := s.repo.CountNotificationsByEntity(ctx, repo.CountNotificationsByEntityParams{
 		UserID:     userID,
 		EntityType: sql.NullString{String: entityType, Valid: true},
 		EntityID:   sql.NullString{String: entityID, Valid: true},
@@ -193,11 +170,11 @@ func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear,
 		s.logger.Error("timesheet reminder: dedup check failed", "err", err, "userId", userID)
 		return result, true
 	}
-	if sentToday > 0 {
+	if sent > 0 {
 		return result, true
 	}
 
-	title, body := buildText(kind, targetYear, targetMonth, gaps)
+	title, body := buildText(targetYear, targetMonth, gaps)
 
 	s.notificationService.CreateMany(ctx, []string{userID}, title, body, repo.NotificationsTypeWarn, entityType, entityID)
 	s.vkService.Notify(ctx, userID, title+": "+body, s.frontendURL+"/calendar")
@@ -205,13 +182,7 @@ func (s *Service) checkAndNotify(ctx context.Context, userID string, targetYear,
 	return result, true
 }
 
-func buildText(kind string, year, month, gaps int) (title, body string) {
-	monthName := monthNames[month-1]
-
-	if kind == "soft" {
-		return "Не забудьте заполнить табель",
-			fmt.Sprintf("Незаполненных рабочих дней в этом месяце: %d", gaps)
-	}
+func buildText(year, month, gaps int) (title, body string) {
 	return "В табеле остались незаполненные дни",
-		fmt.Sprintf("За %s %d: незаполненных рабочих дней — %d", monthName, year, gaps)
+		fmt.Sprintf("За %s %d: незаполненных рабочих дней — %d", monthNames[month-1], year, gaps)
 }

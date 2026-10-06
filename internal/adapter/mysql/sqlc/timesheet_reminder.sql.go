@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const countNotificationsSentToday = `-- name: CountNotificationsSentToday :one
+const countNotificationsByEntity = `-- name: CountNotificationsByEntity :one
 SELECT
   COUNT(*)
 FROM
@@ -19,19 +19,18 @@ WHERE
   user_id = ?
   AND entity_type = ?
   AND entity_id = ?
-  AND DATE(created_at) = DATE(UTC_TIMESTAMP())
 `
 
-type CountNotificationsSentTodayParams struct {
+type CountNotificationsByEntityParams struct {
 	UserID     string         `json:"userId"`
 	EntityType sql.NullString `json:"entityType"`
 	EntityID   sql.NullString `json:"entityId"`
 }
 
-// Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
-// created_at теперь буквальный UTC, см. 018_notification_timestamp_utc.sql).
-func (q *Queries) CountNotificationsSentToday(ctx context.Context, arg CountNotificationsSentTodayParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countNotificationsSentToday, arg.UserID, arg.EntityType, arg.EntityID)
+// Дедуп: напоминание за месяц шлётся один раз — не повторяем, если уже
+// отправляли это пользователю за эту сущность (см. internal/timesheetreminder).
+func (q *Queries) CountNotificationsByEntity(ctx context.Context, arg CountNotificationsByEntityParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countNotificationsByEntity, arg.UserID, arg.EntityType, arg.EntityID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

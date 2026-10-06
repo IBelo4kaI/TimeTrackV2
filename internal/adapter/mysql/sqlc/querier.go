@@ -20,9 +20,9 @@ type Querier interface {
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
 	CountFilesInCategory(ctx context.Context, categoryID sql.NullString) (int64, error)
 	CountNewsPostsSince(ctx context.Context, createdAt time.Time) (int64, error)
-	// Дедуп: не слать напоминание повторно в тот же день (DATE() по UTC —
-	// created_at теперь буквальный UTC, см. 018_notification_timestamp_utc.sql).
-	CountNotificationsSentToday(ctx context.Context, arg CountNotificationsSentTodayParams) (int64, error)
+	// Дедуп: напоминание за месяц шлётся один раз — не повторяем, если уже
+	// отправляли это пользователю за эту сущность (см. internal/timesheetreminder).
+	CountNotificationsByEntity(ctx context.Context, arg CountNotificationsByEntityParams) (int64, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
