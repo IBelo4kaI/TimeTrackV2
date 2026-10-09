@@ -16,6 +16,8 @@ http://localhost:8080/v1
 
 Получает информацию о днях календаря для указанного пользователя, месяца и года.
 
+`workLocation` — место работы (`office` или `remote`); у дней с типом, отличным от рабочего, пустая строка.
+
 **Параметры пути:**
 
 - `userId` (string) - ID пользователя
@@ -44,6 +46,7 @@ GET /v1/calendar/123e4567-e89b-12d3-a456-426614174000/2026/2
          "is_work_day": true,
          "color_code": "#39c684",
          "hours_worked": "8",
+         "workLocation": "office",
          "notes": null
       }
       // ... другие дни месяца
@@ -108,6 +111,8 @@ GET /v1/daytypes
 
 Создает одну или несколько записей учета рабочего времени.
 
+`workLocation` (необязательное) — место работы: `office`, `remote` или `null`. Допустимо только для рабочего дня (`system_name = work`): у рабочего дня пустое значение заменяется на `office`, у остальных типов значение сбрасывается в `null`. Другие значения — 400.
+
 **Разрешение:** `time:calendar:create` или `time:calendar.all:create`
 
 **Тело запроса:**
@@ -119,6 +124,7 @@ GET /v1/daytypes
       {
          "dayTypeId": "2cb03962-d661-11f0-b7e5-b05cda34b6c7",
          "hoursWorked": "8",
+         "workLocation": "remote",
          "entryDate": "2026-02-15T00:00:00Z"
       },
       {
@@ -146,7 +152,7 @@ GET /v1/daytypes
 
 **POST** `/usertimeentries/update`
 
-Обновляет существующие записи учета рабочего времени.
+Обновляет существующие записи учета рабочего времени. Правила для `workLocation` те же, что при создании.
 
 **Разрешение:** `time:calendar:edit` или `time:calendar.all:edit`
 
@@ -160,6 +166,7 @@ GET /v1/daytypes
          "id": "550e8400-e29b-41d4-a716-446655440000",
          "dayTypeId": "5543f231-d661-11f0-b7e5-b05cda34b6c7",
          "hoursWorked": "4",
+         "workLocation": "office",
          "entryDate": "2026-02-15T00:00:00Z"
       }
    ]
@@ -213,18 +220,19 @@ GET /v1/usertimeentries/statistics/123e4567-e89b-12d3-a456-426614174000/2026/2/1
 {
    "success": true,
    "data": {
-      "userId": "123e4567-e89b-12d3-a456-426614174000",
-      "year": 2026,
-      "month": 2,
-      "totalWorkHours": 152,
-      "actualWorkHours": 140,
-      "vacationDays": 5,
-      "sickDays": 2,
-      "timeOffDays": 1,
-      "workEfficiency": 92.1
+      "hours": { "totalHours": 140, "standardHours": 152 },
+      "workDays": { "totalWorkDays": 18, "standardWorkDays": 19 },
+      "officeDays": { "count": 12 },
+      "remoteDays": { "count": 6 },
+      "vacationDays": { "count": 0 },
+      "medicalDays": { "count": 2 },
+      "timeoffDays": { "count": 1 },
+      "decreeDays": { "count": 0 }
    }
 }
 ```
+
+`officeDays` и `remoteDays` — число дней с часами больше нуля в офисе и удалённо.
 
 ## 4. Отпуска (Vacations)
 

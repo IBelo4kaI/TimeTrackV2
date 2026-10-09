@@ -7,22 +7,24 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 )
 
 const createUserTimeEntry = `-- name: CreateUserTimeEntry :exec
 INSERT INTO
-  user_time_entries (user_id, entry_date, day_type_id, hours_worked)
+  user_time_entries (user_id, entry_date, day_type_id, hours_worked, work_location)
 VALUES
-  (?, ?, ?, ?)
+  (?, ?, ?, ?, ?)
 `
 
 type CreateUserTimeEntryParams struct {
-	UserID      string    `json:"userId"`
-	EntryDate   time.Time `json:"entryDate"`
-	DayTypeID   string    `json:"dayTypeId"`
-	HoursWorked string    `json:"hoursWorked"`
+	UserID       string         `json:"userId"`
+	EntryDate    time.Time      `json:"entryDate"`
+	DayTypeID    string         `json:"dayTypeId"`
+	HoursWorked  string         `json:"hoursWorked"`
+	WorkLocation sql.NullString `json:"workLocation"`
 }
 
 func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error {
@@ -31,6 +33,7 @@ func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEnt
 		arg.EntryDate,
 		arg.DayTypeID,
 		arg.HoursWorked,
+		arg.WorkLocation,
 	)
 	return err
 }
@@ -89,6 +92,18 @@ SELECT
     END
   ) AS work_days,
   COUNT(
+    DISTINCT CASE
+      WHEN ute.hours_worked > 0
+      AND ute.work_location = 'office' THEN ute.entry_date
+    END
+  ) AS office_days,
+  COUNT(
+    DISTINCT CASE
+      WHEN ute.hours_worked > 0
+      AND ute.work_location = 'remote' THEN ute.entry_date
+    END
+  ) AS remote_days,
+  COUNT(
     CASE
       WHEN dt.system_name = 'vacation' THEN 1
     END
@@ -126,6 +141,8 @@ type GetMonthlyStatisticsParams struct {
 type GetMonthlyStatisticsRow struct {
 	TotalHours   interface{} `json:"totalHours"`
 	WorkDays     int64       `json:"workDays"`
+	OfficeDays   int64       `json:"officeDays"`
+	RemoteDays   int64       `json:"remoteDays"`
 	VacationDays int64       `json:"vacationDays"`
 	MedicalDays  int64       `json:"medicalDays"`
 	TimeOffDays  int64       `json:"timeOffDays"`
@@ -138,6 +155,8 @@ func (q *Queries) GetMonthlyStatistics(ctx context.Context, arg GetMonthlyStatis
 	err := row.Scan(
 		&i.TotalHours,
 		&i.WorkDays,
+		&i.OfficeDays,
+		&i.RemoteDays,
 		&i.VacationDays,
 		&i.MedicalDays,
 		&i.TimeOffDays,
@@ -251,7 +270,7 @@ func (q *Queries) GetTotalHoursByYear(ctx context.Context, arg GetTotalHoursByYe
 
 const getUserTimeEntriesForMonth = `-- name: GetUserTimeEntriesForMonth :many
 SELECT
-  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at, work_location
 FROM
   user_time_entries
 WHERE
@@ -288,6 +307,7 @@ func (q *Queries) GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTim
 			&i.HoursWorked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkLocation,
 		); err != nil {
 			return nil, err
 		}
@@ -304,7 +324,7 @@ func (q *Queries) GetUserTimeEntriesForMonth(ctx context.Context, arg GetUserTim
 
 const getUserTimeEntryById = `-- name: GetUserTimeEntryById :one
 SELECT
-  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at, work_location
 FROM
   user_time_entries
 WHERE
@@ -322,13 +342,14 @@ func (q *Queries) GetUserTimeEntryById(ctx context.Context, id string) (UserTime
 		&i.HoursWorked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkLocation,
 	)
 	return i, err
 }
 
 const getUserTimeEntryByIds = `-- name: GetUserTimeEntryByIds :many
 SELECT
-  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at
+  id, user_id, entry_date, day_type_id, hours_worked, created_at, updated_at, work_location
 FROM
   user_time_entries
 WHERE
@@ -362,6 +383,7 @@ func (q *Queries) GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]Us
 			&i.HoursWorked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkLocation,
 		); err != nil {
 			return nil, err
 		}
@@ -455,17 +477,19 @@ const updateUserTimeEntries = `-- name: UpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
-  hours_worked = ?
+  hours_worked = ?,
+  work_location = ?
 WHERE
   entry_date IN (/*SLICE:entry_date*/?)
   AND user_id = ?
 `
 
 type UpdateUserTimeEntriesParams struct {
-	DayTypeID   string      `json:"dayTypeId"`
-	HoursWorked string      `json:"hoursWorked"`
-	EntryDate   []time.Time `json:"entryDate"`
-	UserID      string      `json:"userId"`
+	DayTypeID    string         `json:"dayTypeId"`
+	HoursWorked  string         `json:"hoursWorked"`
+	WorkLocation sql.NullString `json:"workLocation"`
+	EntryDate    []time.Time    `json:"entryDate"`
+	UserID       string         `json:"userId"`
 }
 
 func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error {
@@ -473,6 +497,7 @@ func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeE
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.DayTypeID)
 	queryParams = append(queryParams, arg.HoursWorked)
+	queryParams = append(queryParams, arg.WorkLocation)
 	if len(arg.EntryDate) > 0 {
 		for _, v := range arg.EntryDate {
 			queryParams = append(queryParams, v)
@@ -490,23 +515,26 @@ const updateUserTimeEntry = `-- name: UpdateUserTimeEntry :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
-  hours_worked = ?
+  hours_worked = ?,
+  work_location = ?
 WHERE
   entry_date = ?
   AND user_id = ?
 `
 
 type UpdateUserTimeEntryParams struct {
-	DayTypeID   string    `json:"dayTypeId"`
-	HoursWorked string    `json:"hoursWorked"`
-	EntryDate   time.Time `json:"entryDate"`
-	UserID      string    `json:"userId"`
+	DayTypeID    string         `json:"dayTypeId"`
+	HoursWorked  string         `json:"hoursWorked"`
+	WorkLocation sql.NullString `json:"workLocation"`
+	EntryDate    time.Time      `json:"entryDate"`
+	UserID       string         `json:"userId"`
 }
 
 func (q *Queries) UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserTimeEntry,
 		arg.DayTypeID,
 		arg.HoursWorked,
+		arg.WorkLocation,
 		arg.EntryDate,
 		arg.UserID,
 	)

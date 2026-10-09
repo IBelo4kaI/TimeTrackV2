@@ -515,13 +515,14 @@ type SystemSetting struct {
 }
 
 type UserTimeEntry struct {
-	ID          string       `json:"id"`
-	UserID      string       `json:"userId"`
-	EntryDate   time.Time    `json:"entryDate"`
-	DayTypeID   string       `json:"dayTypeId"`
-	HoursWorked string       `json:"hoursWorked"`
-	CreatedAt   sql.NullTime `json:"createdAt"`
-	UpdatedAt   sql.NullTime `json:"updatedAt"`
+	ID           string         `json:"id"`
+	UserID       string         `json:"userId"`
+	EntryDate    time.Time      `json:"entryDate"`
+	DayTypeID    string         `json:"dayTypeId"`
+	HoursWorked  string         `json:"hoursWorked"`
+	CreatedAt    sql.NullTime   `json:"createdAt"`
+	UpdatedAt    sql.NullTime   `json:"updatedAt"`
+	WorkLocation sql.NullString `json:"workLocation"`
 }
 
 type UserVkLink struct {

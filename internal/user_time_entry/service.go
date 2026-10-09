@@ -32,7 +32,26 @@ func NewService(repo *repo.Queries, db *sql.DB) Service {
 	return &service{repo: repo, db: db}
 }
 
+// workDayTypeID возвращает id типа "work": место работы имеет смысл только для него
+func (s *service) workDayTypeID(ctx context.Context) (string, error) {
+	dayTypes, err := s.repo.GetDayTypes(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, dt := range dayTypes {
+		if dt.SystemName == "work" {
+			return dt.ID, nil
+		}
+	}
+	return "", nil
+}
+
 func (s *service) CreateUserTimeEntry(ctx context.Context, entries []repo.CreateUserTimeEntryParams) error {
+	workID, err := s.workDayTypeID(ctx)
+	if err != nil {
+		return err
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -42,6 +61,7 @@ func (s *service) CreateUserTimeEntry(ctx context.Context, entries []repo.Create
 	qtx := s.repo.WithTx(tx)
 
 	for _, entry := range entries {
+		entry.WorkLocation = normalizeWorkLocation(entry.DayTypeID == workID, entry.WorkLocation)
 		err = qtx.CreateUserTimeEntry(ctx, entry)
 		if err != nil {
 			return err
@@ -52,6 +72,10 @@ func (s *service) CreateUserTimeEntry(ctx context.Context, entries []repo.Create
 }
 
 func (s *service) UpdateUserTimeEntries(ctx context.Context, entries []repo.UpdateUserTimeEntryParams) error {
+	workID, err := s.workDayTypeID(ctx)
+	if err != nil {
+		return err
+	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -62,6 +86,7 @@ func (s *service) UpdateUserTimeEntries(ctx context.Context, entries []repo.Upda
 	qtx := s.repo.WithTx(tx)
 
 	for _, entry := range entries {
+		entry.WorkLocation = normalizeWorkLocation(entry.DayTypeID == workID, entry.WorkLocation)
 		err = qtx.UpdateUserTimeEntry(ctx, entry)
 		if err != nil {
 			return err
@@ -274,6 +299,8 @@ func (s *service) GetReportStatistics(ctx context.Context, userId string, month 
 			TotalWorkDays:    stat.WorkDays,
 			StandardWorkDays: standardDays,
 		},
+		OfficeDays:   CountDaysResponse{Count: stat.OfficeDays},
+		RemoteDays:   CountDaysResponse{Count: stat.RemoteDays},
 		VacationDays: CountDaysResponse{Count: stat.VacationDays},
 		MedicalDays:  CountDaysResponse{Count: stat.MedicalDays},
 		TimeOffDays:  CountDaysResponse{Count: stat.TimeOffDays},

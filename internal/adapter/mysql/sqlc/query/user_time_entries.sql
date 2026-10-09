@@ -114,6 +114,18 @@ SELECT
     END
   ) AS work_days,
   COUNT(
+    DISTINCT CASE
+      WHEN ute.hours_worked > 0
+      AND ute.work_location = 'office' THEN ute.entry_date
+    END
+  ) AS office_days,
+  COUNT(
+    DISTINCT CASE
+      WHEN ute.hours_worked > 0
+      AND ute.work_location = 'remote' THEN ute.entry_date
+    END
+  ) AS remote_days,
+  COUNT(
     CASE
       WHEN dt.system_name = 'vacation' THEN 1
     END
@@ -143,15 +155,16 @@ WHERE
 
 -- name: CreateUserTimeEntry :exec
 INSERT INTO
-  user_time_entries (user_id, entry_date, day_type_id, hours_worked)
+  user_time_entries (user_id, entry_date, day_type_id, hours_worked, work_location)
 VALUES
-  (?, ?, ?, ?);
+  (?, ?, ?, ?, ?);
 
 -- name: UpdateUserTimeEntry :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
-  hours_worked = ?
+  hours_worked = ?,
+  work_location = ?
 WHERE
   entry_date = ?
   AND user_id = ?;
@@ -160,7 +173,8 @@ WHERE
 UPDATE user_time_entries
 SET
   day_type_id = ?,
-  hours_worked = ?
+  hours_worked = ?,
+  work_location = ?
 WHERE
   entry_date IN (sqlc.slice ('entry_date'))
   AND user_id = ?;

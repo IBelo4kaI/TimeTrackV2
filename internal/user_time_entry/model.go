@@ -23,6 +23,8 @@ type VacationStatisticsResponse struct {
 type ReportStatisticsResponse struct {
 	Hours        HoursStatisticResponse    `json:"hours"`
 	WorkDays     WorkDaysStatisticResponse `json:"workDays"`
+	OfficeDays   CountDaysResponse         `json:"officeDays"`
+	RemoteDays   CountDaysResponse         `json:"remoteDays"`
 	VacationDays CountDaysResponse         `json:"vacationDays"`
 	MedicalDays  CountDaysResponse         `json:"medicalDays"`
 	TimeOffDays  CountDaysResponse         `json:"timeoffDays"`

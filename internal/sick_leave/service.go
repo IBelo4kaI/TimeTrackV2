@@ -269,10 +269,11 @@ func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userI
 		hoursWorked := parseHours(entry.HoursWorked)
 		if hoursWorked > 0 && workDayType.ID != "" {
 			toUpdate = append(toUpdate, repo.UpdateUserTimeEntryParams{
-				DayTypeID:   workDayType.ID,
-				HoursWorked: entry.HoursWorked,
-				EntryDate:   day,
-				UserID:      userID,
+				DayTypeID:    workDayType.ID,
+				HoursWorked:  entry.HoursWorked,
+				EntryDate:    day,
+				UserID:       userID,
+				WorkLocation: entry.WorkLocation,
 			})
 		} else {
 			toDelete = append(toDelete, day)

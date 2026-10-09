@@ -14,4 +14,5 @@ type CalendarDay struct {
 	Holidays            []string  `json:"holidays"`
 	IsWeekend           bool      `json:"isWeekend"`
 	IsEditType          bool      `json:"isEditType"`
+	WorkLocation        string    `json:"workLocation"`
 }

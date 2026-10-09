@@ -81,6 +81,7 @@ func applyUserTimeEntry(day *CalendarDay, entry repo.UserTimeEntry, dayTypesMap 
 	}
 	day.UserTimeId = entry.ID
 	day.UserTimeTypeId = entry.DayTypeID
+	day.WorkLocation = entry.WorkLocation.String
 	day.IsEditType = dayTypesMap[entry.DayTypeID].SystemName != "vacation"
 }
 

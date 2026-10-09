@@ -22,9 +22,10 @@ func NewHandler(service Service, logger *slog.Logger) *Handler {
 
 func (h *Handler) CreateUserTimeEntry(c fiber.Ctx) error {
 	type createEntityRequest struct {
-		DayTypeID   string    `json:"dayTypeId"`
-		HoursWorked string    `json:"hoursWorked"`
-		EntryDate   time.Time `json:"entryDate"`
+		DayTypeID    string    `json:"dayTypeId"`
+		HoursWorked  string    `json:"hoursWorked"`
+		EntryDate    time.Time `json:"entryDate"`
+		WorkLocation *string   `json:"workLocation"`
 	}
 	type createRequest struct {
 		UserID   string                `json:"userId"`
@@ -38,11 +39,15 @@ func (h *Handler) CreateUserTimeEntry(c fiber.Ctx) error {
 	var prm []repo.CreateUserTimeEntryParams
 
 	for _, entity := range body.Entities {
+		if !isValidWorkLocation(entity.WorkLocation) {
+			return response.BadRequest(c)
+		}
 		prm = append(prm, repo.CreateUserTimeEntryParams{
-			DayTypeID:   entity.DayTypeID,
-			HoursWorked: entity.HoursWorked,
-			EntryDate:   entity.EntryDate,
-			UserID:      body.UserID,
+			DayTypeID:    entity.DayTypeID,
+			HoursWorked:  entity.HoursWorked,
+			EntryDate:    entity.EntryDate,
+			UserID:       body.UserID,
+			WorkLocation: toNullString(entity.WorkLocation),
 		})
 	}
 
@@ -55,9 +60,10 @@ func (h *Handler) CreateUserTimeEntry(c fiber.Ctx) error {
 
 func (h *Handler) UpdateUserTimeEntries(c fiber.Ctx) error {
 	type updateEntityRequest struct {
-		DayTypeID   string    `json:"dayTypeId"`
-		HoursWorked string    `json:"hoursWorked"`
-		EntryDate   time.Time `json:"entryDate"`
+		DayTypeID    string    `json:"dayTypeId"`
+		HoursWorked  string    `json:"hoursWorked"`
+		EntryDate    time.Time `json:"entryDate"`
+		WorkLocation *string   `json:"workLocation"`
 	}
 	type updateRequest struct {
 		UserID   string                `json:"userId"`
@@ -71,11 +77,15 @@ func (h *Handler) UpdateUserTimeEntries(c fiber.Ctx) error {
 	var prm []repo.UpdateUserTimeEntryParams
 
 	for _, entity := range body.Entities {
+		if !isValidWorkLocation(entity.WorkLocation) {
+			return response.BadRequest(c)
+		}
 		prm = append(prm, repo.UpdateUserTimeEntryParams{
-			DayTypeID:   entity.DayTypeID,
-			HoursWorked: entity.HoursWorked,
-			EntryDate:   entity.EntryDate,
-			UserID:      body.UserID,
+			DayTypeID:    entity.DayTypeID,
+			HoursWorked:  entity.HoursWorked,
+			EntryDate:    entity.EntryDate,
+			UserID:       body.UserID,
+			WorkLocation: toNullString(entity.WorkLocation),
 		})
 	}
 
