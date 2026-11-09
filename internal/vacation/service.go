@@ -169,6 +169,25 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		return err
 	}
 
+	// Фиксируем превышение на сервере по утверждённым отпускам года начала.
+	// Последующие изменения баланса не меняют историческую пометку заявки.
+	affectsBalance := true
+	if vacationTypeID.Valid {
+		vacationType, err := s.repo.GetVacationTypeByID(ctx, vacationTypeID.String)
+		if err != nil {
+			return err
+		}
+		affectsBalance = vacationType.AffectsBalance
+	}
+	excessDays := 0
+	if affectsBalance {
+		stats, err := s.GetVacationsStats(ctx, vacation.UserID, vacation.StartDate.Year())
+		if err != nil {
+			return err
+		}
+		excessDays = calculateExcessDays(totalDays.TotalVacationDays, stats.Free)
+	}
+
 	vacationID := uuid.NewString()
 
 	// Создаем отпуск в базе данных
@@ -178,6 +197,7 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		StartDate:      vacation.StartDate,
 		EndDate:        vacation.EndDate,
 		TotalDays:      int32(totalDays.TotalVacationDays),
+		ExcessDays:     int32(excessDays),
 		Description:    desc,
 		Status:         vacation.Status,
 		VacationTypeID: vacationTypeID,
@@ -966,4 +986,9 @@ func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string)
 	}
 
 	return nil
+}
+
+// calculateExcessDays считает только дни новой заявки, не накопленный долг.
+func calculateExcessDays(requested, free int) int {
+	return max(requested-max(free, 0), 0)
 }

@@ -545,6 +545,7 @@ type Vacation struct {
 	Status              VacationsStatus `json:"status"`
 	VacationTypeID      sql.NullString  `json:"vacationTypeId"`
 	ApprovalEmailSentAt sql.NullTime    `json:"approvalEmailSentAt"`
+	ExcessDays          int32           `json:"excessDays"`
 }
 
 type VacationType struct {

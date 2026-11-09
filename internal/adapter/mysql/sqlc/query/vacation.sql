@@ -5,6 +5,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -53,6 +54,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -78,6 +80,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -110,6 +113,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   v.status,
   v.vacation_type_id,
   COALESCE(t.name, '') as vacation_type_name,
@@ -134,12 +138,13 @@ INSERT INTO
     start_date,
     end_date,
     total_days,
+    excess_days,
     description,
     status,
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountVacationsByStatus :one
 SELECT

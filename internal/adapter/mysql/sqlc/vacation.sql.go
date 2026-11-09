@@ -37,12 +37,13 @@ INSERT INTO
     start_date,
     end_date,
     total_days,
+    excess_days,
     description,
     status,
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
@@ -51,6 +52,7 @@ type CreateVacationParams struct {
 	StartDate      time.Time       `json:"startDate"`
 	EndDate        time.Time       `json:"endDate"`
 	TotalDays      int32           `json:"totalDays"`
+	ExcessDays     int32           `json:"excessDays"`
 	Description    sql.NullString  `json:"description"`
 	Status         VacationsStatus `json:"status"`
 	VacationTypeID sql.NullString  `json:"vacationTypeId"`
@@ -66,6 +68,7 @@ func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) 
 		arg.StartDate,
 		arg.EndDate,
 		arg.TotalDays,
+		arg.ExcessDays,
 		arg.Description,
 		arg.Status,
 		arg.VacationTypeID,
@@ -91,6 +94,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -119,6 +123,7 @@ type GetAllUsersVacationsByYearRow struct {
 	StartDate                  time.Time       `json:"startDate"`
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
+	ExcessDays                 int32           `json:"excessDays"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
@@ -144,6 +149,7 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 			&i.StartDate,
 			&i.EndDate,
 			&i.TotalDays,
+			&i.ExcessDays,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -199,6 +205,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -221,6 +228,7 @@ type GetVacationByIDRow struct {
 	StartDate                  time.Time       `json:"startDate"`
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
+	ExcessDays                 int32           `json:"excessDays"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	ApprovalEmailSentAt        sql.NullTime    `json:"approvalEmailSentAt"`
@@ -241,6 +249,7 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.StartDate,
 		&i.EndDate,
 		&i.TotalDays,
+		&i.ExcessDays,
 		&i.Description,
 		&i.Status,
 		&i.ApprovalEmailSentAt,
@@ -261,6 +270,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -291,6 +301,7 @@ type GetVacationsByYearRow struct {
 	StartDate                  time.Time       `json:"startDate"`
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
+	ExcessDays                 int32           `json:"excessDays"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
@@ -316,6 +327,7 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 			&i.StartDate,
 			&i.EndDate,
 			&i.TotalDays,
+			&i.ExcessDays,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -345,6 +357,7 @@ SELECT
   v.start_date,
   v.end_date,
   v.total_days,
+  v.excess_days,
   v.status,
   v.vacation_type_id,
   COALESCE(t.name, '') as vacation_type_name,
@@ -369,6 +382,7 @@ type ListVacationCalendarByYearRow struct {
 	StartDate         time.Time       `json:"startDate"`
 	EndDate           time.Time       `json:"endDate"`
 	TotalDays         int32           `json:"totalDays"`
+	ExcessDays        int32           `json:"excessDays"`
 	Status            VacationsStatus `json:"status"`
 	VacationTypeID    sql.NullString  `json:"vacationTypeId"`
 	VacationTypeName  string          `json:"vacationTypeName"`
@@ -398,6 +412,7 @@ func (q *Queries) ListVacationCalendarByYear(ctx context.Context, arg ListVacati
 			&i.StartDate,
 			&i.EndDate,
 			&i.TotalDays,
+			&i.ExcessDays,
 			&i.Status,
 			&i.VacationTypeID,
 			&i.VacationTypeName,
