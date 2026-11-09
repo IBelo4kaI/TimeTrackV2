@@ -229,9 +229,10 @@ func (ns NullSystemSettingsSettingType) Value() (driver.Value, error) {
 type VacationsStatus string
 
 const (
-	VacationsStatusPending  VacationsStatus = "pending"
-	VacationsStatusApproved VacationsStatus = "approved"
-	VacationsStatusRejected VacationsStatus = "rejected"
+	VacationsStatusPending   VacationsStatus = "pending"
+	VacationsStatusApproved  VacationsStatus = "approved"
+	VacationsStatusRejected  VacationsStatus = "rejected"
+	VacationsStatusWithdrawn VacationsStatus = "withdrawn"
 )
 
 func (e *VacationsStatus) Scan(src interface{}) error {
@@ -542,10 +543,21 @@ type Vacation struct {
 	UpdatedAt           sql.NullTime    `json:"updatedAt"`
 	ManagerComment      sql.NullString  `json:"managerComment"`
 	StatusUpdatedAt     sql.NullTime    `json:"statusUpdatedAt"`
-	Status              VacationsStatus `json:"status"`
 	VacationTypeID      sql.NullString  `json:"vacationTypeId"`
 	ApprovalEmailSentAt sql.NullTime    `json:"approvalEmailSentAt"`
 	ExcessDays          int32           `json:"excessDays"`
+	Status              VacationsStatus `json:"status"`
+	AvailableDays       sql.NullInt32   `json:"availableDays"`
+	DecisionComment     string          `json:"decisionComment"`
+}
+
+type VacationHistory struct {
+	ID         int64     `json:"id"`
+	VacationID string    `json:"vacationId"`
+	ActorID    string    `json:"actorId"`
+	EventType  string    `json:"eventType"`
+	Detail     string    `json:"detail"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type VacationType struct {

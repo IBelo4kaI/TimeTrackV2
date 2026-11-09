@@ -11,6 +11,27 @@ import (
 	"time"
 )
 
+const addVacationHistory = `-- name: AddVacationHistory :exec
+INSERT INTO vacation_history (vacation_id, actor_id, event_type, detail) VALUES (?, ?, ?, ?)
+`
+
+type AddVacationHistoryParams struct {
+	VacationID string `json:"vacationId"`
+	ActorID    string `json:"actorId"`
+	EventType  string `json:"eventType"`
+	Detail     string `json:"detail"`
+}
+
+func (q *Queries) AddVacationHistory(ctx context.Context, arg AddVacationHistoryParams) error {
+	_, err := q.db.ExecContext(ctx, addVacationHistory,
+		arg.VacationID,
+		arg.ActorID,
+		arg.EventType,
+		arg.Detail,
+	)
+	return err
+}
+
 const assignVacationType = `-- name: AssignVacationType :exec
 UPDATE vacations
 SET
@@ -38,12 +59,13 @@ INSERT INTO
     end_date,
     total_days,
     excess_days,
+    available_days,
     description,
     status,
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
@@ -53,6 +75,7 @@ type CreateVacationParams struct {
 	EndDate        time.Time       `json:"endDate"`
 	TotalDays      int32           `json:"totalDays"`
 	ExcessDays     int32           `json:"excessDays"`
+	AvailableDays  sql.NullInt32   `json:"availableDays"`
 	Description    sql.NullString  `json:"description"`
 	Status         VacationsStatus `json:"status"`
 	VacationTypeID sql.NullString  `json:"vacationTypeId"`
@@ -69,6 +92,7 @@ func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) 
 		arg.EndDate,
 		arg.TotalDays,
 		arg.ExcessDays,
+		arg.AvailableDays,
 		arg.Description,
 		arg.Status,
 		arg.VacationTypeID,
@@ -87,6 +111,37 @@ func (q *Queries) DeleteVacation(ctx context.Context, id string) error {
 	return err
 }
 
+const editPendingVacation = `-- name: EditPendingVacation :exec
+UPDATE vacations SET start_date = ?, end_date = ?, total_days = ?,
+ vacation_type_id = ?, description = ?, excess_days = ?, available_days = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'pending'
+`
+
+type EditPendingVacationParams struct {
+	StartDate      time.Time      `json:"startDate"`
+	EndDate        time.Time      `json:"endDate"`
+	TotalDays      int32          `json:"totalDays"`
+	VacationTypeID sql.NullString `json:"vacationTypeId"`
+	Description    sql.NullString `json:"description"`
+	ExcessDays     int32          `json:"excessDays"`
+	AvailableDays  sql.NullInt32  `json:"availableDays"`
+	ID             string         `json:"id"`
+}
+
+func (q *Queries) EditPendingVacation(ctx context.Context, arg EditPendingVacationParams) error {
+	_, err := q.db.ExecContext(ctx, editPendingVacation,
+		arg.StartDate,
+		arg.EndDate,
+		arg.TotalDays,
+		arg.VacationTypeID,
+		arg.Description,
+		arg.ExcessDays,
+		arg.AvailableDays,
+		arg.ID,
+	)
+	return err
+}
+
 const getAllUsersVacationsByYear = `-- name: GetAllUsersVacationsByYear :many
 SELECT
   v.id,
@@ -95,6 +150,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -107,8 +164,8 @@ FROM
   vacations v
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(v.start_date) = YEAR(?)
-  AND YEAR(v.end_date) = YEAR(?)
+  YEAR(v.start_date) <= YEAR(?)
+  AND YEAR(v.end_date) >= YEAR(?)
 ORDER BY
   v.created_at DESC
 `
@@ -124,6 +181,8 @@ type GetAllUsersVacationsByYearRow struct {
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
 	ExcessDays                 int32           `json:"excessDays"`
+	AvailableDays              sql.NullInt32   `json:"availableDays"`
+	DecisionComment            string          `json:"decisionComment"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
@@ -150,6 +209,8 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 			&i.EndDate,
 			&i.TotalDays,
 			&i.ExcessDays,
+			&i.AvailableDays,
+			&i.DecisionComment,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -206,6 +267,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -229,6 +292,8 @@ type GetVacationByIDRow struct {
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
 	ExcessDays                 int32           `json:"excessDays"`
+	AvailableDays              sql.NullInt32   `json:"availableDays"`
+	DecisionComment            string          `json:"decisionComment"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	ApprovalEmailSentAt        sql.NullTime    `json:"approvalEmailSentAt"`
@@ -250,6 +315,8 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.EndDate,
 		&i.TotalDays,
 		&i.ExcessDays,
+		&i.AvailableDays,
+		&i.DecisionComment,
 		&i.Description,
 		&i.Status,
 		&i.ApprovalEmailSentAt,
@@ -271,6 +338,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -284,8 +353,8 @@ FROM
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
   v.user_id = ?
-  AND YEAR(v.start_date) = YEAR(?)
-  AND YEAR(v.end_date) = YEAR(?)
+  AND YEAR(v.start_date) <= YEAR(?)
+  AND YEAR(v.end_date) >= YEAR(?)
 ORDER BY
   v.created_at DESC
 `
@@ -302,6 +371,8 @@ type GetVacationsByYearRow struct {
 	EndDate                    time.Time       `json:"endDate"`
 	TotalDays                  int32           `json:"totalDays"`
 	ExcessDays                 int32           `json:"excessDays"`
+	AvailableDays              sql.NullInt32   `json:"availableDays"`
+	DecisionComment            string          `json:"decisionComment"`
 	Description                string          `json:"description"`
 	Status                     VacationsStatus `json:"status"`
 	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
@@ -328,6 +399,8 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 			&i.EndDate,
 			&i.TotalDays,
 			&i.ExcessDays,
+			&i.AvailableDays,
+			&i.DecisionComment,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -366,8 +439,8 @@ FROM
   vacations v
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(v.start_date) = YEAR(?)
-  AND YEAR(v.end_date) = YEAR(?)
+  YEAR(v.start_date) <= YEAR(?)
+  AND YEAR(v.end_date) >= YEAR(?)
 ORDER BY
   v.created_at DESC
 `
@@ -431,6 +504,58 @@ func (q *Queries) ListVacationCalendarByYear(ctx context.Context, arg ListVacati
 	return items, nil
 }
 
+const listVacationHistory = `-- name: ListVacationHistory :many
+SELECT id, vacation_id, actor_id, event_type, detail, created_at FROM vacation_history
+WHERE vacation_id = ? ORDER BY created_at DESC, id DESC
+`
+
+func (q *Queries) ListVacationHistory(ctx context.Context, vacationID string) ([]VacationHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listVacationHistory, vacationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []VacationHistory
+	for rows.Next() {
+		var i VacationHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.VacationID,
+			&i.ActorID,
+			&i.EventType,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockVacation = `-- name: LockVacation :one
+SELECT id, user_id, status FROM vacations WHERE id = ? FOR UPDATE
+`
+
+type LockVacationRow struct {
+	ID     string          `json:"id"`
+	UserID string          `json:"userId"`
+	Status VacationsStatus `json:"status"`
+}
+
+func (q *Queries) LockVacation(ctx context.Context, id string) (LockVacationRow, error) {
+	row := q.db.QueryRowContext(ctx, lockVacation, id)
+	var i LockVacationRow
+	err := row.Scan(&i.ID, &i.UserID, &i.Status)
+	return i, err
+}
+
 const markVacationApprovalEmailSent = `-- name: MarkVacationApprovalEmailSent :exec
 UPDATE vacations
 SET
@@ -446,6 +571,21 @@ type MarkVacationApprovalEmailSentParams struct {
 
 func (q *Queries) MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error {
 	_, err := q.db.ExecContext(ctx, markVacationApprovalEmailSent, arg.ApprovalEmailSentAt, arg.ID)
+	return err
+}
+
+const setVacationDecision = `-- name: SetVacationDecision :exec
+UPDATE vacations SET status = ?, decision_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+`
+
+type SetVacationDecisionParams struct {
+	Status          VacationsStatus `json:"status"`
+	DecisionComment string          `json:"decisionComment"`
+	ID              string          `json:"id"`
+}
+
+func (q *Queries) SetVacationDecision(ctx context.Context, arg SetVacationDecisionParams) error {
+	_, err := q.db.ExecContext(ctx, setVacationDecision, arg.Status, arg.DecisionComment, arg.ID)
 	return err
 }
 

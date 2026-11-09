@@ -79,6 +79,10 @@ func (h *FileHandler) UploadFile(c fiber.Ctx) error {
 		UploaderID: uploaderIDStr,
 	})
 	if err != nil {
+		var fe *fiber.Error
+		if errors.As(err, &fe) {
+			return response.Error(c, fe.Code, err)
+		}
 		return response.ServerError(c)
 	}
 
@@ -128,7 +132,11 @@ func (h *FileHandler) DeleteFile(c fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.service.Delete(c.RequestCtx(), id); err != nil {
+	if err := h.service.Delete(c.RequestCtx(), id, fileCallerID(c)); err != nil {
+		var fe *fiber.Error
+		if errors.As(err, &fe) {
+			return response.Error(c, fe.Code, err)
+		}
 		if errors.Is(err, service.ErrFileNotFound) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "файл не найден"))
 		}
@@ -311,3 +319,5 @@ func nullableString(v sql.NullString) *string {
 }
 
 // fiber:context-methods migrated
+
+func fileCallerID(c fiber.Ctx) string { id, _ := c.Locals("user_id").(string); return id }

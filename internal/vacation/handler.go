@@ -33,18 +33,30 @@ func (h *Handler) CreateVacation(c fiber.Ctx) error {
 		return response.Error(c, http.StatusBadRequest, err)
 	}
 
-	err := h.service.CreateVacationReport(c.RequestCtx(), body)
+	if body.StartDate.IsZero() || body.EndDate.IsZero() || body.StartDate.After(body.EndDate) {
+		return response.Error(c, 400, errors.New("Некорректный период отпуска"))
+	}
+	if body.Status == "" {
+		body.Status = repo.VacationsStatusPending
+	}
+	if body.Status != repo.VacationsStatusPending && !middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "vacation", Action: "edit"}) {
+		return response.Error(c, 403, errors.New("Сотрудник может создать только заявку на рассмотрении"))
+	}
+	if body.Status != repo.VacationsStatusPending && body.Status != repo.VacationsStatusApproved {
+		return response.Error(c, 400, errors.New("Некорректный начальный статус"))
+	}
+	err := h.service.CreateVacationReport(actionContext(c, ""), body)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Created(c)
 }
 
 func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
-	year, err := fiber.Params[int](c, "year"), error(nil)
+	year, err := strconv.Atoi(c.Params("year"))
 
-	if err != nil {
+	if err != nil || year < 1 || year > 9999 {
 		return response.BadRequest(c)
 	}
 
@@ -52,7 +64,7 @@ func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
 
 	vacations, err := h.service.GetVacationsByYear(c.RequestCtx(), userId, year)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, vacations)
@@ -77,7 +89,7 @@ func (h *Handler) GetVacation(c fiber.Ctx) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
 		}
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	callerID, _ := c.Locals("user_id").(string)
@@ -96,15 +108,15 @@ func (h *Handler) GetVacation(c fiber.Ctx) error {
 }
 
 func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {
-	year, err := fiber.Params[int](c, "year"), error(nil)
+	year, err := strconv.Atoi(c.Params("year"))
 
-	if err != nil {
+	if err != nil || year < 1 || year > 9999 {
 		return response.BadRequest(c)
 	}
 
 	vacations, err := h.service.GetAllUserVacationsByYear(c.RequestCtx(), year)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, vacations)
@@ -116,14 +128,14 @@ func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {
 // виджета "отпуска коллег". Отдельное разрешение time:vacation_calendar:read,
 // см. комментарий в route.go.
 func (h *Handler) ListVacationCalendar(c fiber.Ctx) error {
-	year, err := fiber.Params[int](c, "year"), error(nil)
-	if err != nil {
+	year, err := strconv.Atoi(c.Params("year"))
+	if err != nil || year < 1 || year > 9999 {
 		return response.BadRequest(c)
 	}
 
 	vacations, err := h.service.ListVacationCalendarByYear(c.RequestCtx(), year)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, vacations)
@@ -163,7 +175,7 @@ func (h *Handler) CalculateVacationDays(c fiber.Ctx) error {
 	// Вызываем сервис
 	result, err := h.service.CalculateVacationDays(c.RequestCtx(), startDate, endDate)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, result)
@@ -192,16 +204,16 @@ func (h *Handler) CalculateVacationEndDate(c fiber.Ctx) error {
 
 	result, err := h.service.CalculateVacationEndDate(c.RequestCtx(), startDate, days)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, result)
 }
 
 func (h *Handler) GetVacationStatistics(c fiber.Ctx) error {
-	year, err := fiber.Params[int](c, "year"), error(nil)
+	year, err := strconv.Atoi(c.Params("year"))
 
-	if err != nil {
+	if err != nil || year < 1 || year > 9999 {
 		return response.BadRequest(c)
 	}
 
@@ -209,7 +221,7 @@ func (h *Handler) GetVacationStatistics(c fiber.Ctx) error {
 
 	stats, err := h.service.GetVacationsStats(c.RequestCtx(), userId, year)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, stats)
@@ -223,9 +235,9 @@ func (h *Handler) ApproveVacation(c fiber.Ctx) error {
 	}
 
 	// Используем UpdateVacationStatus с статусом "approved"
-	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, repo.VacationsStatusApproved)
+	err := h.service.UpdateVacationStatus(actionContext(c, c.Query("comment")), vacationID, repo.VacationsStatusApproved)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, fiber.Map{
@@ -241,7 +253,8 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 	}
 
 	var body struct {
-		Status string `json:"status"`
+		Status  string `json:"status"`
+		Comment string `json:"comment"`
 	}
 
 	if err := c.Bind().Body(&body); err != nil {
@@ -262,9 +275,9 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 			fiber.NewError(http.StatusBadRequest, "Invalid status. Must be one of: pending, approved, rejected"))
 	}
 
-	err := h.service.UpdateVacationStatus(c.RequestCtx(), vacationID, status)
+	err := h.service.UpdateVacationStatus(actionContext(c, body.Comment), vacationID, status)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, fiber.Map{
@@ -273,6 +286,9 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateVacationType(c fiber.Ctx) error {
+	if _, err := h.applicationAccess(c, "edit"); err != nil {
+		return workflowResponseError(c, err)
+	}
 	vacationID := c.Params("id")
 
 	if vacationID == "" {
@@ -292,9 +308,9 @@ func (h *Handler) UpdateVacationType(c fiber.Ctx) error {
 			fiber.NewError(http.StatusBadRequest, "vacationTypeId обязателен"))
 	}
 
-	err := h.service.UpdateVacationType(c.RequestCtx(), vacationID, body.VacationTypeID)
+	err := h.service.UpdateVacationType(actionContext(c, ""), vacationID, body.VacationTypeID)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	return response.Success(c, fiber.Map{
@@ -322,7 +338,7 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
 		}
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	callerID, _ := c.Locals("user_id").(string)
@@ -343,7 +359,7 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 
 	err = h.service.DeleteVacation(c.RequestCtx(), vacationID)
 	if err != nil {
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	if err := h.fileService.DeleteByEntity(c.RequestCtx(), "vacation", vacationID); err != nil {
@@ -373,7 +389,7 @@ func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
 		}
-		return response.Error(c, http.StatusInternalServerError, err)
+		return workflowResponseError(c, err)
 	}
 
 	uploaderID, _ := c.Locals("user_id").(string)
@@ -400,7 +416,7 @@ func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 		UploaderID: uploaderID,
 	})
 	if err != nil {
-		return response.ServerError(c)
+		return workflowResponseError(c, err)
 	}
 
 	// Если заявка уже утверждена — этот файл может быть тем самым сканом,
@@ -417,4 +433,63 @@ func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 		"fileType":     f.FileType,
 		"sizeBytes":    f.SizeBytes,
 	})
+}
+
+func workflowResponseError(c fiber.Ctx, err error) error {
+	var fe *fiber.Error
+	if errors.As(err, &fe) {
+		return response.Error(c, fe.Code, err)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return response.Error(c, 404, errors.New("Заявка не найдена"))
+	}
+	return response.Error(c, 500, err)
+}
+func (h *Handler) applicationAccess(c fiber.Ctx, action string) (*repo.GetVacationByIDRow, error) {
+	v, err := h.service.GetVacationByID(c.RequestCtx(), c.Params("id"))
+	if err != nil {
+		return nil, err
+	}
+	caller, _ := c.Locals("user_id").(string)
+	if !middleware.RequireOwnerOrAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "vacation", Action: action}, caller, v.UserID) {
+		return nil, fiber.NewError(403, "Нет доступа к заявке")
+	}
+	return v, nil
+}
+func (h *Handler) History(c fiber.Ctx) error {
+	if _, err := h.applicationAccess(c, "read"); err != nil {
+		return workflowResponseError(c, err)
+	}
+	events, err := h.service.GetHistory(c.RequestCtx(), c.Params("id"))
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	return response.Success(c, historyResponse(events))
+}
+func (h *Handler) EditApplication(c fiber.Ctx) error {
+	if _, err := h.applicationAccess(c, "edit"); err != nil {
+		return workflowResponseError(c, err)
+	}
+	var body VacationCreateRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c)
+	}
+	if err := h.service.EditApplication(actionContext(c, ""), c.Params("id"), body); err != nil {
+		return workflowResponseError(c, err)
+	}
+	return response.Updated(c)
+}
+func (h *Handler) Withdraw(c fiber.Ctx) error {
+	v, err := h.applicationAccess(c, "edit")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	caller, _ := c.Locals("user_id").(string)
+	if caller != v.UserID {
+		return response.Error(c, 403, errors.New("Отозвать заявку может только её автор"))
+	}
+	if err := h.service.UpdateVacationStatus(actionContext(c, ""), v.ID, repo.VacationsStatusWithdrawn); err != nil {
+		return workflowResponseError(c, err)
+	}
+	return response.Updated(c)
 }

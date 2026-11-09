@@ -38,9 +38,15 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation_calendar", Action: "read"}),
 		handler.ListVacationCalendar)
 
+	// Конкретный суффикс должен предшествовать маршруту с двумя параметрами.
+	router.Get("/:id/history", middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}), handler.History)
+
 	router.Get("/:userId/:year",
 		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
 		handler.GetVacationsByYear)
+
+	router.Put("/:id/application", middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}), handler.EditApplication)
+	router.Put("/:id/withdraw", middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}), handler.Withdraw)
 
 	// карточка отдельной заявки, по id отпуска (страница заявления)
 	router.Get("/:id",
@@ -65,7 +71,7 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		handler.UpdateVacationStatus)
 
 	router.Put("/:id/type",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit", RequireAll: true}),
+		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation", Action: "edit"}),
 		handler.UpdateVacationType)
 
 	// загрузка файла; просмотр: GET /v1/files/entity/vacation/:id, удаление: DELETE /v1/files/:id

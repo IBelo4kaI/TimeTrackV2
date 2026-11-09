@@ -35,6 +35,8 @@ type vacationService struct {
 }
 
 type Service interface {
+	GetHistory(ctx context.Context, id string) ([]repo.VacationHistory, error)
+	EditApplication(ctx context.Context, id string, body VacationCreateRequest) error
 	CalculateVacationDaysFullMonths(ctx context.Context, startDate, endDate time.Time) (*VacationCalculationResult, error)
 	CalculateVacationDays(ctx context.Context, startDate, endDate time.Time) (*VacationCalculationResult, error)
 	CalculateVacationEndDate(ctx context.Context, startDate time.Time, days int) (*VacationEndDateResult, error)
@@ -179,25 +181,32 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		}
 		affectsBalance = vacationType.AffectsBalance
 	}
+	stats, err := s.GetVacationsStats(ctx, vacation.UserID, vacation.StartDate.Year())
+	if err != nil {
+		return err
+	}
 	excessDays := 0
 	if affectsBalance {
-		stats, err := s.GetVacationsStats(ctx, vacation.UserID, vacation.StartDate.Year())
-		if err != nil {
-			return err
-		}
 		excessDays = calculateExcessDays(totalDays.TotalVacationDays, stats.Free)
 	}
 
 	vacationID := uuid.NewString()
 
-	// Создаем отпуск в базе данных
-	err = s.repo.CreateVacation(ctx, repo.CreateVacationParams{
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	// Создаем отпуск и событие в одной транзакции.
+	err = q.CreateVacation(ctx, repo.CreateVacationParams{
 		ID:             vacationID,
 		UserID:         vacation.UserID,
 		StartDate:      vacation.StartDate,
 		EndDate:        vacation.EndDate,
 		TotalDays:      int32(totalDays.TotalVacationDays),
 		ExcessDays:     int32(excessDays),
+		AvailableDays:  sql.NullInt32{Int32: int32(stats.Free), Valid: true},
 		Description:    desc,
 		Status:         vacation.Status,
 		VacationTypeID: vacationTypeID,
@@ -206,12 +215,28 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		return err
 	}
 
+	actor := actorFrom(ctx).ID
+	if actor == "" {
+		actor = vacation.UserID
+	}
+	if err := q.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: vacationID, ActorID: actor, EventType: "created", Detail: "Заявка создана"}); err != nil {
+		return err
+	}
+	if vacation.Status == repo.VacationsStatusApproved {
+		if err := q.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: vacationID, ActorID: actor, EventType: "approved", Detail: "Заявка создана в статусе «Утверждена»"}); err != nil {
+			return err
+		}
+	}
 	// Если статус отпуска "approved", создаем userTimeEntry
 	if vacation.Status == repo.VacationsStatusApproved {
-		err = s.createOrUpdateVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate)
+		err = s.createOrUpdateVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate, q)
 		if err != nil {
 			return fmt.Errorf("failed to create vacation time entries: %w", err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
@@ -481,22 +506,12 @@ func (s *vacationService) resolveVacationTypeID(ctx context.Context, vacationTyp
 	return sql.NullString{String: defaultType.ID, Valid: true}, nil
 }
 
-func (s *vacationService) UpdateVacationType(ctx context.Context, vacationID string, vacationTypeID string) error {
-	typeID, err := s.resolveVacationTypeID(ctx, vacationTypeID)
+func (s *vacationService) UpdateVacationType(ctx context.Context, id, typeID string) error {
+	v, err := s.repo.GetVacationByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	if !typeID.Valid {
-		return fmt.Errorf("тип отпуска не найден")
-	}
-
-	if err := s.repo.AssignVacationType(ctx, repo.AssignVacationTypeParams{
-		VacationTypeID: typeID,
-		ID:             vacationID,
-	}); err != nil {
-		return fmt.Errorf("failed to update vacation type: %w", err)
-	}
-	return nil
+	return s.EditApplication(ctx, id, VacationCreateRequest{StartDate: v.StartDate, EndDate: v.EndDate, VacationTypeID: typeID, Description: v.Description})
 }
 
 // Вспомогательный метод — логика определения типа дня (вынесена из оригинала)
@@ -526,9 +541,13 @@ func (s *vacationService) buildVacationDay(ctx context.Context, date time.Time) 
 }
 
 // Вспомогательный метод — создание или обновление userTimeEntry для отпускных дней
-func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time) error {
+func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time, transactionQueries ...*repo.Queries) error {
+	q := s.repo
+	if len(transactionQueries) > 0 {
+		q = transactionQueries[0]
+	}
 	// Получаем day_type_id для типа "vacation"
-	dayType, err := s.repo.GetDayTypeBySystemName(ctx, "vacation")
+	dayType, err := q.GetDayTypeBySystemName(ctx, "vacation")
 	if err != nil {
 		// Если day_type не найден, просто возвращаем успех без создания записей
 		if err == sql.ErrNoRows {
@@ -574,7 +593,7 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 		}
 
 		firstDayOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, startDate.Location())
-		existingEntries, err := s.repo.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
+		existingEntries, err := q.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
 			UserID: userID,
 			Year:   firstDayOfMonth,
 			Month:  firstDayOfMonth,
@@ -618,7 +637,15 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 
 	// Создаем новые записи
 	if len(entries) > 0 {
-		err = s.userTimeEntryService.CreateUserTimeEntry(ctx, entries)
+		if len(transactionQueries) > 0 {
+			for _, entry := range entries {
+				if err = q.CreateUserTimeEntry(ctx, entry); err != nil {
+					break
+				}
+			}
+		} else {
+			err = s.userTimeEntryService.CreateUserTimeEntry(ctx, entries)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to create user time entries: %w", err)
 		}
@@ -626,7 +653,15 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 
 	// Обновляем существующие записи
 	if len(updateEntries) > 0 {
-		err = s.userTimeEntryService.UpdateUserTimeEntries(ctx, updateEntries)
+		if len(transactionQueries) > 0 {
+			for _, entry := range updateEntries {
+				if err = q.UpdateUserTimeEntry(ctx, entry); err != nil {
+					break
+				}
+			}
+		} else {
+			err = s.userTimeEntryService.UpdateUserTimeEntries(ctx, updateEntries)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to update user time entries: %w", err)
 		}
@@ -636,7 +671,11 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 }
 
 // Вспомогательный метод — удаление userTimeEntry для отпускных дней
-func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time) error {
+func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time, transactionQueries ...*repo.Queries) error {
+	q := s.repo
+	if len(transactionQueries) > 0 {
+		q = transactionQueries[0]
+	}
 	// Используем CalculateVacationDays для определения, какие дни являются отпускными
 	vacationDays, err := s.CalculateVacationDays(ctx, startDate, endDate)
 	if err != nil {
@@ -656,7 +695,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 	}
 
 	// Получаем day_type_id для типа "vacation"
-	vacationDayType, err := s.repo.GetDayTypeBySystemName(ctx, "vacation")
+	vacationDayType, err := q.GetDayTypeBySystemName(ctx, "vacation")
 	if err != nil {
 		// Если day_type не найден, просто возвращаем успех без удаления записей
 		if err == sql.ErrNoRows {
@@ -666,7 +705,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 	}
 
 	// Получаем day_type_id для типа "work"
-	workDayType, err := s.repo.GetDayTypeBySystemName(ctx, "work")
+	workDayType, err := q.GetDayTypeBySystemName(ctx, "work")
 	if err != nil {
 		// Если day_type "work" не найден, просто удаляем записи
 		if err == sql.ErrNoRows {
@@ -695,7 +734,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 		}
 
 		firstDayOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, startDate.Location())
-		existingEntries, err := s.repo.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
+		existingEntries, err := q.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
 			UserID: userID,
 			Year:   firstDayOfMonth,
 			Month:  firstDayOfMonth,
@@ -743,7 +782,16 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 
 	// Обновляем записи с часами > 0 на тип "work"
 	if len(entriesToUpdate) > 0 {
-		err = s.userTimeEntryService.UpdateUserTimeEntries(ctx, entriesToUpdate)
+		if len(transactionQueries) > 0 {
+			for _, entry := range entriesToUpdate {
+				entry.WorkLocation = sql.NullString{String: "office", Valid: true}
+				if err = q.UpdateUserTimeEntry(ctx, entry); err != nil {
+					break
+				}
+			}
+		} else {
+			err = s.userTimeEntryService.UpdateUserTimeEntries(ctx, entriesToUpdate)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to update user time entries to work type: %w", err)
 		}
@@ -751,10 +799,12 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 
 	// Удаляем записи с часами = 0
 	if len(entriesToDelete) > 0 {
-		err = s.userTimeEntryService.DeleteUserTimeEntries(ctx, repo.DeleteUserTimeEntriesParams{
-			EntryDate: entriesToDelete,
-			UserID:    userID,
-		})
+		params := repo.DeleteUserTimeEntriesParams{EntryDate: entriesToDelete, UserID: userID}
+		if len(transactionQueries) > 0 {
+			err = q.DeleteUserTimeEntries(ctx, params)
+		} else {
+			err = s.userTimeEntryService.DeleteUserTimeEntries(ctx, params)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to delete user time entries: %w", err)
 		}
@@ -764,79 +814,10 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 }
 
 func (s *vacationService) ApproveVacation(ctx context.Context, vacationID string) error {
-	// Получаем отпуск по ID
-	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
-	if err != nil {
-		return fmt.Errorf("failed to get vacation: %w", err)
-	}
-
-	// Проверяем, что статус отпуска "pending"
-	if vacation.Status != repo.VacationsStatusPending {
-		return fmt.Errorf("vacation status is not pending, current status: %s", vacation.Status)
-	}
-
-	// Создаем или обновляем записи userTimeEntry для отпускных дней
-	err = s.createOrUpdateVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate)
-	if err != nil {
-		return fmt.Errorf("failed to create vacation time entries: %w", err)
-	}
-
-	// Обновляем статус отпуска на "approved"
-	err = s.repo.UpdateVacationStatus(ctx, repo.UpdateVacationStatusParams{
-		ID:     vacationID,
-		Status: repo.VacationsStatusApproved,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update vacation status: %w", err)
-	}
-
-	applicantName := s.resolveApplicantName(ctx, vacation.UserID)
-	s.notifyApplicantStatusChanged(ctx, vacation, repo.VacationsStatusApproved, applicantName)
-
-	if err := s.SendApprovalEmailIfReady(ctx, vacationID); err != nil {
-		fmt.Printf("vacation: send approval email failed: %v\n", err)
-	}
-
-	return nil
+	return s.transition(ctx, vacationID, repo.VacationsStatusApproved)
 }
-
-func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, newStatus repo.VacationsStatus) error {
-	// Получаем отпуск по ID
-	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
-	if err != nil {
-		return fmt.Errorf("failed to get vacation: %w", err)
-	}
-
-	// Если новый статус "approved", вызываем метод ApproveVacation
-	if newStatus == repo.VacationsStatusApproved {
-		return s.ApproveVacation(ctx, vacationID)
-	}
-
-	// Если текущий статус "approved" и новый статус не "approved",
-	// нужно удалить userTimeEntry для отпускных дней
-	if vacation.Status == repo.VacationsStatusApproved && newStatus != repo.VacationsStatusApproved {
-		err = s.deleteVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate)
-		if err != nil {
-			return fmt.Errorf("failed to delete vacation time entries: %w", err)
-		}
-	}
-
-	// Обновляем статус отпуска
-	err = s.repo.UpdateVacationStatus(ctx, repo.UpdateVacationStatusParams{
-		ID:     vacationID,
-		Status: newStatus,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update vacation status: %w", err)
-	}
-
-	// applicantName нужен только для approved-ветки (см.
-	// notifyApplicantStatusChanged) — та обрабатывается отдельно в
-	// ApproveVacation выше, сюда попадают только rejected/pending, для них
-	// ФИО не используется, резолвить не нужно.
-	s.notifyApplicantStatusChanged(ctx, vacation, newStatus, "")
-
-	return nil
+func (s *vacationService) UpdateVacationStatus(ctx context.Context, vacationID string, status repo.VacationsStatus) error {
+	return s.transition(ctx, vacationID, status)
 }
 
 // notifyApplicantStatusChanged — сотруднику, чья заявка, о смене статуса на
@@ -857,6 +838,9 @@ func (s *vacationService) notifyApplicantStatusChanged(ctx context.Context, vaca
 	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
 	// Себе (это же его заявка) — без ФИО, просто даты/тип/описание.
 	body := vacationNotificationBody("", dates, vacation.VacationTypeName, vacation.Description)
+	if actorFrom(ctx).Comment != "" {
+		body += "\nКомментарий к решению: " + actorFrom(ctx).Comment
+	}
 
 	s.notificationService.CreateMany(ctx, []string{vacation.UserID}, title, body, repo.NotificationsTypeInfo, "vacation", vacation.ID)
 	s.vkService.Notify(ctx, vacation.UserID, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, vacation.ID))

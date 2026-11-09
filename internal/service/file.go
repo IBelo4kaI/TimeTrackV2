@@ -12,6 +12,7 @@ import (
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/adapter/storage"
 
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
@@ -49,6 +50,9 @@ type UploadFileParams struct {
 }
 
 func (s *FileService) Upload(ctx context.Context, p UploadFileParams) (repo.GetFileByIDRow, error) {
+	if p.EntityType == "vacation" && p.File != nil && p.File.Size > 10*1024*1024 {
+		return repo.GetFileByIDRow{}, fiber.NewError(400, "Максимальный размер файла — 10 МБ")
+	}
 	if p.File == nil {
 		return repo.GetFileByIDRow{}, errors.New("file is required")
 	}
@@ -78,6 +82,18 @@ func (s *FileService) Upload(ctx context.Context, p UploadFileParams) (repo.GetF
 	defer tx.Rollback()
 
 	qtx := s.repo.WithTx(tx)
+
+	if p.EntityType == "vacation" && p.EntityID != "" {
+		_, err := qtx.LockVacation(ctx, p.EntityID)
+		if err != nil {
+			s.storage.Delete(storagePath)
+			return repo.GetFileByIDRow{}, err
+		}
+		if err := qtx.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: p.EntityID, ActorID: p.UploaderID, EventType: "file_added", Detail: "Добавлен файл: " + filepath.Base(p.File.Filename)}); err != nil {
+			s.storage.Delete(storagePath)
+			return repo.GetFileByIDRow{}, err
+		}
+	}
 
 	categoryID := s.resolveCategoryID(ctx, p.CategoryID, p.EntityType)
 
@@ -130,7 +146,11 @@ func (s *FileService) GetFile(ctx context.Context, id string) (repo.GetFileByIDR
 	return f, nil
 }
 
-func (s *FileService) Delete(ctx context.Context, id string) error {
+func (s *FileService) Delete(ctx context.Context, id string, actorIDs ...string) error {
+	actorID := ""
+	if len(actorIDs) > 0 {
+		actorID = actorIDs[0]
+	}
 	f, err := s.repo.GetFileByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -139,8 +159,36 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("get file: %w", err)
 	}
 
-	if err = s.repo.HardDeleteFile(ctx, id); err != nil {
-		return fmt.Errorf("hard delete: %w", err)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	refs, err := q.ListEntityRefsByFile(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, ref := range refs {
+		if ref.EntityType != "vacation" {
+			continue
+		}
+		_, err := q.LockVacation(ctx, ref.EntityID)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := q.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: ref.EntityID, ActorID: actorID, EventType: "file_deleted", Detail: "Удалён файл: " + f.OriginalName}); err != nil {
+			return err
+		}
+	}
+	if err := q.HardDeleteFile(ctx, id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
 	_ = s.storage.Delete(f.StoragePath)

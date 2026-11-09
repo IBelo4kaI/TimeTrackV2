@@ -6,6 +6,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -55,6 +57,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -68,8 +72,8 @@ FROM
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
   v.user_id = sqlc.arg (user_id)
-  AND YEAR(v.start_date) = YEAR(sqlc.arg (year))
-  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
+  AND YEAR(v.start_date) <= YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) >= YEAR(sqlc.arg (year))
 ORDER BY
   v.created_at DESC;
 
@@ -81,6 +85,8 @@ SELECT
   v.end_date,
   v.total_days,
   v.excess_days,
+  v.available_days,
+  v.decision_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -93,8 +99,8 @@ FROM
   vacations v
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(v.start_date) = YEAR(sqlc.arg (year))
-  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
+  YEAR(v.start_date) <= YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) >= YEAR(sqlc.arg (year))
 ORDER BY
   v.created_at DESC;
 
@@ -122,8 +128,8 @@ FROM
   vacations v
   LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
 WHERE
-  YEAR(v.start_date) = YEAR(sqlc.arg (year))
-  AND YEAR(v.end_date) = YEAR(sqlc.arg (year))
+  YEAR(v.start_date) <= YEAR(sqlc.arg (year))
+  AND YEAR(v.end_date) >= YEAR(sqlc.arg (year))
 ORDER BY
   v.created_at DESC;
 
@@ -139,12 +145,13 @@ INSERT INTO
     end_date,
     total_days,
     excess_days,
+    available_days,
     description,
     status,
     vacation_type_id
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountVacationsByStatus :one
 SELECT
@@ -157,3 +164,21 @@ WHERE
   AND v.status = ?
   AND YEAR(v.start_date) = YEAR(sqlc.arg (year))
   AND COALESCE(t.affects_balance, TRUE) = TRUE;
+
+-- name: LockVacation :one
+SELECT id, user_id, status FROM vacations WHERE id = ? FOR UPDATE;
+
+-- name: SetVacationDecision :exec
+UPDATE vacations SET status = ?, decision_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+
+-- name: EditPendingVacation :exec
+UPDATE vacations SET start_date = ?, end_date = ?, total_days = ?,
+ vacation_type_id = ?, description = ?, excess_days = ?, available_days = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'pending';
+
+-- name: AddVacationHistory :exec
+INSERT INTO vacation_history (vacation_id, actor_id, event_type, detail) VALUES (?, ?, ?, ?);
+
+-- name: ListVacationHistory :many
+SELECT id, vacation_id, actor_id, event_type, detail, created_at FROM vacation_history
+WHERE vacation_id = ? ORDER BY created_at DESC, id DESC;

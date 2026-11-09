@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
 	"io/fs"
 	"sort"
 	"strings"
@@ -103,6 +105,9 @@ func applyFile(ctx context.Context, db *sql.DB, path string) error {
 
 	for _, stmt := range splitStatements(string(data)) {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			if resumableWorkflowColumn(path, stmt, err) {
+				continue
+			}
 			return fmt.Errorf("exec statement: %w\nSQL: %s", err, stmt)
 		}
 	}
@@ -140,4 +145,19 @@ func splitStatements(content string) []string {
 	}
 
 	return stmts
+}
+
+// MySQL commits ALTER/CREATE independently of the enclosing transaction.
+// Migration 039 may have created these columns before failing on its data backfill.
+// Only these two single-column additions can safely ignore a duplicate-column error.
+func resumableWorkflowColumn(path, stmt string, err error) bool {
+	if path != "migrations/039_vacation_workflow.sql" {
+		return false
+	}
+	var dbErr *mysql.MySQLError
+	if !errors.As(err, &dbErr) || dbErr.Number != 1060 {
+		return false
+	}
+	return stmt == "ALTER TABLE vacations ADD COLUMN available_days INT NULL AFTER excess_days" ||
+		stmt == "ALTER TABLE vacations ADD COLUMN decision_comment VARCHAR(4000) NOT NULL DEFAULT ''"
 }

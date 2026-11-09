@@ -15,6 +15,7 @@ type Querier interface {
 	// chat_participants queries
 	// ============================================
 	AddChatParticipant(ctx context.Context, arg AddChatParticipantParams) error
+	AddVacationHistory(ctx context.Context, arg AddVacationHistoryParams) error
 	AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error
 	CountCalendarEventsByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
@@ -90,6 +91,7 @@ type Querier interface {
 	DeleteVacation(ctx context.Context, id string) error
 	DeleteVacationType(ctx context.Context, id string) error
 	DeleteWorkStandard(ctx context.Context, id string) error
+	EditPendingVacation(ctx context.Context, arg EditPendingVacationParams) error
 	GetActiveBusinessCardAssignment(ctx context.Context, cardID string) (BusinessCardAssignment, error)
 	GetActiveVacationTypes(ctx context.Context) ([]VacationType, error)
 	GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error)
@@ -241,12 +243,14 @@ type Querier interface {
 	// всем сотрудникам time:vacation.all:read (тот открывает куда более
 	// чувствительный полный список + доступ к менеджерским действиям).
 	ListVacationCalendarByYear(ctx context.Context, arg ListVacationCalendarByYearParams) ([]ListVacationCalendarByYearRow, error)
+	ListVacationHistory(ctx context.Context, vacationID string) ([]VacationHistory, error)
 	ListVacationIDsByUser(ctx context.Context, userID string) ([]string, error)
 	// Только собственные индивидуальные нормы вызывающего — см.
 	// time:work_standards_mine:read, узкое разрешение для страницы календаря
 	// (в отличие от work_standards:read, которое отдаёт нормы всех и есть
 	// только у админов).
 	ListWorkStandardsByUserAndYear(ctx context.Context, arg ListWorkStandardsByUserAndYearParams) ([]WorkStandard, error)
+	LockVacation(ctx context.Context, id string) (LockVacationRow, error)
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
@@ -260,6 +264,7 @@ type Querier interface {
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
 	SetReceiptCategoriesManual(ctx context.Context, arg SetReceiptCategoriesManualParams) error
+	SetVacationDecision(ctx context.Context, arg SetVacationDecisionParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error

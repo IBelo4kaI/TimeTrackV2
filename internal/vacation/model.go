@@ -41,3 +41,13 @@ type VacationCreateRequest struct {
 	Status         repo.VacationsStatus `json:"status"`
 	VacationTypeID string               `json:"vacationTypeId"`
 }
+
+// HistoryEvent keeps legacy events readable when their stored timestamp is invalid.
+type HistoryEvent struct {
+	ID         int64      `json:"id"`
+	VacationID string     `json:"vacationId"`
+	ActorID    string     `json:"actorId"`
+	EventType  string     `json:"eventType"`
+	Detail     string     `json:"detail"`
+	CreatedAt  *time.Time `json:"createdAt"`
+}
