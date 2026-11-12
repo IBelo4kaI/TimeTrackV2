@@ -5,20 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"time"
 )
-
-// Отключить после диагностики.
-const DebugLogs = true
-
-var checkSequence atomic.Uint64
-
-type debugLoggerKey struct{}
 
 type Client struct {
 	host      string
@@ -62,14 +53,6 @@ func NewClient(host, serviceID string) (*Client, error) {
 }
 
 func (c *Client) get(ctx context.Context, path, token string, result any) error {
-	logger, _ := ctx.Value(debugLoggerKey{}).(*slog.Logger)
-	if logger == nil {
-		logger = slog.Default()
-	}
-	started := time.Now()
-	if DebugLogs {
-		logger.Info("[permission-debug] HTTP request", "method", http.MethodGet, "url", c.host+path, "session_present", token != "")
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.host+path, nil)
 	if err != nil {
 		return fmt.Errorf("build auth request: %w", err)
@@ -77,59 +60,19 @@ func (c *Client) get(ctx context.Context, path, token string, result any) error 
 	req.AddCookie(&http.Cookie{Name: "session", Value: token})
 	resp, err := c.http.Do(req)
 	if err != nil {
-		if DebugLogs {
-			logger.Info("[permission-debug] HTTP error", "url", req.URL.String(), "duration", time.Since(started), "error", err)
-		}
 		return fmt.Errorf("request auth service: %w", err)
 	}
 	defer resp.Body.Close()
-	var body strings.Builder
-	if DebugLogs {
-		defer func() {
-			text := strings.ReplaceAll(body.String(), token, "[REDACTED]")
-			truncated := len(text) > 8192
-			if truncated {
-				text = text[:8192]
-			}
-			logger.Info("[permission-debug] HTTP response", "url", req.URL.String(), "status", resp.StatusCode,
-				"duration", time.Since(started), "body", text, "body_truncated", truncated)
-		}()
-	}
 	if resp.StatusCode != http.StatusOK {
-		if DebugLogs {
-			_, _ = io.Copy(&body, io.LimitReader(resp.Body, 8193))
-		}
 		return fmt.Errorf("auth service returned status %d", resp.StatusCode)
 	}
-	var reader io.Reader = io.LimitReader(resp.Body, 4<<20)
-	if DebugLogs {
-		reader = io.TeeReader(reader, &body)
-	}
-	if err := json.NewDecoder(reader).Decode(result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(result); err != nil {
 		return fmt.Errorf("decode auth response: %w", err)
 	}
 	return nil
 }
 
-func (c *Client) Validate(ctx context.Context, req *PermissionRequest) (response *PermissionResponse, err error) {
-	if DebugLogs {
-		target := ""
-		if req.UserId != nil {
-			target = *req.UserId
-		}
-		logger := slog.Default().With("check_id", checkSequence.Add(1))
-		ctx = context.WithValue(ctx, debugLoggerKey{}, logger)
-		logger.Info("[permission-debug] validate", "service_id", c.serviceID, "service", req.Service,
-			"entity", req.Entity, "action", req.Action, "target_user_id", target, "session_present", req.SessionToken != "")
-		defer func() {
-			if err != nil {
-				logger.Info("[permission-debug] validation failed", "error", err)
-				return
-			}
-			logger.Info("[permission-debug] validation result", "allowed", response.IsAccess,
-				"user_id", response.UserId, "code", response.Code, "message", response.Message)
-		}()
-	}
+func (c *Client) Validate(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
 	if req.SessionToken == "" {
 		return nil, fmt.Errorf("session is required")
 	}

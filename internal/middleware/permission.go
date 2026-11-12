@@ -1,20 +1,10 @@
 package middleware
 
 import (
-	"log/slog"
 	permissionClient "timetrack/internal/adapter/permission"
 
 	"github.com/gofiber/fiber/v3"
 )
-
-func logPermissionRequest(c fiber.Ctx, p Params) {
-	if permissionClient.DebugLogs {
-		slog.Info("[permission-debug] incoming request", "method", c.Method(), "path", c.Path(),
-			"service", p.Service, "entity", p.Entity, "action", p.Action,
-			"require_all", p.RequireAll, "target_user_id", c.Params("userId"),
-			"session_present", c.Cookies(SessionCookieName) != "")
-	}
-}
 
 type Params struct {
 	Service string
@@ -42,7 +32,6 @@ func Require(
 	p Params,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		logPermissionRequest(c, p)
 
 		// 1️⃣ достаём session_token
 		token := c.Cookies(SessionCookieName)
@@ -87,7 +76,6 @@ func RequireFromBody(
 	p Params,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		logPermissionRequest(c, p)
 		// 1️⃣ достаём session_token
 		token := c.Cookies(SessionCookieName)
 		if token == "" {
