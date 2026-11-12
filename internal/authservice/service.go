@@ -10,8 +10,7 @@ import (
 )
 
 // Service — HTTP-клиент к сервису авторизации (отдельному от timetrack,
-// см. AUTH_SERVICE_HOST/AUTH_SERVICE_API_KEY в env), не gRPC — тот уже
-// используется только для проверки прав (см. internal/adapter/grpc).
+// см. AUTH_SERVICE_HOST/AUTH_SERVICE_API_KEY в env).
 type Service interface {
 	GetAllUsers(ctx context.Context) ([]UserResponse, error)
 }

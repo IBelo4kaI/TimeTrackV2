@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
-	"timetrack/internal/adapter/grpc"
 	mysqladapter "timetrack/internal/adapter/mysql"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/env"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -50,16 +50,16 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	grpcClient, err := grpc.NewClient(env.GetGRPCServerAddr())
+	permissionClient, err := permission.NewClient(env.GetAuthServiceHost(), env.GetAuthServiceID())
 	if err != nil {
 		panic(err)
 	}
 
 	app := application{
-		config:     cfg,
-		db:         db,
-		grpcClient: grpcClient,
-		logger:     logger,
+		config:           cfg,
+		db:               db,
+		permissionClient: permissionClient,
+		logger:           logger,
 	}
 
 	app.run(app.mount())

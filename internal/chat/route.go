@@ -1,19 +1,19 @@
 package chat
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/sse"
 )
 
-func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string) {
-	handler := NewHandler(service, grpcClient, prefix)
+func SetupRoutes(f fiber.Router, service Service, permissionClient *permission.Client, prefix string) {
+	handler := NewHandler(service, permissionClient, prefix)
 	router := f.Group("/chats")
 
 	require := func(action string) fiber.Handler {
-		return middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "chat", Action: action})
+		return middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "chat", Action: action})
 	}
 
 	// Принадлежность конкретному чату (участник ли caller) проверяется уже

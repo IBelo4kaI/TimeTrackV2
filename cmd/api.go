@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 	"time"
-	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/authservice"
 	businesscard "timetrack/internal/business_card"
 	"timetrack/internal/calendar"
@@ -39,10 +39,10 @@ import (
 )
 
 type application struct {
-	config     config
-	db         *sql.DB
-	grpcClient *grpc.Client
-	logger     *slog.Logger
+	config           config
+	db               *sql.DB
+	permissionClient *permission.Client
+	logger           *slog.Logger
 }
 
 type config struct {
@@ -86,16 +86,16 @@ func (app *application) mount() *fiber.App {
 	v1 := fiberApp.Group("v1")
 
 	calendarService := calendar.NewService(repo.New(app.db))
-	calendar.SetupRoutes(v1, calendarService, app.grpcClient, app.config.prefix)
+	calendar.SetupRoutes(v1, calendarService, app.permissionClient, app.config.prefix)
 
 	calendarEventService := calendarevent.NewService(repo.New(app.db))
-	calendarevent.SetupRoutes(v1, calendarEventService, app.grpcClient, app.config.prefix)
+	calendarevent.SetupRoutes(v1, calendarEventService, app.permissionClient, app.config.prefix)
 
 	dayTypeService := daytype.NewService(repo.New(app.db))
-	daytype.SetupRoutes(v1, dayTypeService, app.grpcClient, app.config.prefix)
+	daytype.SetupRoutes(v1, dayTypeService, app.permissionClient, app.config.prefix)
 
 	userTimeEntryService := usertimeentry.NewService(repo.New(app.db), app.db)
-	usertimeentry.SetupRoutes(v1, userTimeEntryService, app.logger, app.grpcClient, app.config.prefix)
+	usertimeentry.SetupRoutes(v1, userTimeEntryService, app.logger, app.permissionClient, app.config.prefix)
 
 	fileService := service.NewFileService(app.db, "docs")
 
@@ -103,7 +103,7 @@ func (app *application) mount() *fiber.App {
 	// не в env, см. internal/smtp_settings. Та же permission-сущность
 	// "system_settings", что у общих настроек.
 	smtpSettingsService := smtpsettings.NewService(repo.New(app.db), app.config.smtpEncryptionKey)
-	smtpsettings.SetupRoutes(v1, smtpSettingsService, app.grpcClient, app.config.prefix)
+	smtpsettings.SetupRoutes(v1, smtpSettingsService, app.permissionClient, app.config.prefix)
 
 	mailService := mail.NewService(smtpSettingsService)
 
@@ -116,7 +116,7 @@ func (app *application) mount() *fiber.App {
 	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication
 	// в соответствующих service.go).
 	vkService := vk.NewService(repo.New(app.db), app.config.vk.groupToken, app.config.vk.communityScreenName, app.logger)
-	vk.SetupRoutes(v1, vkService, app.grpcClient, app.config.prefix, vk.Config{
+	vk.SetupRoutes(v1, vkService, app.permissionClient, app.config.prefix, vk.Config{
 		ConfirmationString: app.config.vk.confirmationString,
 		SecretKey:          app.config.vk.secretKey,
 	})
@@ -124,108 +124,108 @@ func (app *application) mount() *fiber.App {
 	// Свой SSE-хаб, отдельный от chat.Hub — см. internal/notification/hub.go.
 	notificationHub := notification.NewHub()
 	notificationService := notification.NewService(repo.New(app.db), notificationHub, vkService, app.logger)
-	notification.SetupRoutes(v1, notificationService, app.grpcClient, app.config.prefix)
+	notification.SetupRoutes(v1, notificationService, app.permissionClient, app.config.prefix)
 
 	// Готовые шаблоны для ручной рассылки (см. notificationService.SendManual)
 	notificationTemplateService := notificationtemplate.NewService(repo.New(app.db))
-	notificationtemplate.SetupRoutes(v1, notificationTemplateService, app.grpcClient, app.config.prefix)
+	notificationtemplate.SetupRoutes(v1, notificationTemplateService, app.permissionClient, app.config.prefix)
 
 	// Новости/чейнджлог приложения (см. internal/news)
 	newsService := news.NewService(repo.New(app.db))
-	news.SetupRoutes(v1, newsService, app.grpcClient, app.config.prefix)
+	news.SetupRoutes(v1, newsService, app.permissionClient, app.config.prefix)
 
 	// Vacation routes
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL)
-	vacation.SetupRoutes(v1, vacationService, fileService, app.grpcClient, app.config.prefix)
+	vacation.SetupRoutes(v1, vacationService, fileService, app.permissionClient, app.config.prefix)
 
 	// Напоминание заполнить табель — свой тикер в процессе, без внешнего
 	// cron (см. internal/timesheetreminder). Список сотрудников — только
 	// локально известные (без похода в auth-сервис за полным списком).
 	reminderService := timesheetreminder.NewService(repo.New(app.db), calendarService, notificationService, vkService, app.config.frontendURL, app.logger)
-	timesheetreminder.SetupRoutes(v1, reminderService, app.grpcClient, app.config.prefix)
+	timesheetreminder.SetupRoutes(v1, reminderService, app.permissionClient, app.config.prefix)
 	go runTimesheetReminderTicker(reminderService)
 
 	// Sick leave routes
 	sickLeaveService := sickleave.NewService(repo.New(app.db), userTimeEntryService, notificationService, vkService, app.config.frontendURL)
-	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.grpcClient, app.config.prefix)
+	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.permissionClient, app.config.prefix)
 
 	// File routes
-	fileHandler := handler.NewFileHandler(fileService, app.grpcClient, app.config.prefix)
+	fileHandler := handler.NewFileHandler(fileService, app.permissionClient, app.config.prefix)
 	fileRouter := v1.Group("/files")
 
 	// permission files:create
 	fileRouter.Post("/upload",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "create"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "create"}),
 		fileHandler.UploadFile)
 
 	// permission files:read
 	fileRouter.Get("/open/:id",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
 		fileHandler.OpenFile)
 
 	// permission files:read
 	fileRouter.Get("/entity/:entityType/:entityId",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
 		fileHandler.ListFilesByEntity)
 
 	// permission files:read
 	fileRouter.Get("/entity/:entityType",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
 		fileHandler.ListFilesByEntityType)
 
 	// permission files:read
 	fileRouter.Get("/category/:categoryId",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "read"}),
 		fileHandler.ListFilesByCategory)
 
 	// permission files:edit
 	fileRouter.Put("/:id/category",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "edit"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "edit"}),
 		fileHandler.SetFileCategory)
 
 	// permission files:delete
 	fileRouter.Delete("/:id",
-		middleware.Require(app.grpcClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "delete"}),
+		middleware.Require(app.permissionClient, middleware.Params{Service: app.config.prefix, Entity: "files", Action: "delete"}),
 		fileHandler.DeleteFile)
 
 	// File category routes (дерево категорий файлов)
 	fileCategoryService := filecategory.NewService(repo.New(app.db))
-	filecategory.SetupRoutes(v1, fileCategoryService, app.grpcClient, app.config.prefix)
+	filecategory.SetupRoutes(v1, fileCategoryService, app.permissionClient, app.config.prefix)
 
 	// Vacation type routes
 	vacationTypeService := vacationtype.NewService(repo.New(app.db))
-	vacationtype.SetupRoutes(v1, vacationTypeService, app.grpcClient, app.config.prefix)
+	vacationtype.SetupRoutes(v1, vacationTypeService, app.permissionClient, app.config.prefix)
 
 	// System settings routes
 	systemSettingService := systemsetting.NewService(repo.New(app.db))
-	systemsetting.SetupRoutes(v1, systemSettingService, app.grpcClient, app.config.prefix)
+	systemsetting.SetupRoutes(v1, systemSettingService, app.permissionClient, app.config.prefix)
 
 	// Work standards routes
 	workStandardService := workstandard.NewService(repo.New(app.db))
-	workstandard.SetupRoutes(v1, workStandardService, app.grpcClient, app.config.prefix)
+	workstandard.SetupRoutes(v1, workStandardService, app.permissionClient, app.config.prefix)
 
 	// Авто-категоризация чеков (локальные словари, без внешних API) — см.
 	// internal/receipt_category. Своя зависимость: receiptService дёргает
 	// её при создании чека и при ручной правке категории.
 	receiptCategoryService := receiptcategory.NewService(repo.New(app.db))
-	receiptcategory.SetupRoutes(v1, receiptCategoryService, app.grpcClient, app.config.prefix)
+	receiptcategory.SetupRoutes(v1, receiptCategoryService, app.permissionClient, app.config.prefix)
 
 	// Receipt routes — сотрудник сканирует QR на фронте, сам ходит во
 	// внешнее API и уже с готовым разобранным ответом идёт сюда (см.
 	// internal/receipt). Нужна транзакция (чек + позиции), поэтому сервису
 	// передаём ещё и app.db, как userTimeEntryService выше.
 	receiptService := receipt.NewService(repo.New(app.db), app.db, receiptCategoryService)
-	receipt.SetupRoutes(v1, receiptService, fileService, app.grpcClient, app.config.prefix)
+	receipt.SetupRoutes(v1, receiptService, fileService, app.permissionClient, app.config.prefix)
 
 	// Корпоративные карты — номер шифруется тем же ключом, что и пароль SMTP
 	businessCardService := businesscard.NewService(repo.New(app.db), app.db, app.config.smtpEncryptionKey)
-	businesscard.SetupRoutes(v1, businessCardService, app.grpcClient, app.config.prefix)
+	businesscard.SetupRoutes(v1, businessCardService, app.permissionClient, app.config.prefix)
 
 	// Chat routes (SSE — требует единственного процесса, см. run() и
 	// internal/chat/hub.go про отключённый prefork)
 	chatHub := chat.NewHub()
 	chatService := chat.NewService(repo.New(app.db), chatHub, fileService, vkService, notificationService, app.config.frontendURL)
-	chat.SetupRoutes(v1, chatService, app.grpcClient, app.config.prefix)
+	chat.SetupRoutes(v1, chatService, app.permissionClient, app.config.prefix)
 
 	return fiberApp
 }

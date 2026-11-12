@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 
@@ -13,13 +13,13 @@ import (
 )
 
 type Handler struct {
-	service Service
-	grpc    *grpc.Client
-	prefix  string
+	service    Service
+	permission *permission.Client
+	prefix     string
 }
 
-func NewHandler(service Service, grpcClient *grpc.Client, prefix string) Handler {
-	return Handler{service: service, grpc: grpcClient, prefix: prefix}
+func NewHandler(service Service, permissionClient *permission.Client, prefix string) Handler {
+	return Handler{service: service, permission: permissionClient, prefix: prefix}
 }
 
 // callerID достаёт user_id, положенный middleware.Require в Locals после
@@ -257,7 +257,7 @@ func (h Handler) checkEntityRefAccess(c fiber.Ctx, ref *EntityRef) error {
 
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: ref.Type, Action: "link"},
 		callerID(c),
 		ownerID,

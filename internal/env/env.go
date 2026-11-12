@@ -27,8 +27,11 @@ func (e *Env) GetAddr() string {
 	return os.Getenv("ADDR")
 }
 
-func (e *Env) GetGRPCServerAddr() string {
-	return os.Getenv("GRPC_ADDR")
+func (e *Env) GetAuthServiceID() string {
+	if id := os.Getenv("AUTH_SERVICE_ID"); id != "" {
+		return id
+	}
+	return "19c1a24e-190d-4742-b559-a1aa25e3afb7"
 }
 
 // GetFrontendURL — публичный адрес фронта (без слэша на конце), нужен,

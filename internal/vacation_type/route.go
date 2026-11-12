@@ -1,13 +1,13 @@
 package vacationtype
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func SetupRoutes(fiber fiber.Router, service Service, grpc *grpc.Client, prefix string) {
+func SetupRoutes(fiber fiber.Router, service Service, permission *permission.Client, prefix string) {
 	handler := NewHandler(service)
 	router := fiber.Group("/vacation-types")
 
@@ -17,16 +17,16 @@ func SetupRoutes(fiber fiber.Router, service Service, grpc *grpc.Client, prefix 
 
 	// permission vacation_types:create
 	router.Post("",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "create"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "create"}),
 		handler.CreateVacationType)
 
 	// permission vacation_types:edit
 	router.Put("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "edit"}),
 		handler.UpdateVacationType)
 
 	// permission vacation_types:delete
 	router.Delete("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "delete"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation_types", Action: "delete"}),
 		handler.DeleteVacationType)
 }

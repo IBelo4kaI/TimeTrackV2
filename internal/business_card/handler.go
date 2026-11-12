@@ -3,7 +3,7 @@ package businesscard
 import (
 	"errors"
 	"net/http"
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 
@@ -11,13 +11,13 @@ import (
 )
 
 type Handler struct {
-	service Service
-	grpc    *grpc.Client
-	prefix  string
+	service    Service
+	permission *permission.Client
+	prefix     string
 }
 
-func NewHandler(service Service, grpc *grpc.Client, prefix string) Handler {
-	return Handler{service: service, grpc: grpc, prefix: prefix}
+func NewHandler(service Service, permission *permission.Client, prefix string) Handler {
+	return Handler{service: service, permission: permission, prefix: prefix}
 }
 
 // GET /v1/business-cards/my — карты, выданные вызывающему.
@@ -55,7 +55,7 @@ func (h Handler) GetCard(c fiber.Ctx) error {
 	if owner == "" {
 		owner = "unassigned"
 	}
-	if !middleware.RequireOwnerOrAll(c, h.grpc,
+	if !middleware.RequireOwnerOrAll(c, h.permission,
 		middleware.Params{Service: h.prefix, Entity: "business_cards", Action: "read"},
 		callerID, owner) {
 		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этой карте"))

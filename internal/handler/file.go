@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -15,20 +15,20 @@ import (
 )
 
 type FileHandler struct {
-	service *service.FileService
-	grpc    *grpc.Client
-	prefix  string
+	service    *service.FileService
+	permission *permission.Client
+	prefix     string
 }
 
-func NewFileHandler(fileService *service.FileService, grpc *grpc.Client, prefix string) *FileHandler {
-	return &FileHandler{service: fileService, grpc: grpc, prefix: prefix}
+func NewFileHandler(fileService *service.FileService, permission *permission.Client, prefix string) *FileHandler {
+	return &FileHandler{service: fileService, permission: permission, prefix: prefix}
 }
 
 // hasAllFor — проверка права <entity>.all:<action> у вызывающего (ленивая:
 // запрос к сервису прав только когда владелец не совпал)
 func (h *FileHandler) hasAllFor(c fiber.Ctx, action string) service.HasAllFunc {
 	return func(entity string) bool {
-		return middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: entity, Action: action})
+		return middleware.HasAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: entity, Action: action})
 	}
 }
 
@@ -211,7 +211,7 @@ func (h *FileHandler) ListFilesByEntityType(c fiber.Ctx) error {
 	allEntity, restricted := service.RestrictedEntityPermissions[entityType]
 	// Открытые типы сущностей видны всем — фильтровать по владельцу нечем
 	canSeeAll := !restricted ||
-		middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: allEntity, Action: "read"})
+		middleware.HasAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: allEntity, Action: "read"})
 
 	if scope == "all" && !canSeeAll {
 		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к документам других сотрудников"))

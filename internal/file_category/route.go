@@ -1,13 +1,13 @@
 package filecategory
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func SetupRoutes(fiber fiber.Router, service Service, grpc *grpc.Client, prefix string) {
+func SetupRoutes(fiber fiber.Router, service Service, permission *permission.Client, prefix string) {
 	handler := NewHandler(service)
 	router := fiber.Group("/file-categories")
 
@@ -16,16 +16,16 @@ func SetupRoutes(fiber fiber.Router, service Service, grpc *grpc.Client, prefix 
 
 	// permission file_categories:create — управление деревом категорий только у админа
 	router.Post("",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "file_categories", Action: "create"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "file_categories", Action: "create"}),
 		handler.CreateFileCategory)
 
 	// permission file_categories:edit
 	router.Put("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "file_categories", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "file_categories", Action: "edit"}),
 		handler.UpdateFileCategory)
 
 	// permission file_categories:delete
 	router.Delete("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "file_categories", Action: "delete"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "file_categories", Action: "delete"}),
 		handler.DeleteFileCategory)
 }

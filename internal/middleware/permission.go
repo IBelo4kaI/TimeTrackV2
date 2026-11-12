@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	grpcClient "timetrack/internal/adapter/grpc"
+	permissionClient "timetrack/internal/adapter/permission"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -28,7 +28,7 @@ const SessionCookieName = "session"
 const allScopeSentinel = "all-scope"
 
 func Require(
-	client *grpcClient.Client,
+	client *permissionClient.Client,
 	p Params,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -44,8 +44,8 @@ func Require(
 			userId = allScopeSentinel
 		}
 
-		// 3️⃣ gRPC запрос
-		resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
+		// 3️⃣ HTTP запрос
+		resp, err := client.Validate(c.RequestCtx(), &permissionClient.PermissionRequest{
 			SessionToken: token,
 			Service:      p.Service,
 			Entity:       p.Entity,
@@ -72,7 +72,7 @@ func Require(
 }
 
 func RequireFromBody(
-	client *grpcClient.Client,
+	client *permissionClient.Client,
 	p Params,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -102,8 +102,8 @@ func RequireFromBody(
 			})
 		}
 
-		// 4️⃣ gRPC запрос
-		resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
+		// 4️⃣ HTTP запрос
+		resp, err := client.Validate(c.RequestCtx(), &permissionClient.PermissionRequest{
 			SessionToken: token,
 			Service:      p.Service,
 			Entity:       p.Entity,
@@ -142,7 +142,7 @@ func RequireFromBody(
 // настоящую проверку <entity>.all:<action>.
 func RequireOwnerOrAll(
 	c fiber.Ctx,
-	client *grpcClient.Client,
+	client *permissionClient.Client,
 	p Params,
 	callerUserID string,
 	ownerUserID string,
@@ -156,7 +156,7 @@ func RequireOwnerOrAll(
 		return false
 	}
 
-	resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
+	resp, err := client.Validate(c.RequestCtx(), &permissionClient.PermissionRequest{
 		SessionToken: token,
 		Service:      p.Service,
 		Entity:       p.Entity,
@@ -173,14 +173,14 @@ func RequireOwnerOrAll(
 // HasAll — есть ли у вызывающего право <entity>.all:<action> (доступ к
 // чужим записям). Тот же запрос, что и в RequireOwnerOrAll для чужой записи,
 // только без конкретного владельца.
-func HasAll(c fiber.Ctx, client *grpcClient.Client, p Params) bool {
+func HasAll(c fiber.Ctx, client *permissionClient.Client, p Params) bool {
 	token := c.Cookies(SessionCookieName)
 	if token == "" {
 		return false
 	}
 
 	anyone := "all"
-	resp, err := client.Validate(c.RequestCtx(), &grpcClient.PermissionRequest{
+	resp, err := client.Validate(c.RequestCtx(), &permissionClient.PermissionRequest{
 		SessionToken: token,
 		Service:      p.Service,
 		Entity:       p.Entity,

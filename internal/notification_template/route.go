@@ -1,18 +1,18 @@
 package notificationtemplate
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string) {
+func SetupRoutes(f fiber.Router, service Service, permissionClient *permission.Client, prefix string) {
 	handler := NewHandler(service)
 	router := f.Group("/notification-templates")
 
 	require := func(action string) fiber.Handler {
-		return middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "notification_templates", Action: action})
+		return middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "notification_templates", Action: action})
 	}
 
 	// permission notification_templates:read — админ, выбирающий шаблон для рассылки

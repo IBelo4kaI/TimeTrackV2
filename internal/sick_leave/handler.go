@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -18,12 +18,12 @@ import (
 type Handler struct {
 	service     Service
 	fileService *service.FileService
-	grpc        *grpc.Client
+	permission  *permission.Client
 	prefix      string
 }
 
-func NewHandler(svc Service, fileService *service.FileService, grpc *grpc.Client, prefix string) *Handler {
-	return &Handler{service: svc, fileService: fileService, grpc: grpc, prefix: prefix}
+func NewHandler(svc Service, fileService *service.FileService, permission *permission.Client, prefix string) *Handler {
+	return &Handler{service: svc, fileService: fileService, permission: permission, prefix: prefix}
 }
 
 func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
@@ -143,7 +143,7 @@ func (h *Handler) authorizeOwnerOrAll(c fiber.Ctx, id, action string) error {
 	}
 
 	callerID, _ := c.Locals("user_id").(string)
-	if !middleware.RequireOwnerOrAll(c, h.grpc,
+	if !middleware.RequireOwnerOrAll(c, h.permission,
 		middleware.Params{Service: h.prefix, Entity: "sick_leaves", Action: action},
 		callerID, row.UserID) {
 		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этому больничному"))

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	"timetrack/internal/adapter/grpc"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -19,12 +19,12 @@ import (
 type Handler struct {
 	service     Service
 	fileService *service.FileService
-	grpc        *grpc.Client
+	permission  *permission.Client
 	prefix      string
 }
 
-func NewHandler(service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) *Handler {
-	return &Handler{service: service, fileService: fileService, grpc: grpc, prefix: prefix}
+func NewHandler(service Service, fileService *service.FileService, permission *permission.Client, prefix string) *Handler {
+	return &Handler{service: service, fileService: fileService, permission: permission, prefix: prefix}
 }
 
 func (h *Handler) CreateVacation(c fiber.Ctx) error {
@@ -39,7 +39,7 @@ func (h *Handler) CreateVacation(c fiber.Ctx) error {
 	if body.Status == "" {
 		body.Status = repo.VacationsStatusPending
 	}
-	if body.Status != repo.VacationsStatusPending && !middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "vacation", Action: "edit"}) {
+	if body.Status != repo.VacationsStatusPending && !middleware.HasAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: "vacation", Action: "edit"}) {
 		return response.Error(c, 403, errors.New("Сотрудник может создать только заявку на рассмотрении"))
 	}
 	if body.Status != repo.VacationsStatusPending && body.Status != repo.VacationsStatusApproved {
@@ -95,7 +95,7 @@ func (h *Handler) GetVacation(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "read"},
 		callerID,
 		vacation.UserID,
@@ -344,7 +344,7 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "delete"},
 		callerID,
 		vacation.UserID,
@@ -395,7 +395,7 @@ func (h *Handler) UploadVacationFile(c fiber.Ctx) error {
 	uploaderID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "edit"},
 		uploaderID,
 		vacation.UserID,
@@ -451,7 +451,7 @@ func (h *Handler) applicationAccess(c fiber.Ctx, action string) (*repo.GetVacati
 		return nil, err
 	}
 	caller, _ := c.Locals("user_id").(string)
-	if !middleware.RequireOwnerOrAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "vacation", Action: action}, caller, v.UserID) {
+	if !middleware.RequireOwnerOrAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: "vacation", Action: action}, caller, v.UserID) {
 		return nil, fiber.NewError(403, "Нет доступа к заявке")
 	}
 	return v, nil

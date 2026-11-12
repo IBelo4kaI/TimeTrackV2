@@ -1,81 +1,81 @@
 package receipt
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/service"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) {
-	handler := NewHandler(service, fileService, grpc, prefix)
+func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileService, permission *permission.Client, prefix string) {
+	handler := NewHandler(service, fileService, permission, prefix)
 	router := fiber.Group("/receipts")
 
 	// permission receipts:create — userId берём из тела (фронт сканирует QR,
 	// сам ходит во внешнее API и уже с готовым ответом идёт сюда), как и
 	// vacation/create (см. middleware.RequireFromBody).
 	router.Post("/create",
-		middleware.RequireFromBody(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "create"}),
+		middleware.RequireFromBody(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "create"}),
 		handler.CreateReceipt)
 
 	// чеки ВСЕХ сотрудников (бухгалтерия) — RequireAll: без :userId в пути
 	// permission-сервис сам ".all" не подставит, см. комментарий в
 	// vacation/route.go про "/all/:year".
 	router.Get("/all",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read", RequireAll: true}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "read", RequireAll: true}),
 		handler.GetAllReceipts)
 
 	// чеки по корпоративной карте; доступ довалидируется в хендлере
 	router.Get("/card/:cardId",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.GetReceiptsByBusinessCard)
 
 	// список чеков конкретного сотрудника
 	router.Get("/user/:userId",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.GetReceiptsByUser)
 
 	// задним числом перепрогнать классификацию по ВСЕМ уже сохранённым
 	// чекам (см. BackfillCategories) — до /:id, иначе Fiber принял бы
 	// "backfill-categories" за :id
 	router.Post("/backfill-categories",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit", RequireAll: true}),
 		handler.BackfillReceiptCategories)
 
 	// карточка отдельного чека (с позициями); владелец довалидируется в
 	// хендлере через RequireOwnerOrAll
 	router.Get("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "read"}),
 		handler.GetReceipt)
 
 	// permission receipts:delete; владелец довалидируется в хендлере
 	router.Delete("/:id",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "delete"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "delete"}),
 		handler.DeleteReceipt)
 
 	// прикрепление файла (фото/скан чека); просмотр: GET
 	// /v1/files/entity/receipt/:id, удаление: DELETE /v1/files/:id.
 	// permission receipts:edit; владелец довалидируется в хендлере
 	router.Post("/:id/file",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.UploadReceiptFile)
 
 	// передача чека другому сотруднику; permission receipts:edit, владелец
 	// довалидируется в хендлере через RequireOwnerOrAll — свой чек может
 	// передать любой сотрудник, чужой только с receipts.all:edit.
 	router.Put("/:id/transfer",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.TransferReceipt)
 
 	// ручная правка категории (см. internal/receipt_category); permission
 	// receipts:edit, владелец довалидируется в хендлере, как и transfer
 	router.Put("/:id/category",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.SetReceiptCategory)
 
 	// привязка чека к объекту (Reference Service); права как у category
 	router.Put("/:id/object",
-		middleware.Require(grpc, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "receipts", Action: "edit"}),
 		handler.SetReceiptObject)
 }

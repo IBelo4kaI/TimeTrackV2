@@ -2,7 +2,7 @@ package vk
 
 import (
 	"context"
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/SevereCloud/vksdk/v3/callback"
@@ -18,12 +18,12 @@ type Config struct {
 	SecretKey          string
 }
 
-func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string, cfg Config) {
+func SetupRoutes(f fiber.Router, service Service, permissionClient *permission.Client, prefix string, cfg Config) {
 	handler := NewHandler(service)
 	router := f.Group("/vk")
 
 	require := func(action string) fiber.Handler {
-		return middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "vk", Action: action})
+		return middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "vk", Action: action})
 	}
 
 	// permission vk:*

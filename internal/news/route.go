@@ -1,13 +1,13 @@
 package news
 
 import (
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefix string) {
+func SetupRoutes(f fiber.Router, service Service, permissionClient *permission.Client, prefix string) {
 	handler := NewHandler(service)
 	router := f.Group("/news")
 
@@ -18,12 +18,12 @@ func SetupRoutes(f fiber.Router, service Service, grpcClient *grpc.Client, prefi
 
 	// permission news:create/edit/delete — только админам
 	router.Post("",
-		middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "news", Action: "create"}),
+		middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "news", Action: "create"}),
 		handler.Create)
 	router.Put("/:id",
-		middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "news", Action: "edit"}),
+		middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "news", Action: "edit"}),
 		handler.Update)
 	router.Delete("/:id",
-		middleware.Require(grpcClient, middleware.Params{Service: prefix, Entity: "news", Action: "delete"}),
+		middleware.Require(permissionClient, middleware.Params{Service: prefix, Entity: "news", Action: "delete"}),
 		handler.Delete)
 }

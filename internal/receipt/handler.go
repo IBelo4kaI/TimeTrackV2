@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"timetrack/internal/adapter/grpc"
+	"timetrack/internal/adapter/permission"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -15,12 +15,12 @@ import (
 type Handler struct {
 	service     Service
 	fileService *service.FileService
-	grpc        *grpc.Client
+	permission  *permission.Client
 	prefix      string
 }
 
-func NewHandler(service Service, fileService *service.FileService, grpc *grpc.Client, prefix string) Handler {
-	return Handler{service: service, fileService: fileService, grpc: grpc, prefix: prefix}
+func NewHandler(service Service, fileService *service.FileService, permission *permission.Client, prefix string) Handler {
+	return Handler{service: service, fileService: fileService, permission: permission, prefix: prefix}
 }
 
 func (h Handler) CreateReceipt(c fiber.Ctx) error {
@@ -74,7 +74,7 @@ func (h Handler) GetReceiptsByBusinessCard(c fiber.Ctx) error {
 	if owner == "" {
 		owner = "unassigned"
 	}
-	if !middleware.RequireOwnerOrAll(c, h.grpc,
+	if !middleware.RequireOwnerOrAll(c, h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "read"},
 		callerID, owner) {
 		return response.Error(c, http.StatusForbidden, errors.New("нет доступа к этой карте"))
@@ -114,7 +114,7 @@ func (h Handler) GetReceipt(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "read"},
 		callerID,
 		r.UserID,
@@ -147,7 +147,7 @@ func (h Handler) UploadReceiptFile(c fiber.Ctx) error {
 	uploaderID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
 		uploaderID,
 		r.UserID,
@@ -197,7 +197,7 @@ func (h Handler) DeleteReceipt(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "delete"},
 		callerID,
 		r.UserID,
@@ -240,7 +240,7 @@ func (h Handler) TransferReceipt(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
 		callerID,
 		current.UserID,
@@ -280,7 +280,7 @@ func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	allowed := middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
 		callerID,
 		current.UserID,
@@ -292,7 +292,7 @@ func (h Handler) SetReceiptCategory(c fiber.Ctx) error {
 	// Словарь продавцов учим только по выбору бухгалтерии (receipts.all:edit),
 	// а не любого сотрудника — иначе одна ошибка перекатегоризирует чеки
 	// всех остальных.
-	learn := middleware.HasAll(c, h.grpc, middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"})
+	learn := middleware.HasAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"})
 
 	categoryIDs := body.CategoryIDs
 	if categoryIDs == nil {
@@ -329,7 +329,7 @@ func (h Handler) SetReceiptObject(c fiber.Ctx) error {
 	callerID, _ := c.Locals("user_id").(string)
 	if !middleware.RequireOwnerOrAll(
 		c,
-		h.grpc,
+		h.permission,
 		middleware.Params{Service: h.prefix, Entity: "receipts", Action: "edit"},
 		callerID,
 		current.UserID,
