@@ -157,6 +157,7 @@ type Querier interface {
 	GetUserTimeEntryById(ctx context.Context, id string) (UserTimeEntry, error)
 	GetUserTimeEntryByIds(ctx context.Context, ids []string) ([]UserTimeEntry, error)
 	GetVKIDByUser(ctx context.Context, userID string) (int64, error)
+	GetVacationBalancesByYear(ctx context.Context, year time.Time) ([]GetVacationBalancesByYearRow, error)
 	GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error)
 	GetVacationDaysByMonth(ctx context.Context, arg GetVacationDaysByMonthParams) (interface{}, error)
 	GetVacationDaysByYear(ctx context.Context, arg GetVacationDaysByYearParams) (interface{}, error)

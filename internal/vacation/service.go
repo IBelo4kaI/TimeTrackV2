@@ -35,6 +35,7 @@ type vacationService struct {
 }
 
 type Service interface {
+	GetVacationBalances(ctx context.Context, year int) ([]VacationBalance, error)
 	GetHistory(ctx context.Context, id string) ([]repo.VacationHistory, error)
 	EditApplication(ctx context.Context, id string, body VacationCreateRequest) error
 	CalculateVacationDaysFullMonths(ctx context.Context, startDate, endDate time.Time) (*VacationCalculationResult, error)
@@ -459,26 +460,12 @@ func (s *vacationService) GetVacationsStats(ctx context.Context, userId string, 
 		return nil, err
 	}
 
-	var settingValue string
-	if setting.SettingValue.Valid {
-		settingValue = setting.SettingValue.String
-	} else {
-		// Если значение NULL, используем значение по умолчанию
-		settingValue = "30"
-	}
-
-	totalVacationDays, err := strconv.ParseInt(settingValue, 10, 64)
-	if err != nil {
-		// Если не удалось преобразовать, используем значение по умолчанию
-		totalVacationDays = 30
-	}
-
-	remainingVacationDays := max(totalVacationDays-parser.InterfaceToInt64(approveds), 0)
-
+	totalVacationDays, _ := vacationAllowance(setting.SettingValue)
+	used := parser.InterfaceToInt(approveds)
 	return &VacationStats{
-		Used:    parser.InterfaceToInt(approveds),
+		Used:    used,
 		Pending: parser.InterfaceToInt(pendings),
-		Free:    int(remainingVacationDays),
+		Free:    vacationFree(totalVacationDays, used),
 	}, nil
 }
 
@@ -975,4 +962,57 @@ func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string)
 // calculateExcessDays считает только дни новой заявки, не накопленный долг.
 func calculateExcessDays(requested, free int) int {
 	return max(requested-max(free, 0), 0)
+}
+
+// Индивидуальная статистика сохраняет fallback 30; административная проверяет valid.
+func vacationAllowance(value sql.NullString) (total int, valid bool) {
+	if !value.Valid {
+		return 30, false
+	}
+	parsed, err := strconv.ParseInt(value.String, 10, 64)
+	if err != nil {
+		return 30, false
+	}
+	return int(parsed), parsed >= 0
+}
+
+func vacationFree(total, used int) int {
+	return max(total-used, 0)
+}
+
+func (s *vacationService) GetVacationBalances(ctx context.Context, year int) ([]VacationBalance, error) {
+	setting, err := s.repo.GetSystemSettingByKey(ctx, "vacation_duration")
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.New("Не задана годовая норма отпуска (vacation_duration)")
+	}
+	if err != nil {
+		return nil, err
+	}
+	total, valid := vacationAllowance(setting.SettingValue)
+	if !valid {
+		return nil, errors.New("Некорректная годовая норма отпуска (vacation_duration)")
+	}
+	users, err := s.authService.GetAllUsers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Не удалось загрузить список сотрудников: %w", err)
+	}
+	rows, err := s.repo.GetVacationBalancesByYear(ctx, date.NewDate(1, 1, year))
+	if err != nil {
+		return nil, err
+	}
+	byUser := make(map[string]repo.GetVacationBalancesByYearRow, len(rows))
+	for _, row := range rows {
+		byUser[row.UserID] = row
+	}
+	balances := make([]VacationBalance, 0, len(users))
+	for _, user := range users {
+		row := byUser[user.ID]
+		used := parser.InterfaceToInt(row.Used)
+		balances = append(balances, VacationBalance{
+			UserID: user.ID, Surname: user.Surname, Name: user.Name, Patronymic: user.Patronymic,
+			Total: total, Used: used, Pending: parser.InterfaceToInt(row.Pending),
+			Free: vacationFree(total, used), Excess: max(used-total, 0),
+		})
+	}
+	return balances, nil
 }

@@ -28,6 +28,10 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation", Action: "read", RequireAll: true}),
 		handler.GetAllUserVacationsByYear)
 
+	router.Get("/balance/:year",
+		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation", Action: "read", RequireAll: true}),
+		handler.GetVacationBalances)
+
 	// Урезанный (без description) список отпусков всех сотрудников — для
 	// виджета "отпуска коллег" на дашборде. Специально ОТДЕЛЬНОЕ разрешение
 	// (time:vacation_calendar:read), а не vacation.all:read: последнее даёт

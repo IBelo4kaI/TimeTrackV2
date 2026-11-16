@@ -210,6 +210,19 @@ func (h *Handler) CalculateVacationEndDate(c fiber.Ctx) error {
 	return response.Success(c, result)
 }
 
+func (h *Handler) GetVacationBalances(c fiber.Ctx) error {
+	year, err := strconv.Atoi(c.Params("year"))
+	if err != nil || year < 1 || year > 9999 {
+		return response.BadRequest(c)
+	}
+	c.Set("Cache-Control", "no-store")
+	balances, err := h.service.GetVacationBalances(c.RequestCtx(), year)
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	return response.Success(c, balances)
+}
+
 func (h *Handler) GetVacationStatistics(c fiber.Ctx) error {
 	year, err := strconv.Atoi(c.Params("year"))
 

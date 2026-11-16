@@ -182,3 +182,14 @@ INSERT INTO vacation_history (vacation_id, actor_id, event_type, detail) VALUES 
 -- name: ListVacationHistory :many
 SELECT id, vacation_id, actor_id, event_type, detail, created_at FROM vacation_history
 WHERE vacation_id = ? ORDER BY created_at DESC, id DESC;
+
+-- name: GetVacationBalancesByYear :many
+SELECT v.user_id,
+  COALESCE(SUM(CASE WHEN v.status = 'approved' THEN v.total_days ELSE 0 END), 0) AS used,
+  COALESCE(SUM(CASE WHEN v.status = 'pending' THEN v.total_days ELSE 0 END), 0) AS pending
+FROM vacations v
+LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
+WHERE YEAR(v.start_date) = YEAR(sqlc.arg(year))
+  AND v.status IN ('approved', 'pending')
+  AND COALESCE(t.affects_balance, TRUE) = TRUE
+GROUP BY v.user_id;

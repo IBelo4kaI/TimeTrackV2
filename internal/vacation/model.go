@@ -51,3 +51,15 @@ type HistoryEvent struct {
 	Detail     string     `json:"detail"`
 	CreatedAt  *time.Time `json:"createdAt"`
 }
+
+type VacationBalance struct {
+	UserID     string  `json:"userId"`
+	Surname    string  `json:"surname"`
+	Name       string  `json:"name"`
+	Patronymic *string `json:"patronymic"`
+	Total      int     `json:"total"`
+	Used       int     `json:"used"`
+	Pending    int     `json:"pending"`
+	Free       int     `json:"free"`
+	Excess     int     `json:"excess"`
+}

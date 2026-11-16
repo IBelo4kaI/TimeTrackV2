@@ -259,6 +259,47 @@ func (q *Queries) GetCountVacationsByStatus(ctx context.Context, arg GetCountVac
 	return total_days, err
 }
 
+const getVacationBalancesByYear = `-- name: GetVacationBalancesByYear :many
+SELECT v.user_id,
+  COALESCE(SUM(CASE WHEN v.status = 'approved' THEN v.total_days ELSE 0 END), 0) AS used,
+  COALESCE(SUM(CASE WHEN v.status = 'pending' THEN v.total_days ELSE 0 END), 0) AS pending
+FROM vacations v
+LEFT JOIN vacation_types t ON t.id = v.vacation_type_id
+WHERE YEAR(v.start_date) = YEAR(?)
+  AND v.status IN ('approved', 'pending')
+  AND COALESCE(t.affects_balance, TRUE) = TRUE
+GROUP BY v.user_id
+`
+
+type GetVacationBalancesByYearRow struct {
+	UserID  string      `json:"userId"`
+	Used    interface{} `json:"used"`
+	Pending interface{} `json:"pending"`
+}
+
+func (q *Queries) GetVacationBalancesByYear(ctx context.Context, year time.Time) ([]GetVacationBalancesByYearRow, error) {
+	rows, err := q.db.QueryContext(ctx, getVacationBalancesByYear, year)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetVacationBalancesByYearRow
+	for rows.Next() {
+		var i GetVacationBalancesByYearRow
+		if err := rows.Scan(&i.UserID, &i.Used, &i.Pending); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getVacationByID = `-- name: GetVacationByID :one
 SELECT
   v.id,
