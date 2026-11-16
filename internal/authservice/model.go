@@ -14,7 +14,7 @@ type Gender struct {
 	Name string `json:"name"`
 }
 
-// RoleResponse/UserResponse — повторяют JSON-контракт GET /api/as/users/all
+// RoleResponse/UserResponse — повторяют JSON-контракт GET /api/as/users/timetrack
 // сервиса авторизации (см. authservice.Service.GetAllUsers).
 type RoleResponse struct {
 	ID               string    `json:"id"`

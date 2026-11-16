@@ -32,7 +32,7 @@ func NewService(host, apiKey string) Service {
 }
 
 func (s *service) GetAllUsers(ctx context.Context) ([]UserResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.host+"/api/as/users/all", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.host+"/api/as/users/timetrack", nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
