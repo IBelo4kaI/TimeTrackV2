@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -76,7 +77,7 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 		return nil, fmt.Errorf("%w: ошибка запроса", ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	log.Printf("reference: GET /ref/employees/internal response: status=%d elapsed=%s", resp.StatusCode, time.Since(started))
+	log.Printf("reference: GET /ref/employees/internal response: status=%d content_type=%q elapsed=%s", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
@@ -92,7 +93,25 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 	}
 	var records []employee
 	if err := json.Unmarshal(data, &records); err != nil {
-		log.Printf("reference: invalid employees response: bytes=%d error_type=%T", len(data), err)
+		bodyKind := "empty"
+		if trimmed := bytes.TrimSpace(data); len(trimmed) > 0 {
+			switch trimmed[0] {
+			case '<':
+				bodyKind = "html_or_xml"
+			case '[':
+				bodyKind = "json_array"
+			case '{':
+				bodyKind = "json_object"
+			default:
+				bodyKind = "other"
+			}
+		}
+		var syntaxError *json.SyntaxError
+		var offset int64
+		if errors.As(err, &syntaxError) {
+			offset = syntaxError.Offset
+		}
+		log.Printf("reference: invalid employees response: bytes=%d error_type=%T body_kind=%s syntax_offset=%d", len(data), err, bodyKind, offset)
 		return nil, fmt.Errorf("%w: неверный формат ответа", ErrUnavailable)
 	}
 	byUser := map[string]scope{}
