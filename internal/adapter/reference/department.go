@@ -77,12 +77,13 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 		return nil, fmt.Errorf("%w: ошибка запроса", ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s body=%#v", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started), resp.Body)
+	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started))
+	const limit = 4 << 20
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	log.Printf("reference: response body: bytes=%d truncated=%t body=%q", len(data), len(data) > limit, data[:min(len(data), limit)])
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
-	const limit = 4 << 20
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		log.Printf("reference: response body read failed: error_type=%T", err)
 		return nil, ErrUnavailable
