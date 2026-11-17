@@ -34,15 +34,15 @@ func NewDepartmentScopeResolver(config Config) *DepartmentScopeResolver {
 }
 
 type employee struct {
-	UserID       string     `json:"user_id"`
-	CompanyID    string     `json:"company_id"`
-	DepartmentID string     `json:"department_id"`
-	Employees    []employee `json:"employees"`
+	UserID     string     `json:"user_id"`
+	Company    string     `json:"company"`
+	Department string     `json:"department"`
+	Employees  []employee `json:"employees"`
 }
 
 type scope struct{ company, department string }
 
-// Members returns only unambiguous employees with explicit company and department IDs.
+// Members compares both company and department from the live employee directory.
 func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
 	if r == nil {
 		log.Print("reference: scope lookup blocked: resolver is not configured")
@@ -116,7 +116,7 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 	}
 	byUser := map[string]scope{}
 	invalid := map[string]bool{}
-	add := func(e employee) {
+	add := func(e employee, groupDepartment string) {
 		if e.UserID == "" {
 			return
 		}
@@ -124,10 +124,18 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 		if _, exists := byUser[e.UserID]; exists {
 			invalid[e.UserID] = true
 		}
-		if strings.TrimSpace(e.CompanyID) == "" || strings.TrimSpace(e.DepartmentID) == "" {
+		company := strings.TrimSpace(e.Company)
+		department := strings.TrimSpace(e.Department)
+		groupDepartment = strings.TrimSpace(groupDepartment)
+		if department == "" {
+			department = groupDepartment
+		} else if groupDepartment != "" && department != groupDepartment {
 			invalid[e.UserID] = true
 		}
-		byUser[e.UserID] = scope{e.CompanyID, e.DepartmentID}
+		if company == "" || department == "" {
+			invalid[e.UserID] = true
+		}
+		byUser[e.UserID] = scope{company, department}
 	}
 	for _, record := range records {
 		if record.Employees != nil {
@@ -140,10 +148,10 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 					log.Print("reference: invalid employees response: nested employee groups")
 					return nil, ErrUnavailable
 				}
-				add(e)
+				add(e, record.Department)
 			}
 		} else {
-			add(record)
+			add(record, "")
 		}
 	}
 	actor, ok := byUser[actorID]
