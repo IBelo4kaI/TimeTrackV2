@@ -139,7 +139,7 @@ func (app *application) mount() *fiber.App {
 
 	// Vacation routes
 	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference, repo.New(app.db))
-	departmentManagers := departmentmanager.NewService(repo.New(app.db), departmentScope, nil)
+	departmentManagers := departmentmanager.NewService(repo.New(app.db), app.db, departmentScope, authService)
 	departmentmanager.SetupRoutes(v1, departmentManagers, app.permissionClient, app.config.prefix)
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, departmentScope)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.permissionClient, app.config.prefix)

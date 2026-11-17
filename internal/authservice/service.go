@@ -13,6 +13,8 @@ import (
 // см. AUTH_SERVICE_HOST/AUTH_SERVICE_API_KEY в env).
 type Service interface {
 	GetAllUsers(ctx context.Context) ([]UserResponse, error)
+	EnsureRole(ctx context.Context, userID, roleID string) error
+	RemoveRole(ctx context.Context, userID, roleID string) error
 }
 
 type service struct {
@@ -27,7 +29,7 @@ func NewService(host, apiKey string) Service {
 	return &service{
 		host:   strings.TrimRight(host, "/"),
 		apiKey: apiKey,
-		client: &http.Client{Timeout: 15 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }},
 	}
 }
 

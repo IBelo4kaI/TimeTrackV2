@@ -24,6 +24,7 @@ type Querier interface {
 	// Дедуп: напоминание за месяц шлётся один раз — не повторяем, если уже
 	// отправляли это пользователю за эту сущность (см. internal/timesheetreminder).
 	CountNotificationsByEntity(ctx context.Context, arg CountNotificationsByEntityParams) (int64, error)
+	CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int64, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
@@ -257,6 +258,8 @@ type Querier interface {
 	// (в отличие от work_standards:read, которое отдаёт нормы всех и есть
 	// только у админов).
 	ListWorkStandardsByUserAndYear(ctx context.Context, arg ListWorkStandardsByUserAndYearParams) ([]WorkStandard, error)
+	LockDepartmentManager(ctx context.Context, id string) (DepartmentManager, error)
+	LockDepartmentManagerRoleSetting(ctx context.Context) (sql.NullString, error)
 	LockVacation(ctx context.Context, id string) (LockVacationRow, error)
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
@@ -286,6 +289,7 @@ type Querier interface {
 	UpdateChatParticipantRole(ctx context.Context, arg UpdateChatParticipantRoleParams) error
 	UpdateColorCodeDayType(ctx context.Context, arg UpdateColorCodeDayTypeParams) error
 	UpdateDayType(ctx context.Context, arg UpdateDayTypeParams) error
+	UpdateDepartmentManagerRole(ctx context.Context, arg UpdateDepartmentManagerRoleParams) error
 	UpdateFileCategory(ctx context.Context, arg UpdateFileCategoryParams) error
 	UpdateFileCategoryAssignment(ctx context.Context, arg UpdateFileCategoryAssignmentParams) error
 	UpdateIsUserSelectDayType(ctx context.Context, arg UpdateIsUserSelectDayTypeParams) error

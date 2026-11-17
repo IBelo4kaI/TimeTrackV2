@@ -16,17 +16,19 @@ import (
 
 // RoleAssigner must ensure the role idempotently without replacing other user roles.
 type RoleAssigner interface {
-	EnsureDepartmentManagerRole(ctx context.Context, userID string) error
+	EnsureRole(ctx context.Context, userID, roleID string) error
+	RemoveRole(ctx context.Context, userID, roleID string) error
 }
 
 type Service struct {
+	db        *sql.DB
 	repo      *repo.Queries
 	directory *reference.DepartmentScopeResolver
 	roles     RoleAssigner
 }
 
-func NewService(queries *repo.Queries, directory *reference.DepartmentScopeResolver, roles RoleAssigner) *Service {
-	return &Service{repo: queries, directory: directory, roles: roles}
+func NewService(queries *repo.Queries, db *sql.DB, directory *reference.DepartmentScopeResolver, roles RoleAssigner) *Service {
+	return &Service{repo: queries, db: db, directory: directory, roles: roles}
 }
 
 type AssignmentRequest struct {
@@ -94,26 +96,94 @@ func (s *Service) Create(ctx context.Context, body AssignmentRequest, actorID, s
 	return s.SyncRole(ctx, id)
 }
 func (s *Service) SyncRole(ctx context.Context, id string) (repo.DepartmentManager, error) {
-	assignment, err := s.repo.GetDepartmentManager(ctx, id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return repo.DepartmentManager{}, err
 	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	// Serialize role changes and settings updates before locking the assignment.
+	setting, err := q.LockDepartmentManagerRoleSetting(ctx)
+	if err != nil {
+		return repo.DepartmentManager{}, err
+	}
+	assignment, err := q.LockDepartmentManager(ctx, id)
+	if err != nil {
+		return repo.DepartmentManager{}, err
+	}
+	desired := strings.TrimSpace(setting.String)
+	current := assignment.AuthRoleID
 	status := repo.DepartmentManagersRoleSyncStatusNotConfigured
 	if s.roles != nil {
 		status = repo.DepartmentManagersRoleSyncStatusSynced
-		if err := s.roles.EnsureDepartmentManagerRole(ctx, assignment.UserID); err != nil {
-			status = repo.DepartmentManagersRoleSyncStatusFailed
+		if current != "" && current != desired {
+			if err := s.removeRoleIfUnused(ctx, q, assignment); err != nil {
+				status = repo.DepartmentManagersRoleSyncStatusFailed
+			} else {
+				current = ""
+			}
+		}
+		if status != repo.DepartmentManagersRoleSyncStatusFailed {
+			if desired == "" {
+				status = repo.DepartmentManagersRoleSyncStatusNotConfigured
+			} else {
+				if err := s.roles.EnsureRole(ctx, assignment.UserID, desired); err != nil {
+					status = repo.DepartmentManagersRoleSyncStatusFailed
+				} else {
+					current = desired
+				}
+			}
 		}
 	}
-	if err := s.repo.SetDepartmentManagerRoleSync(ctx, repo.SetDepartmentManagerRoleSyncParams{ID: id, RoleSyncStatus: status}); err != nil {
+	if err := q.UpdateDepartmentManagerRole(ctx, repo.UpdateDepartmentManagerRoleParams{ID: id, RoleSyncStatus: status, AuthRoleID: current}); err != nil {
+		return repo.DepartmentManager{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return repo.DepartmentManager{}, err
 	}
 	return s.repo.GetDepartmentManager(ctx, id)
 }
-func (s *Service) Delete(ctx context.Context, id string) error {
-	count, err := s.repo.DeleteDepartmentManager(ctx, id)
-	if err == nil && count == 0 {
-		return sql.ErrNoRows
+func (s *Service) removeRoleIfUnused(ctx context.Context, q *repo.Queries, assignment repo.DepartmentManager) error {
+	if assignment.AuthRoleID == "" {
+		return nil
 	}
-	return err
+	if s.roles == nil {
+		return fiber.NewError(503, "Сервис назначения ролей недоступен")
+	}
+	count, err := q.CountOtherDepartmentManagersWithRole(ctx, repo.CountOtherDepartmentManagersWithRoleParams{UserID: assignment.UserID, AuthRoleID: assignment.AuthRoleID, ID: assignment.ID})
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return s.roles.RemoveRole(ctx, assignment.UserID, assignment.AuthRoleID)
+}
+func (s *Service) Delete(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	if _, err := q.LockDepartmentManagerRoleSetting(ctx); err != nil {
+		return err
+	}
+	assignment, err := q.LockDepartmentManager(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.removeRoleIfUnused(ctx, q, assignment); err != nil {
+		if updateErr := q.SetDepartmentManagerRoleSync(ctx, repo.SetDepartmentManagerRoleSyncParams{ID: id, RoleSyncStatus: repo.DepartmentManagersRoleSyncStatusFailed}); updateErr != nil {
+			return updateErr
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return commitErr
+		}
+		return fiber.NewError(503, "Не удалось снять роль в сервисе авторизации. Назначение сохранено; повторите удаление")
+	}
+	if _, err := q.DeleteDepartmentManager(ctx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

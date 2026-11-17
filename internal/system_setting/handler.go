@@ -35,6 +35,10 @@ func (h *Handler) UpdateSystemSettingValue(c fiber.Ctx) error {
 
 	err := h.service.UpdateSystemSettingValue(c.RequestCtx(), req.SettingKey, req.SettingValue)
 	if err != nil {
+		var fe *fiber.Error
+		if errors.As(err, &fe) {
+			return response.Error(c, fe.Code, err)
+		}
 		return response.Error(c, http.StatusInternalServerError, err)
 	}
 

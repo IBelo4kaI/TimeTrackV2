@@ -7,7 +7,25 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 )
+
+const countOtherDepartmentManagersWithRole = `-- name: CountOtherDepartmentManagersWithRole :one
+SELECT COUNT(*) FROM department_managers WHERE user_id = ? AND auth_role_id = ? AND id <> ?
+`
+
+type CountOtherDepartmentManagersWithRoleParams struct {
+	UserID     string `json:"userId"`
+	AuthRoleID string `json:"authRoleId"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOtherDepartmentManagersWithRole, arg.UserID, arg.AuthRoleID, arg.ID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createDepartmentManager = `-- name: CreateDepartmentManager :exec
 INSERT INTO department_managers (id, company, department, user_id, created_by) VALUES (?, ?, ?, ?, ?)
@@ -45,7 +63,7 @@ func (q *Queries) DeleteDepartmentManager(ctx context.Context, id string) (int64
 }
 
 const getDepartmentManager = `-- name: GetDepartmentManager :one
-SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at FROM department_managers WHERE id = ?
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE id = ?
 `
 
 func (q *Queries) GetDepartmentManager(ctx context.Context, id string) (DepartmentManager, error) {
@@ -60,6 +78,7 @@ func (q *Queries) GetDepartmentManager(ctx context.Context, id string) (Departme
 		&i.RoleSyncStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthRoleID,
 	)
 	return i, err
 }
@@ -82,7 +101,7 @@ func (q *Queries) HasDepartmentManager(ctx context.Context, arg HasDepartmentMan
 }
 
 const listDepartmentManagers = `-- name: ListDepartmentManagers :many
-SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at FROM department_managers ORDER BY company, department, created_at, id
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers ORDER BY company, department, created_at, id
 `
 
 func (q *Queries) ListDepartmentManagers(ctx context.Context) ([]DepartmentManager, error) {
@@ -103,6 +122,7 @@ func (q *Queries) ListDepartmentManagers(ctx context.Context) ([]DepartmentManag
 			&i.RoleSyncStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AuthRoleID,
 		); err != nil {
 			return nil, err
 		}
@@ -118,7 +138,7 @@ func (q *Queries) ListDepartmentManagers(ctx context.Context) ([]DepartmentManag
 }
 
 const listDepartmentManagersByScope = `-- name: ListDepartmentManagersByScope :many
-SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at FROM department_managers WHERE company = ? AND department = ? ORDER BY id
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE company = ? AND department = ? ORDER BY id
 `
 
 type ListDepartmentManagersByScopeParams struct {
@@ -144,6 +164,7 @@ func (q *Queries) ListDepartmentManagersByScope(ctx context.Context, arg ListDep
 			&i.RoleSyncStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AuthRoleID,
 		); err != nil {
 			return nil, err
 		}
@@ -158,6 +179,38 @@ func (q *Queries) ListDepartmentManagersByScope(ctx context.Context, arg ListDep
 	return items, nil
 }
 
+const lockDepartmentManager = `-- name: LockDepartmentManager :one
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE id = ? FOR UPDATE
+`
+
+func (q *Queries) LockDepartmentManager(ctx context.Context, id string) (DepartmentManager, error) {
+	row := q.db.QueryRowContext(ctx, lockDepartmentManager, id)
+	var i DepartmentManager
+	err := row.Scan(
+		&i.ID,
+		&i.Company,
+		&i.Department,
+		&i.UserID,
+		&i.CreatedBy,
+		&i.RoleSyncStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthRoleID,
+	)
+	return i, err
+}
+
+const lockDepartmentManagerRoleSetting = `-- name: LockDepartmentManagerRoleSetting :one
+SELECT setting_value FROM system_settings WHERE setting_key = 'department_manager_role_id' FOR UPDATE
+`
+
+func (q *Queries) LockDepartmentManagerRoleSetting(ctx context.Context) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, lockDepartmentManagerRoleSetting)
+	var setting_value sql.NullString
+	err := row.Scan(&setting_value)
+	return setting_value, err
+}
+
 const setDepartmentManagerRoleSync = `-- name: SetDepartmentManagerRoleSync :exec
 UPDATE department_managers SET role_sync_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
 `
@@ -169,5 +222,20 @@ type SetDepartmentManagerRoleSyncParams struct {
 
 func (q *Queries) SetDepartmentManagerRoleSync(ctx context.Context, arg SetDepartmentManagerRoleSyncParams) error {
 	_, err := q.db.ExecContext(ctx, setDepartmentManagerRoleSync, arg.RoleSyncStatus, arg.ID)
+	return err
+}
+
+const updateDepartmentManagerRole = `-- name: UpdateDepartmentManagerRole :exec
+UPDATE department_managers SET role_sync_status = ?, auth_role_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+`
+
+type UpdateDepartmentManagerRoleParams struct {
+	RoleSyncStatus DepartmentManagersRoleSyncStatus `json:"roleSyncStatus"`
+	AuthRoleID     string                           `json:"authRoleId"`
+	ID             string                           `json:"id"`
+}
+
+func (q *Queries) UpdateDepartmentManagerRole(ctx context.Context, arg UpdateDepartmentManagerRoleParams) error {
+	_, err := q.db.ExecContext(ctx, updateDepartmentManagerRole, arg.RoleSyncStatus, arg.AuthRoleID, arg.ID)
 	return err
 }

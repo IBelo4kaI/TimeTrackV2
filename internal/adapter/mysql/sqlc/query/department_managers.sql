@@ -18,3 +18,15 @@ DELETE FROM department_managers WHERE id = ?;
 
 -- name: SetDepartmentManagerRoleSync :exec
 UPDATE department_managers SET role_sync_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;
+
+-- name: LockDepartmentManager :one
+SELECT * FROM department_managers WHERE id = ? FOR UPDATE;
+
+-- name: LockDepartmentManagerRoleSetting :one
+SELECT setting_value FROM system_settings WHERE setting_key = 'department_manager_role_id' FOR UPDATE;
+
+-- name: CountOtherDepartmentManagersWithRole :one
+SELECT COUNT(*) FROM department_managers WHERE user_id = ? AND auth_role_id = ? AND id <> ?;
+
+-- name: UpdateDepartmentManagerRole :exec
+UPDATE department_managers SET role_sync_status = ?, auth_role_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;

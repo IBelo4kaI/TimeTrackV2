@@ -3,7 +3,11 @@ package systemsetting
 import (
 	"context"
 	"database/sql"
+	"github.com/gofiber/fiber/v3"
+	"strings"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"unicode"
+	"unicode/utf8"
 )
 
 type Service interface {
@@ -21,6 +25,12 @@ func NewService(repo repo.Querier) Service {
 
 // UpdateSystemSettingValue обновляет значение настройки по ключу
 func (s *service) UpdateSystemSettingValue(ctx context.Context, settingKey string, settingValue string) error {
+	if settingKey == "department_manager_role_id" {
+		settingValue = strings.TrimSpace(settingValue)
+		if utf8.RuneCountInString(settingValue) > 255 || strings.IndexFunc(settingValue, unicode.IsControl) >= 0 {
+			return fiber.NewError(400, "ID роли должен содержать не более 255 символов без управляющих символов")
+		}
+	}
 	params := repo.UpdateValueSystemSettingParams{
 		SettingKey: settingKey,
 		SettingValue: sql.NullString{

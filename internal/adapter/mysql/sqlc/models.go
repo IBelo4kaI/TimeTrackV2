@@ -454,6 +454,7 @@ type DepartmentManager struct {
 	RoleSyncStatus DepartmentManagersRoleSyncStatus `json:"roleSyncStatus"`
 	CreatedAt      time.Time                        `json:"createdAt"`
 	UpdatedAt      time.Time                        `json:"updatedAt"`
+	AuthRoleID     string                           `json:"authRoleId"`
 }
 
 type File struct {

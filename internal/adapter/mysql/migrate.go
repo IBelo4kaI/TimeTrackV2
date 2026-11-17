@@ -148,15 +148,17 @@ func splitStatements(content string) []string {
 }
 
 // MySQL commits ALTER/CREATE independently of the enclosing transaction.
-// Migration 039 may have created these columns before failing on its data backfill.
-// Only these two single-column additions can safely ignore a duplicate-column error.
+// Only the listed single-column additions can safely resume after partial DDL.
 func resumableWorkflowColumn(path, stmt string, err error) bool {
-	if path != "migrations/039_vacation_workflow.sql" {
+	if path != "migrations/039_vacation_workflow.sql" && path != "migrations/042_department_manager_role.sql" {
 		return false
 	}
 	var dbErr *mysql.MySQLError
 	if !errors.As(err, &dbErr) || dbErr.Number != 1060 {
 		return false
+	}
+	if path == "migrations/042_department_manager_role.sql" {
+		return stmt == "ALTER TABLE department_managers ADD COLUMN auth_role_id VARCHAR(255) NOT NULL DEFAULT ''"
 	}
 	return stmt == "ALTER TABLE vacations ADD COLUMN available_days INT NULL AFTER excess_days" ||
 		stmt == "ALTER TABLE vacations ADD COLUMN decision_comment VARCHAR(4000) NOT NULL DEFAULT ''"
