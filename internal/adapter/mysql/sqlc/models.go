@@ -95,6 +95,50 @@ func (ns NullChatsType) Value() (driver.Value, error) {
 	return string(ns.ChatsType), nil
 }
 
+type DepartmentManagersRoleSyncStatus string
+
+const (
+	DepartmentManagersRoleSyncStatusPending       DepartmentManagersRoleSyncStatus = "pending"
+	DepartmentManagersRoleSyncStatusNotConfigured DepartmentManagersRoleSyncStatus = "not_configured"
+	DepartmentManagersRoleSyncStatusSynced        DepartmentManagersRoleSyncStatus = "synced"
+	DepartmentManagersRoleSyncStatusFailed        DepartmentManagersRoleSyncStatus = "failed"
+)
+
+func (e *DepartmentManagersRoleSyncStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DepartmentManagersRoleSyncStatus(s)
+	case string:
+		*e = DepartmentManagersRoleSyncStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DepartmentManagersRoleSyncStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDepartmentManagersRoleSyncStatus struct {
+	DepartmentManagersRoleSyncStatus DepartmentManagersRoleSyncStatus `json:"departmentManagersRoleSyncStatus"`
+	Valid                            bool                             `json:"valid"` // Valid is true if DepartmentManagersRoleSyncStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDepartmentManagersRoleSyncStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DepartmentManagersRoleSyncStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DepartmentManagersRoleSyncStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDepartmentManagersRoleSyncStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DepartmentManagersRoleSyncStatus), nil
+}
+
 type NotificationsType string
 
 const (
@@ -399,6 +443,17 @@ type DayType struct {
 	ColorCode       string    `json:"colorCode"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type DepartmentManager struct {
+	ID             string                           `json:"id"`
+	Company        string                           `json:"company"`
+	Department     string                           `json:"department"`
+	UserID         string                           `json:"userId"`
+	CreatedBy      string                           `json:"createdBy"`
+	RoleSyncStatus DepartmentManagersRoleSyncStatus `json:"roleSyncStatus"`
+	CreatedAt      time.Time                        `json:"createdAt"`
+	UpdatedAt      time.Time                        `json:"updatedAt"`
 }
 
 type File struct {

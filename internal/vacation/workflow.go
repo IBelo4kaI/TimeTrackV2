@@ -10,14 +10,15 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/middleware"
 )
 
 type workflowKey struct{}
-type workflowActor struct{ ID, Comment string }
+type workflowActor struct{ ID, Comment, Session string }
 
 func actionContext(c fiber.Ctx, comment string) context.Context {
 	id, _ := c.Locals("user_id").(string)
-	return context.WithValue(c.RequestCtx(), workflowKey{}, workflowActor{ID: id, Comment: strings.TrimSpace(comment)})
+	return context.WithValue(c.RequestCtx(), workflowKey{}, workflowActor{ID: id, Comment: strings.TrimSpace(comment), Session: c.Cookies(middleware.SessionCookieName)})
 }
 func actorFrom(ctx context.Context) workflowActor {
 	a, _ := ctx.Value(workflowKey{}).(workflowActor)
@@ -97,6 +98,9 @@ func (s *vacationService) transition(ctx context.Context, id string, status repo
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if status == repo.VacationsStatusPending && vacation.DepartmentStatus != repo.VacationsDepartmentStatusNotRequired {
+		s.notifyDepartmentManagers(ctx, id, vacation.UserID, nil)
 	}
 	s.notifyApplicantStatusChanged(ctx, vacation, status, s.resolveApplicantName(ctx, vacation.UserID))
 	if status == repo.VacationsStatusApproved {
@@ -178,7 +182,13 @@ func (s *vacationService) EditApplication(ctx context.Context, id string, body V
 	if err := q.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: id, ActorID: actorFrom(ctx).ID, EventType: eventType, Detail: detail}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if previous.DepartmentStatus != repo.VacationsDepartmentStatusNotRequired && (previous.DepartmentStatus != repo.VacationsDepartmentStatusPending || !previous.StartDate.Equal(body.StartDate) || !previous.EndDate.Equal(body.EndDate) || previous.VacationTypeID != typeID) {
+		s.notifyDepartmentManagers(ctx, id, locked.UserID, nil)
+	}
+	return nil
 }
 
 // MySQL legacy zero dates (or timestamps shifted into year 0 by a timezone)

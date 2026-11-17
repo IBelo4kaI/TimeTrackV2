@@ -262,7 +262,10 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 
 	body := vacationNotificationBody(s.resolveApplicantName(ctx, vacation.UserID), dates, typeName, vacation.Description)
 
-	s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск", body)
+	adminIDs := s.notifyAdminsNewApplication(ctx, "vacation", vacationID, "Новая заявка на отпуск", body)
+	if vacation.Status == repo.VacationsStatusPending {
+		s.notifyDepartmentManagers(ctx, vacationID, vacation.UserID, adminIDs)
+	}
 
 	return nil
 }
@@ -301,14 +304,15 @@ func vacationApprovalEmailBody(applicantName, dates string, totalDays int, typeN
 // настроен в system_settings под отпуска отдельно от больничных (см.
 // notification.Service.GetVacationAdminRecipients). Best-effort — ошибка
 // тут не должна ронять создание самой заявки.
-func (s *vacationService) notifyAdminsNewApplication(ctx context.Context, entityType, entityID, title, body string) {
+func (s *vacationService) notifyAdminsNewApplication(ctx context.Context, entityType, entityID, title, body string) []string {
 	adminIDs, err := s.notificationService.GetVacationAdminRecipients(ctx)
 	if err != nil || len(adminIDs) == 0 {
-		return
+		return nil
 	}
 
 	s.notificationService.CreateMany(ctx, adminIDs, title, body, repo.NotificationsTypeInfo, entityType, entityID)
 	s.vkService.NotifyMany(ctx, adminIDs, title+": "+body, fmt.Sprintf("%s/docs/vacation/%s", s.frontendURL, entityID))
+	return adminIDs
 }
 
 // Основная версия — только дни между датами, сгруппированные по месяцам

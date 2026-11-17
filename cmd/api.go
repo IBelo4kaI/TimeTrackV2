@@ -14,6 +14,7 @@ import (
 	calendarevent "timetrack/internal/calendar_event"
 	"timetrack/internal/chat"
 	daytype "timetrack/internal/day_type"
+	departmentmanager "timetrack/internal/department_manager"
 	filecategory "timetrack/internal/file_category"
 	"timetrack/internal/handler"
 	"timetrack/internal/mail"
@@ -137,7 +138,9 @@ func (app *application) mount() *fiber.App {
 	news.SetupRoutes(v1, newsService, app.permissionClient, app.config.prefix)
 
 	// Vacation routes
-	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference)
+	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference, repo.New(app.db))
+	departmentManagers := departmentmanager.NewService(repo.New(app.db), departmentScope, nil)
+	departmentmanager.SetupRoutes(v1, departmentManagers, app.permissionClient, app.config.prefix)
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, departmentScope)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.permissionClient, app.config.prefix)
 

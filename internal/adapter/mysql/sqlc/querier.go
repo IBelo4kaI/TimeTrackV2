@@ -44,6 +44,7 @@ type Querier interface {
 	// ============================================
 	CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (sql.Result, error)
 	CreateDayType(ctx context.Context, arg CreateDayTypeParams) error
+	CreateDepartmentManager(ctx context.Context, arg CreateDepartmentManagerParams) error
 	CreateFile(ctx context.Context, arg CreateFileParams) error
 	CreateFileCategory(ctx context.Context, arg CreateFileCategoryParams) error
 	CreateFileEntityRef(ctx context.Context, arg CreateFileEntityRefParams) error
@@ -78,6 +79,7 @@ type Querier interface {
 	// см. миграцию 011_add_chats.sql).
 	DeleteChat(ctx context.Context, id string) error
 	DeleteDayType(ctx context.Context, id string) error
+	DeleteDepartmentManager(ctx context.Context, id string) (int64, error)
 	DeleteFileCategory(ctx context.Context, id string) error
 	DeleteNewsPost(ctx context.Context, id string) error
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
@@ -117,6 +119,7 @@ type Querier interface {
 	// day_types queries
 	// ============================================
 	GetDayTypes(ctx context.Context) ([]DayType, error)
+	GetDepartmentManager(ctx context.Context, id string) (DepartmentManager, error)
 	GetFileByID(ctx context.Context, id string) (GetFileByIDRow, error)
 	// ============================================
 	// file_categories queries
@@ -179,6 +182,7 @@ type Querier interface {
 	GetWorkStandardsByMonthAndGenderIdAndUserId(ctx context.Context, arg GetWorkStandardsByMonthAndGenderIdAndUserIdParams) (WorkStandard, error)
 	GetWorkStandardsByYear(ctx context.Context, year int32) ([]WorkStandard, error)
 	HardDeleteFile(ctx context.Context, id string) error
+	HasDepartmentManager(ctx context.Context, arg HasDepartmentManagerParams) (int64, error)
 	InsertAutoCategoryLinkBySellerInn(ctx context.Context, arg InsertAutoCategoryLinkBySellerInnParams) (int64, error)
 	InsertReceiptCategoryLink(ctx context.Context, arg InsertReceiptCategoryLinkParams) error
 	IsChatMessageParticipant(ctx context.Context, arg IsChatMessageParticipantParams) (bool, error)
@@ -196,6 +200,8 @@ type Querier interface {
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ChatMessage, error)
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
+	ListDepartmentManagers(ctx context.Context) ([]DepartmentManager, error)
+	ListDepartmentManagersByScope(ctx context.Context, arg ListDepartmentManagersByScopeParams) ([]DepartmentManager, error)
 	ListEntityRefsByFile(ctx context.Context, fileID string) ([]ListEntityRefsByFileRow, error)
 	ListFilesByCategory(ctx context.Context, arg ListFilesByCategoryParams) ([]ListFilesByCategoryRow, error)
 	ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error)
@@ -266,6 +272,7 @@ type Querier interface {
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
 	SetDepartmentDecision(ctx context.Context, arg SetDepartmentDecisionParams) error
+	SetDepartmentManagerRoleSync(ctx context.Context, arg SetDepartmentManagerRoleSyncParams) error
 	SetReceiptCategoriesManual(ctx context.Context, arg SetReceiptCategoriesManualParams) error
 	SetVacationDecision(ctx context.Context, arg SetVacationDecisionParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error

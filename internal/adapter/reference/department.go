@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	repo "timetrack/internal/adapter/mysql/sqlc"
 )
 
 var ErrUnavailable = errors.New("кадровый справочник недоступен или вернул некорректные данные")
@@ -20,12 +21,13 @@ type Config struct {
 }
 
 type DepartmentScopeResolver struct {
-	config Config
-	http   *http.Client
+	config   Config
+	managers *repo.Queries
+	http     *http.Client
 }
 
-func NewDepartmentScopeResolver(config Config) *DepartmentScopeResolver {
-	return &DepartmentScopeResolver{config: config, http: &http.Client{
+func NewDepartmentScopeResolver(config Config, managers *repo.Queries) *DepartmentScopeResolver {
+	return &DepartmentScopeResolver{config: config, managers: managers, http: &http.Client{
 		Timeout:       5 * time.Second,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 	}}
@@ -38,14 +40,42 @@ type employee struct {
 	Employees  []employee `json:"employees"`
 }
 
-type scope struct{ company, department string }
+type Department struct {
+	Company string `json:"company"`
+	Name    string `json:"department"`
+}
 
-// Members compares both company and department from the live employee directory.
+// Members requires both a configured appointment and matching live directory scopes.
 func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
-	if r == nil {
+	if actorID == "" {
+		return nil, ErrScope
+	}
+	directory, err := r.Directory(ctx, sessionToken)
+	if err != nil {
+		return nil, err
+	}
+	actor, ok := directory[actorID]
+	if !ok || r.managers == nil {
+		return nil, ErrScope
+	}
+	count, err := r.managers.HasDepartmentManager(ctx, repo.HasDepartmentManagerParams{UserID: actorID, Company: actor.Company, Department: actor.Name})
+	if err != nil {
 		return nil, ErrUnavailable
 	}
-	if actorID == "" {
+	if count == 0 {
+		return nil, ErrScope
+	}
+	members := map[string]bool{}
+	for id, department := range directory {
+		if id != actorID && department == actor {
+			members[id] = true
+		}
+	}
+	return members, nil
+}
+
+func (r *DepartmentScopeResolver) Directory(ctx context.Context, sessionToken string) (map[string]Department, error) {
+	if r == nil {
 		return nil, ErrUnavailable
 	}
 	cfg := r.config
@@ -81,7 +111,7 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 	if err := json.Unmarshal(data, &records); err != nil {
 		return nil, fmt.Errorf("%w: неверный формат ответа", ErrUnavailable)
 	}
-	byUser := map[string]scope{}
+	byUser := map[string]Department{}
 	invalid := map[string]bool{}
 	add := func(e employee, groupDepartment string) {
 		if e.UserID == "" {
@@ -102,7 +132,7 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 		if company == "" || department == "" {
 			invalid[e.UserID] = true
 		}
-		byUser[e.UserID] = scope{company, department}
+		byUser[e.UserID] = Department{Company: company, Name: department}
 	}
 	for _, record := range records {
 		if record.Employees != nil {
@@ -119,15 +149,8 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 			add(record, "")
 		}
 	}
-	actor, ok := byUser[actorID]
-	if !ok || invalid[actorID] {
-		return nil, ErrScope
+	for id := range invalid {
+		delete(byUser, id)
 	}
-	members := map[string]bool{}
-	for id, s := range byUser {
-		if id != actorID && !invalid[id] && s == actor {
-			members[id] = true
-		}
-	}
-	return members, nil
+	return byUser, nil
 }
