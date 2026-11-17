@@ -35,7 +35,7 @@
 
 | Переменная | Назначение |
 | --- | --- |
-| `APIREF_BASE_URL` | Только origin upstream, например `http://apiref:8080`, без `/apiref`, path, query и credentials в URL. Запрос идёт на `/ref/employees/internal`. |
+| `APIREF_BASE_URL` | Только origin upstream, например `http://apiref:8080`, без `/apiref`, path, query и credentials в URL. Запрос идёт на `/apiref/ref/employees/internal`, как в frontend-прокси. |
 | `AUTH_SERVICE_API_KEY` | Существующий служебный API-токен, общий для auth и reference API; отправляется в cookie `session`. Пустое значение блокирует операции отдела. |
 
 Ранее добавленные `APIREF_AUTH_MODE`, `APIREF_AUTH_HEADER_NAME`, `APIREF_AUTH_HEADER_VALUE` удалены: отдельная настройка механизма авторизации больше не нужна. Реальные `.env` и значения секретов не изменялись.

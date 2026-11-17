@@ -59,9 +59,9 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 		log.Print("reference: scope lookup blocked: invalid APIREF_BASE_URL")
 		return nil, ErrUnavailable
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cfg.BaseURL, "/")+"/ref/employees/internal", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cfg.BaseURL, "/")+"/apiref/ref/employees/internal", nil)
 	if err != nil {
-		log.Print("reference: failed to build GET /ref/employees/internal request")
+		log.Print("reference: failed to build GET /apiref/ref/employees/internal request")
 		return nil, ErrUnavailable
 	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
@@ -70,14 +70,14 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 	}
 	req.AddCookie(&http.Cookie{Name: "session", Value: cfg.APIKey})
 	started := time.Now()
-	log.Print("reference: GET /ref/employees/internal started")
+	log.Print("reference: GET /apiref/ref/employees/internal started")
 	resp, err := r.http.Do(req)
 	if err != nil {
-		log.Printf("reference: GET /ref/employees/internal failed: elapsed=%s error_type=%T timeout=%t canceled=%t", time.Since(started), err, errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled))
+		log.Printf("reference: GET /apiref/ref/employees/internal failed: elapsed=%s error_type=%T timeout=%t canceled=%t", time.Since(started), err, errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled))
 		return nil, fmt.Errorf("%w: ошибка запроса", ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	log.Printf("reference: GET /ref/employees/internal response: status=%d content_type=%q elapsed=%s", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started))
+	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
