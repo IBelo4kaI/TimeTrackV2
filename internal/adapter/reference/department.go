@@ -77,7 +77,7 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 		return nil, fmt.Errorf("%w: ошибка запроса", ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s body=%v", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started), resp.Body)
+	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s body=%#v", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started), resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
