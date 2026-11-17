@@ -43,7 +43,7 @@ func (s *vacationService) notifyDepartmentManagers(ctx context.Context, id, user
 	if len(recipients) == 0 {
 		return
 	}
-	title := "Заявка на согласование отдела"
+	title := "Заявка на согласование отпуска для руководителя отдела"
 	dates := fmt.Sprintf("%s – %s", vacation.StartDate.Format("02.01.2006"), vacation.EndDate.Format("02.01.2006"))
 	body := vacationNotificationBody(s.resolveApplicantName(ctx, userID), dates, vacation.VacationTypeName, "")
 	s.notificationService.CreateMany(ctx, recipients, title, body, repo.NotificationsTypeInfo, "vacation", id)
