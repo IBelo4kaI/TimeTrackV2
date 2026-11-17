@@ -7,6 +7,7 @@ import (
 	"strconv"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/adapter/permission"
+	"timetrack/internal/adapter/reference"
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
@@ -15,13 +16,14 @@ import (
 )
 
 type FileHandler struct {
-	service    *service.FileService
-	permission *permission.Client
-	prefix     string
+	departmentScope *reference.DepartmentScopeResolver
+	service         *service.FileService
+	permission      *permission.Client
+	prefix          string
 }
 
-func NewFileHandler(fileService *service.FileService, permission *permission.Client, prefix string) *FileHandler {
-	return &FileHandler{service: fileService, permission: permission, prefix: prefix}
+func NewFileHandler(fileService *service.FileService, permission *permission.Client, prefix string, departmentScope *reference.DepartmentScopeResolver) *FileHandler {
+	return &FileHandler{service: fileService, permission: permission, prefix: prefix, departmentScope: departmentScope}
 }
 
 // hasAllFor — проверка права <entity>.all:<action> у вызывающего (ленивая:
@@ -32,13 +34,42 @@ func (h *FileHandler) hasAllFor(c fiber.Ctx, action string) service.HasAllFunc {
 	}
 }
 
+func (h *FileHandler) departmentReadAccess(c fiber.Ctx, action string) service.OwnerReadAccessFunc {
+	if action != "read" {
+		return nil
+	}
+	callerID, _ := c.Locals("user_id").(string)
+	session := c.Cookies(middleware.SessionCookieName)
+	checked := false
+	var members map[string]bool
+	return func(entityType, ownerID string) bool {
+		if entityType != "vacation" || callerID == "" || ownerID == "" || session == "" {
+			return false
+		}
+		if !checked {
+			checked = true
+			result, err := h.permission.Validate(c.RequestCtx(), &permission.PermissionRequest{
+				SessionToken: session, Service: h.prefix, Entity: "department.manager", Action: "manage",
+			})
+			if err != nil || !result.IsAccess || result.UserId != callerID {
+				return false
+			}
+			members, err = h.departmentScope.Members(c.RequestCtx(), callerID, session)
+			if err != nil {
+				return false
+			}
+		}
+		return members[ownerID]
+	}
+}
+
 var errFileForbidden = errors.New("нет доступа к этому файлу")
 
 // authorizeFile — nil, если вызывающему можно работать с файлом; иначе уже
 // отправленный ответ 403/500.
 func (h *FileHandler) authorizeFile(c fiber.Ctx, fileID, action string) error {
 	callerID, _ := c.Locals("user_id").(string)
-	ok, err := h.service.CanAccessFile(c.RequestCtx(), fileID, callerID, h.hasAllFor(c, action))
+	ok, err := h.service.CanAccessFile(c.RequestCtx(), fileID, callerID, h.hasAllFor(c, action), h.departmentReadAccess(c, action))
 	if err != nil {
 		return response.ServerError(c)
 	}
@@ -104,7 +135,7 @@ func (h *FileHandler) OpenFile(c fiber.Ctx) error {
 		return response.BadRequest(c)
 	}
 
-	if err := h.authorizeFile(c, id, "read"); err != nil {
+	if err := h.authorizeFile(c, id, "read"); err != nil || c.Response().StatusCode() >= http.StatusBadRequest {
 		return err
 	}
 
@@ -163,7 +194,7 @@ func (h *FileHandler) ListFilesByEntity(c fiber.Ctx) error {
 	}
 
 	callerID, _ := c.Locals("user_id").(string)
-	ok, err := h.service.CanAccessEntity(c.RequestCtx(), entityType, entityID, callerID, h.hasAllFor(c, "read"))
+	ok, err := h.service.CanAccessEntity(c.RequestCtx(), entityType, entityID, callerID, h.hasAllFor(c, "read"), h.departmentReadAccess(c, "read"))
 	if err != nil {
 		return response.ServerError(c)
 	}
@@ -257,9 +288,10 @@ func (h *FileHandler) ListFilesByCategory(c fiber.Ctx) error {
 	// Категории общие, а файлы в них могут быть привязаны к чужим сущностям
 	callerID, _ := c.Locals("user_id").(string)
 	hasAll := h.hasAllFor(c, "read")
+	scopedRead := h.departmentReadAccess(c, "read")
 	visible := make([]repo.ListFilesByCategoryRow, 0, len(files))
 	for _, f := range files {
-		ok, err := h.service.CanAccessFile(c.RequestCtx(), f.ID, callerID, hasAll)
+		ok, err := h.service.CanAccessFile(c.RequestCtx(), f.ID, callerID, hasAll, scopedRead)
 		if err != nil {
 			return response.ServerError(c)
 		}

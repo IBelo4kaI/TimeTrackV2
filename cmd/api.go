@@ -137,7 +137,8 @@ func (app *application) mount() *fiber.App {
 	news.SetupRoutes(v1, newsService, app.permissionClient, app.config.prefix)
 
 	// Vacation routes
-	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, reference.NewDepartmentScopeResolver(app.config.reference))
+	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference)
+	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, departmentScope)
 	vacation.SetupRoutes(v1, vacationService, fileService, app.permissionClient, app.config.prefix)
 
 	// Напоминание заполнить табель — свой тикер в процессе, без внешнего
@@ -152,7 +153,7 @@ func (app *application) mount() *fiber.App {
 	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.permissionClient, app.config.prefix)
 
 	// File routes
-	fileHandler := handler.NewFileHandler(fileService, app.permissionClient, app.config.prefix)
+	fileHandler := handler.NewFileHandler(fileService, app.permissionClient, app.config.prefix, departmentScope)
 	fileRouter := v1.Group("/files")
 
 	// permission files:create

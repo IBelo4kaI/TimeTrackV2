@@ -1,13 +1,11 @@
 package reference
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,73 +43,42 @@ type scope struct{ company, department string }
 // Members compares both company and department from the live employee directory.
 func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
 	if r == nil {
-		log.Print("reference: scope lookup blocked: resolver is not configured")
 		return nil, ErrUnavailable
 	}
 	if actorID == "" {
-		log.Print("reference: scope lookup blocked: actor ID is missing")
 		return nil, ErrUnavailable
 	}
 	cfg := r.config
 	u, err := url.Parse(cfg.BaseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		log.Print("reference: scope lookup blocked: invalid APIREF_BASE_URL")
 		return nil, ErrUnavailable
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cfg.BaseURL, "/")+"/apiref/ref/employees/internal", nil)
 	if err != nil {
-		log.Print("reference: failed to build GET /apiref/ref/employees/internal request")
 		return nil, ErrUnavailable
 	}
 	if strings.TrimSpace(sessionToken) == "" {
-		log.Print("reference: scope lookup blocked: user session is missing")
 		return nil, ErrUnavailable
 	}
 	req.AddCookie(&http.Cookie{Name: "session", Value: sessionToken})
-	started := time.Now()
-	log.Print("reference: GET /apiref/ref/employees/internal started")
 	resp, err := r.http.Do(req)
 	if err != nil {
-		log.Printf("reference: GET /apiref/ref/employees/internal failed: elapsed=%s error_type=%T timeout=%t canceled=%t", time.Since(started), err, errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled))
 		return nil, fmt.Errorf("%w: ошибка запроса", ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	log.Printf("reference: GET /apiref/ref/employees/internal response: status=%d content_type=%q elapsed=%s", resp.StatusCode, resp.Header.Get("Content-Type"), time.Since(started))
 	const limit = 4 << 20
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	log.Printf("reference: response body: bytes=%d truncated=%t body=%q", len(data), len(data) > limit, data[:min(len(data), limit)])
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w: HTTP %d", ErrUnavailable, resp.StatusCode)
 	}
 	if err != nil {
-		log.Printf("reference: response body read failed: error_type=%T", err)
 		return nil, ErrUnavailable
 	}
 	if len(data) > limit {
-		log.Printf("reference: response body exceeds limit: limit_bytes=%d", limit)
 		return nil, ErrUnavailable
 	}
 	var records []employee
 	if err := json.Unmarshal(data, &records); err != nil {
-		bodyKind := "empty"
-		if trimmed := bytes.TrimSpace(data); len(trimmed) > 0 {
-			switch trimmed[0] {
-			case '<':
-				bodyKind = "html_or_xml"
-			case '[':
-				bodyKind = "json_array"
-			case '{':
-				bodyKind = "json_object"
-			default:
-				bodyKind = "other"
-			}
-		}
-		var syntaxError *json.SyntaxError
-		var offset int64
-		if errors.As(err, &syntaxError) {
-			offset = syntaxError.Offset
-		}
-		log.Printf("reference: invalid employees response: bytes=%d error_type=%T body_kind=%s syntax_offset=%d", len(data), err, bodyKind, offset)
 		return nil, fmt.Errorf("%w: неверный формат ответа", ErrUnavailable)
 	}
 	byUser := map[string]scope{}
@@ -140,12 +107,10 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 	for _, record := range records {
 		if record.Employees != nil {
 			if record.UserID != "" {
-				log.Print("reference: invalid employees response: group contains user_id")
 				return nil, ErrUnavailable
 			}
 			for _, e := range record.Employees {
 				if e.Employees != nil {
-					log.Print("reference: invalid employees response: nested employee groups")
 					return nil, ErrUnavailable
 				}
 				add(e, record.Department)
@@ -156,7 +121,6 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 	}
 	actor, ok := byUser[actorID]
 	if !ok || invalid[actorID] {
-		log.Printf("reference: scope lookup denied: actor_found=%t actor_scope_invalid=%t", ok, invalid[actorID])
 		return nil, ErrScope
 	}
 	members := map[string]bool{}
@@ -165,6 +129,5 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionT
 			members[id] = true
 		}
 	}
-	log.Printf("reference: scope lookup completed: employees=%d invalid_employees=%d department_members=%d elapsed=%s", len(byUser), len(invalid), len(members), time.Since(started))
 	return members, nil
 }

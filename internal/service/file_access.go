@@ -27,6 +27,9 @@ var RestrictedEntityPermissions = map[string]string{
 // HasAllFunc — есть ли у вызывающего право на чужие записи этой сущности.
 type HasAllFunc func(entity string) bool
 
+// OwnerReadAccessFunc adds scoped read access after owner/all checks.
+type OwnerReadAccessFunc func(entityType, ownerID string) bool
+
 func (s *FileService) entityOwner(ctx context.Context, entityType, entityID string) (string, error) {
 	switch entityType {
 	case "vacation":
@@ -41,7 +44,7 @@ func (s *FileService) entityOwner(ctx context.Context, entityType, entityID stri
 
 // CanAccessEntity — доступ к файлам сущности: открытые типы — всем, ограниченные
 // — владельцу сущности или с <entity>.all, вложения чата — участникам чата.
-func (s *FileService) CanAccessEntity(ctx context.Context, entityType, entityID, userID string, hasAll HasAllFunc) (bool, error) {
+func (s *FileService) CanAccessEntity(ctx context.Context, entityType, entityID, userID string, hasAll HasAllFunc, scopedRead ...OwnerReadAccessFunc) (bool, error) {
 	if entityType == EntityTypeChatMessage {
 		messageID, err := strconv.ParseUint(entityID, 10, 64)
 		if err != nil {
@@ -62,12 +65,22 @@ func (s *FileService) CanAccessEntity(ctx context.Context, entityType, entityID,
 	if err == nil && owner == userID {
 		return true, nil
 	}
-	return hasAll(allEntity), nil
+	if hasAll(allEntity) {
+		return true, nil
+	}
+	if err == nil && owner != "" {
+		for _, allowed := range scopedRead {
+			if allowed != nil && allowed(entityType, owner) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // CanAccessFile — доступ к файлу по его привязкам: достаточно, чтобы
 // разрешила хотя бы одна. Файл без привязок открыт (как и раньше).
-func (s *FileService) CanAccessFile(ctx context.Context, fileID, userID string, hasAll HasAllFunc) (bool, error) {
+func (s *FileService) CanAccessFile(ctx context.Context, fileID, userID string, hasAll HasAllFunc, scopedRead ...OwnerReadAccessFunc) (bool, error) {
 	refs, err := s.repo.ListEntityRefsByFile(ctx, fileID)
 	if err != nil {
 		return false, fmt.Errorf("list entity refs: %w", err)
@@ -77,7 +90,7 @@ func (s *FileService) CanAccessFile(ctx context.Context, fileID, userID string, 
 	}
 
 	for _, r := range refs {
-		ok, err := s.CanAccessEntity(ctx, r.EntityType, r.EntityID, userID, hasAll)
+		ok, err := s.CanAccessEntity(ctx, r.EntityType, r.EntityID, userID, hasAll, scopedRead...)
 		if err != nil {
 			return false, err
 		}
