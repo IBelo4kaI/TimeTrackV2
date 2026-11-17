@@ -13,13 +13,12 @@ import (
 	"time"
 )
 
-var ErrUnavailable = errors.New("кадровый справочник недоступен или его контракт не подтверждён")
+var ErrUnavailable = errors.New("кадровый справочник недоступен или вернул некорректные данные")
 var ErrScope = errors.New("не подтверждены отдел и компания сотрудника")
 
 type Config struct {
-	BaseURL           string
-	ContractConfirmed bool
-	APIKey            string
+	BaseURL string
+	APIKey  string
 }
 
 type DepartmentScopeResolver struct {
@@ -51,10 +50,6 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 	}
 	if actorID == "" {
 		log.Print("reference: scope lookup blocked: actor ID is missing")
-		return nil, ErrUnavailable
-	}
-	if !r.config.ContractConfirmed {
-		log.Print("reference: scope lookup blocked: APIREF_CONTRACT_CONFIRMED is not true")
 		return nil, ErrUnavailable
 	}
 	cfg := r.config

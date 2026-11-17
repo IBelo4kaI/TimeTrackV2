@@ -87,8 +87,7 @@ func (e *Env) GetSMTPEncryptionKey() string {
 
 func (e *Env) GetReferenceConfig() reference.Config {
 	return reference.Config{
-		BaseURL:           os.Getenv("APIREF_BASE_URL"),
-		ContractConfirmed: os.Getenv("APIREF_CONTRACT_CONFIRMED") == "true",
-		APIKey:            e.GetAuthServiceAPIKey(),
+		BaseURL: os.Getenv("APIREF_BASE_URL"),
+		APIKey:  e.GetAuthServiceAPIKey(),
 	}
 }
