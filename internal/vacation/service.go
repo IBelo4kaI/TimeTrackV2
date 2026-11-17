@@ -37,8 +37,8 @@ type vacationService struct {
 }
 
 type Service interface {
-	DepartmentMembers(ctx context.Context, actorID string) (map[string]bool, error)
-	DepartmentDecision(ctx context.Context, id, decision, comment string) error
+	DepartmentMembers(ctx context.Context, actorID, sessionToken string) (map[string]bool, error)
+	DepartmentDecision(ctx context.Context, id, decision, comment, sessionToken string) error
 	GetVacationBalances(ctx context.Context, year int) ([]VacationBalance, error)
 	GetHistory(ctx context.Context, id string) ([]repo.VacationHistory, error)
 	EditApplication(ctx context.Context, id string, body VacationCreateRequest) error

@@ -19,7 +19,6 @@ var ErrScope = errors.New("не подтверждены отдел и комп�
 
 type Config struct {
 	BaseURL string
-	APIKey  string
 }
 
 type DepartmentScopeResolver struct {
@@ -44,7 +43,7 @@ type employee struct {
 type scope struct{ company, department string }
 
 // Members returns only unambiguous employees with explicit company and department IDs.
-func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (map[string]bool, error) {
+func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
 	if r == nil {
 		log.Print("reference: scope lookup blocked: resolver is not configured")
 		return nil, ErrUnavailable
@@ -64,11 +63,11 @@ func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID string) (
 		log.Print("reference: failed to build GET /apiref/ref/employees/internal request")
 		return nil, ErrUnavailable
 	}
-	if strings.TrimSpace(cfg.APIKey) == "" {
-		log.Print("reference: scope lookup blocked: AUTH_SERVICE_API_KEY is empty")
+	if strings.TrimSpace(sessionToken) == "" {
+		log.Print("reference: scope lookup blocked: user session is missing")
 		return nil, ErrUnavailable
 	}
-	req.AddCookie(&http.Cookie{Name: "session", Value: cfg.APIKey})
+	req.AddCookie(&http.Cookie{Name: "session", Value: sessionToken})
 	started := time.Now()
 	log.Print("reference: GET /apiref/ref/employees/internal started")
 	resp, err := r.http.Do(req)

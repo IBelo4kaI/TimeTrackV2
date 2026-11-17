@@ -72,7 +72,7 @@ func (e *Env) GetAuthServiceHost() string {
 }
 
 // GetAuthServiceAPIKey — отправляется как значение cookie "session" в
-// запросах к сервисам авторизации и кадрового справочника.
+// запросах к сервису авторизации.
 func (e *Env) GetAuthServiceAPIKey() string {
 	return os.Getenv("AUTH_SERVICE_API_KEY")
 }
@@ -88,6 +88,5 @@ func (e *Env) GetSMTPEncryptionKey() string {
 func (e *Env) GetReferenceConfig() reference.Config {
 	return reference.Config{
 		BaseURL: os.Getenv("APIREF_BASE_URL"),
-		APIKey:  e.GetAuthServiceAPIKey(),
 	}
 }

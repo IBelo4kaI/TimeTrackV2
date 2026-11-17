@@ -15,14 +15,14 @@ import (
 	"timetrack/internal/response"
 )
 
-func (s *vacationService) DepartmentMembers(ctx context.Context, actorID string) (map[string]bool, error) {
-	return s.departmentScope.Members(ctx, actorID)
+func (s *vacationService) DepartmentMembers(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
+	return s.departmentScope.Members(ctx, actorID, sessionToken)
 }
 
-func (s *vacationService) DepartmentDecision(ctx context.Context, id, decision, comment string) error {
+func (s *vacationService) DepartmentDecision(ctx context.Context, id, decision, comment, sessionToken string) error {
 	actor := actorFrom(ctx).ID
 	comment = strings.TrimSpace(comment)
-	if actor == "" {
+	if actor == "" || strings.TrimSpace(sessionToken) == "" {
 		return fiber.ErrUnauthorized
 	}
 	if decision != "approved" && decision != "rejected" {
@@ -44,7 +44,7 @@ func (s *vacationService) DepartmentDecision(ctx context.Context, id, decision, 
 	if locked.UserID == actor || locked.UserID == "" {
 		return fiber.NewError(403, "Самосогласование запрещено")
 	}
-	members, err := s.DepartmentMembers(ctx, actor)
+	members, err := s.DepartmentMembers(ctx, actor, sessionToken)
 	if err != nil {
 		return departmentScopeError(err)
 	}
@@ -103,7 +103,7 @@ func (h *Handler) departmentMembers(c fiber.Ctx) (map[string]bool, error) {
 		return nil, fiber.ErrForbidden
 	}
 	actor, _ := c.Locals("user_id").(string)
-	members, err := h.service.DepartmentMembers(c.RequestCtx(), actor)
+	members, err := h.service.DepartmentMembers(c.RequestCtx(), actor, c.Cookies(middleware.SessionCookieName))
 	if err != nil {
 		return nil, departmentScopeError(err)
 	}
@@ -153,7 +153,7 @@ func (h *Handler) DepartmentDecision(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return response.BadRequest(c)
 	}
-	if err := h.service.DepartmentDecision(actionContext(c, ""), c.Params("id"), body.Decision, body.Comment); err != nil {
+	if err := h.service.DepartmentDecision(actionContext(c, ""), c.Params("id"), body.Decision, body.Comment, c.Cookies(middleware.SessionCookieName)); err != nil {
 		return workflowResponseError(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Решение руководителя отдела сохранено"})
