@@ -23,6 +23,7 @@ func main() {
 		},
 		prefix:      "time",
 		frontendURL: env.GetFrontendURL(),
+		reference:   env.GetReferenceConfig(),
 		vk: vkConfig{
 			groupToken:          env.GetVKGroupToken(),
 			confirmationString:  env.GetVKConfirmationString(),

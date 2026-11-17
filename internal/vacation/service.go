@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
+	"timetrack/internal/adapter/reference"
 	"timetrack/internal/authservice"
 	"timetrack/internal/date"
 	"timetrack/internal/mail"
@@ -23,6 +24,7 @@ import (
 )
 
 type vacationService struct {
+	departmentScope      *reference.DepartmentScopeResolver
 	repo                 *repo.Queries
 	db                   *sql.DB
 	userTimeEntryService usertimeentry.Service
@@ -35,6 +37,8 @@ type vacationService struct {
 }
 
 type Service interface {
+	DepartmentMembers(ctx context.Context, actorID string) (map[string]bool, error)
+	DepartmentDecision(ctx context.Context, id, decision, comment string) error
 	GetVacationBalances(ctx context.Context, year int) ([]VacationBalance, error)
 	GetHistory(ctx context.Context, id string) ([]repo.VacationHistory, error)
 	EditApplication(ctx context.Context, id string, body VacationCreateRequest) error
@@ -70,8 +74,9 @@ type Service interface {
 // defaultVacationTypeSystemName — тип отпуска, назначаемый по умолчанию, если клиент его не указал.
 const defaultVacationTypeSystemName = "paid"
 
-func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, fileService *service.FileService, mailService mail.Service, authService authservice.Service, frontendURL string) Service {
+func NewService(repo *repo.Queries, db *sql.DB, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, fileService *service.FileService, mailService mail.Service, authService authservice.Service, frontendURL string, departmentScope *reference.DepartmentScopeResolver) Service {
 	return &vacationService{
+		departmentScope:      departmentScope,
 		repo:                 repo,
 		db:                   db,
 		userTimeEntryService: userTimeEntryService,
@@ -201,16 +206,17 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 	q := s.repo.WithTx(tx)
 	// Создаем отпуск и событие в одной транзакции.
 	err = q.CreateVacation(ctx, repo.CreateVacationParams{
-		ID:             vacationID,
-		UserID:         vacation.UserID,
-		StartDate:      vacation.StartDate,
-		EndDate:        vacation.EndDate,
-		TotalDays:      int32(totalDays.TotalVacationDays),
-		ExcessDays:     int32(excessDays),
-		AvailableDays:  sql.NullInt32{Int32: int32(stats.Free), Valid: true},
-		Description:    desc,
-		Status:         vacation.Status,
-		VacationTypeID: vacationTypeID,
+		ID:               vacationID,
+		UserID:           vacation.UserID,
+		StartDate:        vacation.StartDate,
+		EndDate:          vacation.EndDate,
+		TotalDays:        int32(totalDays.TotalVacationDays),
+		ExcessDays:       int32(excessDays),
+		AvailableDays:    sql.NullInt32{Int32: int32(stats.Free), Valid: true},
+		Description:      desc,
+		Status:           vacation.Status,
+		VacationTypeID:   vacationTypeID,
+		DepartmentStatus: repo.VacationsDepartmentStatusPending,
 	})
 	if err != nil {
 		return err
@@ -224,6 +230,9 @@ func (s *vacationService) CreateVacationReport(ctx context.Context, vacation Vac
 		return err
 	}
 	if vacation.Status == repo.VacationsStatusApproved {
+		if err := addDepartmentBypass(ctx, q, vacationID, actor, "pending"); err != nil {
+			return err
+		}
 		if err := q.AddVacationHistory(ctx, repo.AddVacationHistoryParams{VacationID: vacationID, ActorID: actor, EventType: "approved", Detail: "Заявка создана в статусе «Утверждена»"}); err != nil {
 			return err
 		}

@@ -226,6 +226,50 @@ func (ns NullSystemSettingsSettingType) Value() (driver.Value, error) {
 	return string(ns.SystemSettingsSettingType), nil
 }
 
+type VacationsDepartmentStatus string
+
+const (
+	VacationsDepartmentStatusNotRequired VacationsDepartmentStatus = "not_required"
+	VacationsDepartmentStatusPending     VacationsDepartmentStatus = "pending"
+	VacationsDepartmentStatusApproved    VacationsDepartmentStatus = "approved"
+	VacationsDepartmentStatusRejected    VacationsDepartmentStatus = "rejected"
+)
+
+func (e *VacationsDepartmentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = VacationsDepartmentStatus(s)
+	case string:
+		*e = VacationsDepartmentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for VacationsDepartmentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullVacationsDepartmentStatus struct {
+	VacationsDepartmentStatus VacationsDepartmentStatus `json:"vacationsDepartmentStatus"`
+	Valid                     bool                      `json:"valid"` // Valid is true if VacationsDepartmentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullVacationsDepartmentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.VacationsDepartmentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.VacationsDepartmentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullVacationsDepartmentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.VacationsDepartmentStatus), nil
+}
+
 type VacationsStatus string
 
 const (
@@ -533,22 +577,26 @@ type UserVkLink struct {
 }
 
 type Vacation struct {
-	ID                  string          `json:"id"`
-	UserID              string          `json:"userId"`
-	StartDate           time.Time       `json:"startDate"`
-	EndDate             time.Time       `json:"endDate"`
-	TotalDays           int32           `json:"totalDays"`
-	Description         sql.NullString  `json:"description"`
-	CreatedAt           sql.NullTime    `json:"createdAt"`
-	UpdatedAt           sql.NullTime    `json:"updatedAt"`
-	ManagerComment      sql.NullString  `json:"managerComment"`
-	StatusUpdatedAt     sql.NullTime    `json:"statusUpdatedAt"`
-	VacationTypeID      sql.NullString  `json:"vacationTypeId"`
-	ApprovalEmailSentAt sql.NullTime    `json:"approvalEmailSentAt"`
-	ExcessDays          int32           `json:"excessDays"`
-	Status              VacationsStatus `json:"status"`
-	AvailableDays       sql.NullInt32   `json:"availableDays"`
-	DecisionComment     string          `json:"decisionComment"`
+	ID                  string                    `json:"id"`
+	UserID              string                    `json:"userId"`
+	StartDate           time.Time                 `json:"startDate"`
+	EndDate             time.Time                 `json:"endDate"`
+	TotalDays           int32                     `json:"totalDays"`
+	Description         sql.NullString            `json:"description"`
+	CreatedAt           sql.NullTime              `json:"createdAt"`
+	UpdatedAt           sql.NullTime              `json:"updatedAt"`
+	ManagerComment      sql.NullString            `json:"managerComment"`
+	StatusUpdatedAt     sql.NullTime              `json:"statusUpdatedAt"`
+	VacationTypeID      sql.NullString            `json:"vacationTypeId"`
+	ApprovalEmailSentAt sql.NullTime              `json:"approvalEmailSentAt"`
+	ExcessDays          int32                     `json:"excessDays"`
+	Status              VacationsStatus           `json:"status"`
+	AvailableDays       sql.NullInt32             `json:"availableDays"`
+	DecisionComment     string                    `json:"decisionComment"`
+	DepartmentStatus    VacationsDepartmentStatus `json:"departmentStatus"`
+	DepartmentActorID   string                    `json:"departmentActorId"`
+	DepartmentDecidedAt sql.NullTime              `json:"departmentDecidedAt"`
+	DepartmentComment   string                    `json:"departmentComment"`
 }
 
 type VacationHistory struct {

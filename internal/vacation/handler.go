@@ -67,7 +67,13 @@ func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
 		return workflowResponseError(c, err)
 	}
 
-	return response.Success(c, vacations)
+	members, _ := h.departmentMembers(c)
+	result := make([]userVacationResponse, 0, len(*vacations))
+	for _, v := range *vacations {
+		result = append(result, userVacationResponse{v, canDepartmentApprove(members, v.UserID, v.Status, v.DepartmentStatus)})
+	}
+	c.Set("Cache-Control", "no-store")
+	return response.Success(c, result)
 }
 
 // GetVacation godoc
@@ -79,32 +85,13 @@ func (h *Handler) GetVacationsByYear(c fiber.Ctx) error {
 // подставить ".all". Владельца узнаём только после того, как достали запись
 // из БД, и если она чужая — довалидируем через middleware.RequireOwnerOrAll.
 func (h *Handler) GetVacation(c fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return response.BadRequest(c)
-	}
-
-	vacation, err := h.service.GetVacationByID(c.RequestCtx(), id)
+	v, err := h.applicationAccess(c, "read")
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return response.Error(c, http.StatusNotFound, fiber.NewError(http.StatusNotFound, "заявка на отпуск не найдена"))
-		}
 		return workflowResponseError(c, err)
 	}
-
-	callerID, _ := c.Locals("user_id").(string)
-	allowed := middleware.RequireOwnerOrAll(
-		c,
-		h.permission,
-		middleware.Params{Service: h.prefix, Entity: "vacation", Action: "read"},
-		callerID,
-		vacation.UserID,
-	)
-	if !allowed {
-		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "нет доступа к этой заявке"))
-	}
-
-	return response.Success(c, vacation)
+	members, _ := h.departmentMembers(c)
+	c.Set("Cache-Control", "no-store")
+	return response.Success(c, vacationResponse{*v, canDepartmentApprove(members, v.UserID, v.Status, v.DepartmentStatus)})
 }
 
 func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {
@@ -119,7 +106,13 @@ func (h *Handler) GetAllUserVacationsByYear(c fiber.Ctx) error {
 		return workflowResponseError(c, err)
 	}
 
-	return response.Success(c, vacations)
+	members, _ := h.departmentMembers(c)
+	result := make([]allVacationResponse, 0, len(*vacations))
+	for _, v := range *vacations {
+		result = append(result, allVacationResponse{v, canDepartmentApprove(members, v.UserID, v.Status, v.DepartmentStatus)})
+	}
+	c.Set("Cache-Control", "no-store")
+	return response.Success(c, result)
 }
 
 // ListVacationCalendar godoc
@@ -465,7 +458,16 @@ func (h *Handler) applicationAccess(c fiber.Ctx, action string) (*repo.GetVacati
 	}
 	caller, _ := c.Locals("user_id").(string)
 	if !middleware.RequireOwnerOrAll(c, h.permission, middleware.Params{Service: h.prefix, Entity: "vacation", Action: action}, caller, v.UserID) {
-		return nil, fiber.NewError(403, "Нет доступа к заявке")
+		if action != "read" {
+			return nil, fiber.NewError(403, "Нет доступа к заявке")
+		}
+		members, err := h.departmentMembers(c)
+		if err != nil {
+			return nil, err
+		}
+		if !members[v.UserID] {
+			return nil, fiber.NewError(403, "Нет доступа к заявке")
+		}
 	}
 	return v, nil
 }

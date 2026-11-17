@@ -42,8 +42,11 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation_calendar", Action: "read"}),
 		handler.ListVacationCalendar)
 
+	router.Get("/department/:year", middleware.Require(permission, middleware.Params{Service: prefix, Entity: "department.manager", Action: "manage"}), handler.DepartmentVacations)
+	router.Put("/:id/department-decision", middleware.Require(permission, middleware.Params{Service: prefix, Entity: "department.manager", Action: "manage"}), handler.DepartmentDecision)
+
 	// Конкретный суффикс должен предшествовать маршруту с двумя параметрами.
-	router.Get("/:id/history", middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}), handler.History)
+	router.Get("/:id/history", handler.requireApplicationRead, handler.History)
 
 	router.Get("/:userId/:year",
 		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
@@ -54,7 +57,7 @@ func SetupRoutes(fiber fiber.Router, service Service, fileService *service.FileS
 
 	// карточка отдельной заявки, по id отпуска (страница заявления)
 	router.Get("/:id",
-		middleware.Require(permission, middleware.Params{Service: prefix, Entity: "vacation", Action: "read"}),
+		handler.requireApplicationRead,
 		handler.GetVacation)
 
 	// permission vacation:create

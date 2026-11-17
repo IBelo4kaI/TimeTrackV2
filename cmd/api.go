@@ -7,6 +7,7 @@ import (
 	"time"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/adapter/permission"
+	"timetrack/internal/adapter/reference"
 	"timetrack/internal/authservice"
 	businesscard "timetrack/internal/business_card"
 	"timetrack/internal/calendar"
@@ -46,6 +47,7 @@ type application struct {
 }
 
 type config struct {
+	reference         reference.Config
 	addr              string
 	db                dbConfig
 	prefix            string
@@ -135,7 +137,7 @@ func (app *application) mount() *fiber.App {
 	news.SetupRoutes(v1, newsService, app.permissionClient, app.config.prefix)
 
 	// Vacation routes
-	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL)
+	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, reference.NewDepartmentScopeResolver(app.config.reference))
 	vacation.SetupRoutes(v1, vacationService, fileService, app.permissionClient, app.config.prefix)
 
 	// Напоминание заполнить табель — свой тикер в процессе, без внешнего

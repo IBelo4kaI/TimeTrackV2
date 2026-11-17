@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"timetrack/internal/adapter/reference"
 
 	"github.com/joho/godotenv"
 )
@@ -71,7 +72,7 @@ func (e *Env) GetAuthServiceHost() string {
 }
 
 // GetAuthServiceAPIKey — отправляется как значение cookie "session" в
-// запросах к сервису авторизации (см. authservice.Service.GetAllUsers).
+// запросах к сервисам авторизации и кадрового справочника.
 func (e *Env) GetAuthServiceAPIKey() string {
 	return os.Getenv("AUTH_SERVICE_API_KEY")
 }
@@ -82,4 +83,12 @@ func (e *Env) GetAuthServiceAPIKey() string {
 // от этой строки, так что подойдёт любой секрет любой длины.
 func (e *Env) GetSMTPEncryptionKey() string {
 	return os.Getenv("SMTP_ENCRYPTION_KEY")
+}
+
+func (e *Env) GetReferenceConfig() reference.Config {
+	return reference.Config{
+		BaseURL:           os.Getenv("APIREF_BASE_URL"),
+		ContractConfirmed: os.Getenv("APIREF_CONTRACT_CONFIRMED") == "true",
+		APIKey:            e.GetAuthServiceAPIKey(),
+	}
 }

@@ -62,23 +62,25 @@ INSERT INTO
     available_days,
     description,
     status,
-    vacation_type_id
+    vacation_type_id,
+    department_status
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateVacationParams struct {
-	ID             string          `json:"id"`
-	UserID         string          `json:"userId"`
-	StartDate      time.Time       `json:"startDate"`
-	EndDate        time.Time       `json:"endDate"`
-	TotalDays      int32           `json:"totalDays"`
-	ExcessDays     int32           `json:"excessDays"`
-	AvailableDays  sql.NullInt32   `json:"availableDays"`
-	Description    sql.NullString  `json:"description"`
-	Status         VacationsStatus `json:"status"`
-	VacationTypeID sql.NullString  `json:"vacationTypeId"`
+	ID               string                    `json:"id"`
+	UserID           string                    `json:"userId"`
+	StartDate        time.Time                 `json:"startDate"`
+	EndDate          time.Time                 `json:"endDate"`
+	TotalDays        int32                     `json:"totalDays"`
+	ExcessDays       int32                     `json:"excessDays"`
+	AvailableDays    sql.NullInt32             `json:"availableDays"`
+	Description      sql.NullString            `json:"description"`
+	Status           VacationsStatus           `json:"status"`
+	VacationTypeID   sql.NullString            `json:"vacationTypeId"`
+	DepartmentStatus VacationsDepartmentStatus `json:"departmentStatus"`
 }
 
 // id передаём явно (не полагаемся на DEFAULT(uuid())) — нужен сразу после
@@ -96,6 +98,7 @@ func (q *Queries) CreateVacation(ctx context.Context, arg CreateVacationParams) 
 		arg.Description,
 		arg.Status,
 		arg.VacationTypeID,
+		arg.DepartmentStatus,
 	)
 	return err
 }
@@ -152,6 +155,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -175,22 +182,26 @@ type GetAllUsersVacationsByYearParams struct {
 }
 
 type GetAllUsersVacationsByYearRow struct {
-	ID                         string          `json:"id"`
-	UserID                     string          `json:"userId"`
-	StartDate                  time.Time       `json:"startDate"`
-	EndDate                    time.Time       `json:"endDate"`
-	TotalDays                  int32           `json:"totalDays"`
-	ExcessDays                 int32           `json:"excessDays"`
-	AvailableDays              sql.NullInt32   `json:"availableDays"`
-	DecisionComment            string          `json:"decisionComment"`
-	Description                string          `json:"description"`
-	Status                     VacationsStatus `json:"status"`
-	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
-	VacationTypeName           string          `json:"vacationTypeName"`
-	VacationTypeColor          string          `json:"vacationTypeColor"`
-	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
-	CreatedAt                  sql.NullTime    `json:"createdAt"`
-	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
+	ID                         string                    `json:"id"`
+	UserID                     string                    `json:"userId"`
+	StartDate                  time.Time                 `json:"startDate"`
+	EndDate                    time.Time                 `json:"endDate"`
+	TotalDays                  int32                     `json:"totalDays"`
+	ExcessDays                 int32                     `json:"excessDays"`
+	AvailableDays              sql.NullInt32             `json:"availableDays"`
+	DecisionComment            string                    `json:"decisionComment"`
+	DepartmentStatus           VacationsDepartmentStatus `json:"departmentStatus"`
+	DepartmentActorID          string                    `json:"departmentActorId"`
+	DepartmentDecidedAt        sql.NullTime              `json:"departmentDecidedAt"`
+	DepartmentComment          string                    `json:"departmentComment"`
+	Description                string                    `json:"description"`
+	Status                     VacationsStatus           `json:"status"`
+	VacationTypeID             sql.NullString            `json:"vacationTypeId"`
+	VacationTypeName           string                    `json:"vacationTypeName"`
+	VacationTypeColor          string                    `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool                      `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime              `json:"createdAt"`
+	UpdatedAt                  sql.NullTime              `json:"updatedAt"`
 }
 
 func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUsersVacationsByYearParams) ([]GetAllUsersVacationsByYearRow, error) {
@@ -211,6 +222,10 @@ func (q *Queries) GetAllUsersVacationsByYear(ctx context.Context, arg GetAllUser
 			&i.ExcessDays,
 			&i.AvailableDays,
 			&i.DecisionComment,
+			&i.DepartmentStatus,
+			&i.DepartmentActorID,
+			&i.DepartmentDecidedAt,
+			&i.DepartmentComment,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -310,6 +325,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -327,23 +346,27 @@ WHERE
 `
 
 type GetVacationByIDRow struct {
-	ID                         string          `json:"id"`
-	UserID                     string          `json:"userId"`
-	StartDate                  time.Time       `json:"startDate"`
-	EndDate                    time.Time       `json:"endDate"`
-	TotalDays                  int32           `json:"totalDays"`
-	ExcessDays                 int32           `json:"excessDays"`
-	AvailableDays              sql.NullInt32   `json:"availableDays"`
-	DecisionComment            string          `json:"decisionComment"`
-	Description                string          `json:"description"`
-	Status                     VacationsStatus `json:"status"`
-	ApprovalEmailSentAt        sql.NullTime    `json:"approvalEmailSentAt"`
-	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
-	VacationTypeName           string          `json:"vacationTypeName"`
-	VacationTypeColor          string          `json:"vacationTypeColor"`
-	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
-	CreatedAt                  sql.NullTime    `json:"createdAt"`
-	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
+	ID                         string                    `json:"id"`
+	UserID                     string                    `json:"userId"`
+	StartDate                  time.Time                 `json:"startDate"`
+	EndDate                    time.Time                 `json:"endDate"`
+	TotalDays                  int32                     `json:"totalDays"`
+	ExcessDays                 int32                     `json:"excessDays"`
+	AvailableDays              sql.NullInt32             `json:"availableDays"`
+	DecisionComment            string                    `json:"decisionComment"`
+	DepartmentStatus           VacationsDepartmentStatus `json:"departmentStatus"`
+	DepartmentActorID          string                    `json:"departmentActorId"`
+	DepartmentDecidedAt        sql.NullTime              `json:"departmentDecidedAt"`
+	DepartmentComment          string                    `json:"departmentComment"`
+	Description                string                    `json:"description"`
+	Status                     VacationsStatus           `json:"status"`
+	ApprovalEmailSentAt        sql.NullTime              `json:"approvalEmailSentAt"`
+	VacationTypeID             sql.NullString            `json:"vacationTypeId"`
+	VacationTypeName           string                    `json:"vacationTypeName"`
+	VacationTypeColor          string                    `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool                      `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime              `json:"createdAt"`
+	UpdatedAt                  sql.NullTime              `json:"updatedAt"`
 }
 
 func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationByIDRow, error) {
@@ -358,6 +381,10 @@ func (q *Queries) GetVacationByID(ctx context.Context, id string) (GetVacationBy
 		&i.ExcessDays,
 		&i.AvailableDays,
 		&i.DecisionComment,
+		&i.DepartmentStatus,
+		&i.DepartmentActorID,
+		&i.DepartmentDecidedAt,
+		&i.DepartmentComment,
 		&i.Description,
 		&i.Status,
 		&i.ApprovalEmailSentAt,
@@ -381,6 +408,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -406,22 +437,26 @@ type GetVacationsByYearParams struct {
 }
 
 type GetVacationsByYearRow struct {
-	ID                         string          `json:"id"`
-	UserID                     string          `json:"userId"`
-	StartDate                  time.Time       `json:"startDate"`
-	EndDate                    time.Time       `json:"endDate"`
-	TotalDays                  int32           `json:"totalDays"`
-	ExcessDays                 int32           `json:"excessDays"`
-	AvailableDays              sql.NullInt32   `json:"availableDays"`
-	DecisionComment            string          `json:"decisionComment"`
-	Description                string          `json:"description"`
-	Status                     VacationsStatus `json:"status"`
-	VacationTypeID             sql.NullString  `json:"vacationTypeId"`
-	VacationTypeName           string          `json:"vacationTypeName"`
-	VacationTypeColor          string          `json:"vacationTypeColor"`
-	VacationTypeAffectsBalance bool            `json:"vacationTypeAffectsBalance"`
-	CreatedAt                  sql.NullTime    `json:"createdAt"`
-	UpdatedAt                  sql.NullTime    `json:"updatedAt"`
+	ID                         string                    `json:"id"`
+	UserID                     string                    `json:"userId"`
+	StartDate                  time.Time                 `json:"startDate"`
+	EndDate                    time.Time                 `json:"endDate"`
+	TotalDays                  int32                     `json:"totalDays"`
+	ExcessDays                 int32                     `json:"excessDays"`
+	AvailableDays              sql.NullInt32             `json:"availableDays"`
+	DecisionComment            string                    `json:"decisionComment"`
+	DepartmentStatus           VacationsDepartmentStatus `json:"departmentStatus"`
+	DepartmentActorID          string                    `json:"departmentActorId"`
+	DepartmentDecidedAt        sql.NullTime              `json:"departmentDecidedAt"`
+	DepartmentComment          string                    `json:"departmentComment"`
+	Description                string                    `json:"description"`
+	Status                     VacationsStatus           `json:"status"`
+	VacationTypeID             sql.NullString            `json:"vacationTypeId"`
+	VacationTypeName           string                    `json:"vacationTypeName"`
+	VacationTypeColor          string                    `json:"vacationTypeColor"`
+	VacationTypeAffectsBalance bool                      `json:"vacationTypeAffectsBalance"`
+	CreatedAt                  sql.NullTime              `json:"createdAt"`
+	UpdatedAt                  sql.NullTime              `json:"updatedAt"`
 }
 
 func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYearParams) ([]GetVacationsByYearRow, error) {
@@ -442,6 +477,10 @@ func (q *Queries) GetVacationsByYear(ctx context.Context, arg GetVacationsByYear
 			&i.ExcessDays,
 			&i.AvailableDays,
 			&i.DecisionComment,
+			&i.DepartmentStatus,
+			&i.DepartmentActorID,
+			&i.DepartmentDecidedAt,
+			&i.DepartmentComment,
 			&i.Description,
 			&i.Status,
 			&i.VacationTypeID,
@@ -612,6 +651,40 @@ type MarkVacationApprovalEmailSentParams struct {
 
 func (q *Queries) MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error {
 	_, err := q.db.ExecContext(ctx, markVacationApprovalEmailSent, arg.ApprovalEmailSentAt, arg.ID)
+	return err
+}
+
+const resetDepartmentDecision = `-- name: ResetDepartmentDecision :exec
+UPDATE vacations SET department_status = 'pending', department_actor_id = '',
+ department_decided_at = NULL, department_comment = '', updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+func (q *Queries) ResetDepartmentDecision(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, resetDepartmentDecision, id)
+	return err
+}
+
+const setDepartmentDecision = `-- name: SetDepartmentDecision :exec
+UPDATE vacations SET department_status = ?, department_actor_id = ?,
+ department_decided_at = CURRENT_TIMESTAMP, department_comment = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type SetDepartmentDecisionParams struct {
+	DepartmentStatus  VacationsDepartmentStatus `json:"departmentStatus"`
+	DepartmentActorID string                    `json:"departmentActorId"`
+	DepartmentComment string                    `json:"departmentComment"`
+	ID                string                    `json:"id"`
+}
+
+func (q *Queries) SetDepartmentDecision(ctx context.Context, arg SetDepartmentDecisionParams) error {
+	_, err := q.db.ExecContext(ctx, setDepartmentDecision,
+		arg.DepartmentStatus,
+		arg.DepartmentActorID,
+		arg.DepartmentComment,
+		arg.ID,
+	)
 	return err
 }
 

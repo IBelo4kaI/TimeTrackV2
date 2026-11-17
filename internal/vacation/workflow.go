@@ -75,6 +75,16 @@ func (s *vacationService) transition(ctx context.Context, id string, status repo
 			return err
 		}
 	}
+	if status == repo.VacationsStatusApproved && vacation.DepartmentStatus != repo.VacationsDepartmentStatusApproved {
+		if err := addDepartmentBypass(ctx, q, id, actor.ID, string(vacation.DepartmentStatus)); err != nil {
+			return err
+		}
+	}
+	if status == repo.VacationsStatusPending && vacation.DepartmentStatus != repo.VacationsDepartmentStatusNotRequired {
+		if err := resetDepartmentDecision(ctx, q, id, actor.ID); err != nil {
+			return err
+		}
+	}
 	if err := q.SetVacationDecision(ctx, repo.SetVacationDecisionParams{Status: status, DecisionComment: actor.Comment, ID: id}); err != nil {
 		return err
 	}
@@ -153,6 +163,11 @@ func (s *vacationService) EditApplication(ctx context.Context, id string, body V
 	}
 	if err := q.EditPendingVacation(ctx, repo.EditPendingVacationParams{ID: id, StartDate: body.StartDate, EndDate: body.EndDate, TotalDays: int32(calculated.TotalVacationDays), VacationTypeID: typeID, Description: sql.NullString{String: body.Description, Valid: body.Description != ""}, ExcessDays: int32(excess), AvailableDays: sql.NullInt32{Int32: int32(stats.Free), Valid: true}}); err != nil {
 		return err
+	}
+	if previous.DepartmentStatus != repo.VacationsDepartmentStatusNotRequired {
+		if err := resetDepartmentDecision(ctx, q, id, actorFrom(ctx).ID); err != nil {
+			return err
+		}
 	}
 	eventType := "edited"
 	detail := fmt.Sprintf("Заявка изменена: %s — %s, %s", body.StartDate.Format("02.01.2006"), body.EndDate.Format("02.01.2006"), typeName)

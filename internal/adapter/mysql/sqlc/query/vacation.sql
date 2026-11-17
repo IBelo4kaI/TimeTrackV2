@@ -8,6 +8,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.approval_email_sent_at,
@@ -59,6 +63,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -87,6 +95,10 @@ SELECT
   v.excess_days,
   v.available_days,
   v.decision_comment,
+  v.department_status,
+  v.department_actor_id,
+  v.department_decided_at,
+  v.department_comment,
   COALESCE(v.description, '') as description,
   v.status,
   v.vacation_type_id,
@@ -148,10 +160,11 @@ INSERT INTO
     available_days,
     description,
     status,
-    vacation_type_id
+    vacation_type_id,
+    department_status
   )
 VALUES
-  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetCountVacationsByStatus :one
 SELECT
@@ -193,3 +206,13 @@ WHERE YEAR(v.start_date) = YEAR(sqlc.arg(year))
   AND v.status IN ('approved', 'pending')
   AND COALESCE(t.affects_balance, TRUE) = TRUE
 GROUP BY v.user_id;
+
+-- name: SetDepartmentDecision :exec
+UPDATE vacations SET department_status = ?, department_actor_id = ?,
+ department_decided_at = CURRENT_TIMESTAMP, department_comment = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: ResetDepartmentDecision :exec
+UPDATE vacations SET department_status = 'pending', department_actor_id = '',
+ department_decided_at = NULL, department_comment = '', updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;

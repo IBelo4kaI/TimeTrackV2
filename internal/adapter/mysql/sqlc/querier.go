@@ -262,8 +262,10 @@ type Querier interface {
 	ReleaseBusinessCardAssignment(ctx context.Context, arg ReleaseBusinessCardAssignmentParams) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
+	ResetDepartmentDecision(ctx context.Context, id string) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
+	SetDepartmentDecision(ctx context.Context, arg SetDepartmentDecisionParams) error
 	SetReceiptCategoriesManual(ctx context.Context, arg SetReceiptCategoriesManualParams) error
 	SetVacationDecision(ctx context.Context, arg SetVacationDecisionParams) error
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
