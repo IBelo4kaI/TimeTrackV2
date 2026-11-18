@@ -14,7 +14,7 @@ import (
 )
 
 var ErrUnavailable = errors.New("кадровый справочник недоступен или вернул некорректные данные")
-var ErrScope = errors.New("не подтверждены отдел и компания сотрудника")
+var ErrScope = errors.New("не подтверждён отдел сотрудника")
 
 type Config struct {
 	BaseURL string
@@ -35,7 +35,8 @@ func NewDepartmentScopeResolver(config Config, managers *repo.Queries) *Departme
 
 type employee struct {
 	UserID     string     `json:"user_id"`
-	Company    string     `json:"company"`
+	FullName   any        `json:"full_name"`
+	Company    any        `json:"company"`
 	Department string     `json:"department"`
 	Employees  []employee `json:"employees"`
 }
@@ -45,36 +46,65 @@ type Department struct {
 	Name    string `json:"department"`
 }
 
-// Members requires both a configured appointment and matching live directory scopes.
+// Members resolves saved target scopes against the live employee directory.
 func (r *DepartmentScopeResolver) Members(ctx context.Context, actorID, sessionToken string) (map[string]bool, error) {
-	if actorID == "" {
+	if r == nil || r.managers == nil {
+		return nil, ErrUnavailable
+	}
+	if strings.TrimSpace(actorID) == "" {
+		return nil, ErrScope
+	}
+	assignments, err := r.managers.ListDepartmentManagersByUser(ctx, actorID)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	if len(assignments) == 0 {
+		return nil, ErrScope
+	}
+	scopes := map[string]bool{}
+	for _, assignment := range assignments {
+		if strings.TrimSpace(assignment.Department) == "" {
+			continue
+		}
+		scopes[assignment.Department] = true
+	}
+	if len(scopes) == 0 {
 		return nil, ErrScope
 	}
 	directory, err := r.Directory(ctx, sessionToken)
 	if err != nil {
 		return nil, err
 	}
-	actor, ok := directory[actorID]
-	if !ok || r.managers == nil {
-		return nil, ErrScope
-	}
-	count, err := r.managers.HasDepartmentManager(ctx, repo.HasDepartmentManagerParams{UserID: actorID, Company: actor.Company, Department: actor.Name})
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	if count == 0 {
+	if _, ok := directory[actorID]; !ok {
 		return nil, ErrScope
 	}
 	members := map[string]bool{}
 	for id, department := range directory {
-		if id != actorID && department == actor {
+		if id != actorID && scopes[department.Name] {
 			members[id] = true
 		}
 	}
 	return members, nil
 }
 
+type DirectoryEmployee struct {
+	Department
+	FullName string
+}
+
 func (r *DepartmentScopeResolver) Directory(ctx context.Context, sessionToken string) (map[string]Department, error) {
+	employees, err := r.Employees(ctx, sessionToken)
+	if err != nil {
+		return nil, err
+	}
+	directory := make(map[string]Department, len(employees))
+	for id, employee := range employees {
+		directory[id] = employee.Department
+	}
+	return directory, nil
+}
+
+func (r *DepartmentScopeResolver) Employees(ctx context.Context, sessionToken string) (map[string]DirectoryEmployee, error) {
 	if r == nil {
 		return nil, ErrUnavailable
 	}
@@ -111,7 +141,7 @@ func (r *DepartmentScopeResolver) Directory(ctx context.Context, sessionToken st
 	if err := json.Unmarshal(data, &records); err != nil {
 		return nil, fmt.Errorf("%w: неверный формат ответа", ErrUnavailable)
 	}
-	byUser := map[string]Department{}
+	byUser := map[string]DirectoryEmployee{}
 	invalid := map[string]bool{}
 	add := func(e employee, groupDepartment string) {
 		if e.UserID == "" {
@@ -121,7 +151,8 @@ func (r *DepartmentScopeResolver) Directory(ctx context.Context, sessionToken st
 		if _, exists := byUser[e.UserID]; exists {
 			invalid[e.UserID] = true
 		}
-		company := strings.TrimSpace(e.Company)
+		company, _ := e.Company.(string)
+		company = strings.TrimSpace(company)
 		department := strings.TrimSpace(e.Department)
 		groupDepartment = strings.TrimSpace(groupDepartment)
 		if department == "" {
@@ -129,10 +160,11 @@ func (r *DepartmentScopeResolver) Directory(ctx context.Context, sessionToken st
 		} else if groupDepartment != "" && department != groupDepartment {
 			invalid[e.UserID] = true
 		}
-		if company == "" || department == "" {
+		if department == "" {
 			invalid[e.UserID] = true
 		}
-		byUser[e.UserID] = Department{Company: company, Name: department}
+		fullName, _ := e.FullName.(string)
+		byUser[e.UserID] = DirectoryEmployee{Department: Department{Company: company, Name: department}, FullName: strings.TrimSpace(fullName)}
 	}
 	for _, record := range records {
 		if record.Employees != nil {

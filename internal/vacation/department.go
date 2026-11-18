@@ -49,7 +49,7 @@ func (s *vacationService) DepartmentDecision(ctx context.Context, id, decision, 
 		return departmentScopeError(err)
 	}
 	if !members[locked.UserID] {
-		return fiber.NewError(403, "Нет доступа к заявке другого отдела или компании")
+		return fiber.NewError(403, "Нет доступа к заявке другого отдела")
 	}
 	v, err := q.GetVacationByID(ctx, id)
 	if err != nil {
@@ -153,7 +153,11 @@ func (h *Handler) DepartmentDecision(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return response.BadRequest(c)
 	}
-	if err := h.service.DepartmentDecision(actionContext(c, ""), c.Params("id"), body.Decision, body.Comment, c.Cookies(middleware.SessionCookieName)); err != nil {
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	if err := h.service.DepartmentDecision(ctx, c.Params("id"), body.Decision, body.Comment, c.Cookies(middleware.SessionCookieName)); err != nil {
 		return workflowResponseError(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Решение руководителя отдела сохранено"})

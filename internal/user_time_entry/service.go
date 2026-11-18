@@ -52,13 +52,20 @@ func (s *service) CreateUserTimeEntry(ctx context.Context, entries []repo.Create
 		return err
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	qtx := s.repo.WithTx(tx)
+	keys := make([]repo.TimeEntryKey, 0, len(entries))
+	for _, entry := range entries {
+		keys = append(keys, repo.TimeEntryKey{UserID: entry.UserID, Date: entry.EntryDate})
+	}
+	if err := qtx.LockTimeEntryMonths(ctx, keys); err != nil {
+		return err
+	}
 
 	for _, entry := range entries {
 		entry.WorkLocation = normalizeWorkLocation(entry.DayTypeID == workID, entry.WorkLocation)
@@ -77,13 +84,20 @@ func (s *service) UpdateUserTimeEntries(ctx context.Context, entries []repo.Upda
 		return err
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	qtx := s.repo.WithTx(tx)
+	keys := make([]repo.TimeEntryKey, 0, len(entries))
+	for _, entry := range entries {
+		keys = append(keys, repo.TimeEntryKey{UserID: entry.UserID, Date: entry.EntryDate})
+	}
+	if err := qtx.LockTimeEntryMonths(ctx, keys); err != nil {
+		return err
+	}
 
 	for _, entry := range entries {
 		entry.WorkLocation = normalizeWorkLocation(entry.DayTypeID == workID, entry.WorkLocation)

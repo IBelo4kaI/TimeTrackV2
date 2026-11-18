@@ -12,77 +12,6 @@ import (
 	"time"
 )
 
-const createUserTimeEntry = `-- name: CreateUserTimeEntry :exec
-INSERT INTO
-  user_time_entries (user_id, entry_date, day_type_id, hours_worked, work_location)
-VALUES
-  (?, ?, ?, ?, ?)
-`
-
-type CreateUserTimeEntryParams struct {
-	UserID       string         `json:"userId"`
-	EntryDate    time.Time      `json:"entryDate"`
-	DayTypeID    string         `json:"dayTypeId"`
-	HoursWorked  string         `json:"hoursWorked"`
-	WorkLocation sql.NullString `json:"workLocation"`
-}
-
-func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error {
-	_, err := q.db.ExecContext(ctx, createUserTimeEntry,
-		arg.UserID,
-		arg.EntryDate,
-		arg.DayTypeID,
-		arg.HoursWorked,
-		arg.WorkLocation,
-	)
-	return err
-}
-
-const deleteUserTimeEntries = `-- name: DeleteUserTimeEntries :exec
-DELETE FROM user_time_entries
-WHERE
-  entry_date IN (/*SLICE:entry_date*/?)
-  AND user_id = ?
-`
-
-type DeleteUserTimeEntriesParams struct {
-	EntryDate []time.Time `json:"entryDate"`
-	UserID    string      `json:"userId"`
-}
-
-func (q *Queries) DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error {
-	query := deleteUserTimeEntries
-	var queryParams []interface{}
-	if len(arg.EntryDate) > 0 {
-		for _, v := range arg.EntryDate {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:entry_date*/?", strings.Repeat(",?", len(arg.EntryDate))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:entry_date*/?", "NULL", 1)
-	}
-	queryParams = append(queryParams, arg.UserID)
-	_, err := q.db.ExecContext(ctx, query, queryParams...)
-	return err
-}
-
-const deleteUserTimeEntry = `-- name: DeleteUserTimeEntry :exec
-DELETE FROM user_time_entries
-WHERE
-  entry_date = ?
-  AND user_id = ?
-`
-
-type DeleteUserTimeEntryParams struct {
-	EntryDate time.Time `json:"entryDate"`
-	UserID    string    `json:"userId"`
-}
-
-func (q *Queries) DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error {
-	_, err := q.db.ExecContext(ctx, deleteUserTimeEntry, arg.EntryDate, arg.UserID)
-	return err
-}
-
 const getMonthlyStatistics = `-- name: GetMonthlyStatistics :one
 SELECT
   COALESCE(SUM(ute.hours_worked), 0) AS total_hours,
@@ -473,7 +402,78 @@ func (q *Queries) GetWorkDaysByMonth(ctx context.Context, arg GetWorkDaysByMonth
 	return total_days, err
 }
 
-const updateUserTimeEntries = `-- name: UpdateUserTimeEntries :exec
+const rawCreateUserTimeEntry = `-- name: RawCreateUserTimeEntry :exec
+INSERT INTO
+  user_time_entries (user_id, entry_date, day_type_id, hours_worked, work_location)
+VALUES
+  (?, ?, ?, ?, ?)
+`
+
+type RawCreateUserTimeEntryParams struct {
+	UserID       string         `json:"userId"`
+	EntryDate    time.Time      `json:"entryDate"`
+	DayTypeID    string         `json:"dayTypeId"`
+	HoursWorked  string         `json:"hoursWorked"`
+	WorkLocation sql.NullString `json:"workLocation"`
+}
+
+func (q *Queries) RawCreateUserTimeEntry(ctx context.Context, arg RawCreateUserTimeEntryParams) error {
+	_, err := q.db.ExecContext(ctx, rawCreateUserTimeEntry,
+		arg.UserID,
+		arg.EntryDate,
+		arg.DayTypeID,
+		arg.HoursWorked,
+		arg.WorkLocation,
+	)
+	return err
+}
+
+const rawDeleteUserTimeEntries = `-- name: RawDeleteUserTimeEntries :exec
+DELETE FROM user_time_entries
+WHERE
+  entry_date IN (/*SLICE:entry_date*/?)
+  AND user_id = ?
+`
+
+type RawDeleteUserTimeEntriesParams struct {
+	EntryDate []time.Time `json:"entryDate"`
+	UserID    string      `json:"userId"`
+}
+
+func (q *Queries) RawDeleteUserTimeEntries(ctx context.Context, arg RawDeleteUserTimeEntriesParams) error {
+	query := rawDeleteUserTimeEntries
+	var queryParams []interface{}
+	if len(arg.EntryDate) > 0 {
+		for _, v := range arg.EntryDate {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", strings.Repeat(",?", len(arg.EntryDate))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:entry_date*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.UserID)
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const rawDeleteUserTimeEntry = `-- name: RawDeleteUserTimeEntry :exec
+DELETE FROM user_time_entries
+WHERE
+  entry_date = ?
+  AND user_id = ?
+`
+
+type RawDeleteUserTimeEntryParams struct {
+	EntryDate time.Time `json:"entryDate"`
+	UserID    string    `json:"userId"`
+}
+
+func (q *Queries) RawDeleteUserTimeEntry(ctx context.Context, arg RawDeleteUserTimeEntryParams) error {
+	_, err := q.db.ExecContext(ctx, rawDeleteUserTimeEntry, arg.EntryDate, arg.UserID)
+	return err
+}
+
+const rawUpdateUserTimeEntries = `-- name: RawUpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
@@ -484,7 +484,7 @@ WHERE
   AND user_id = ?
 `
 
-type UpdateUserTimeEntriesParams struct {
+type RawUpdateUserTimeEntriesParams struct {
 	DayTypeID    string         `json:"dayTypeId"`
 	HoursWorked  string         `json:"hoursWorked"`
 	WorkLocation sql.NullString `json:"workLocation"`
@@ -492,8 +492,8 @@ type UpdateUserTimeEntriesParams struct {
 	UserID       string         `json:"userId"`
 }
 
-func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error {
-	query := updateUserTimeEntries
+func (q *Queries) RawUpdateUserTimeEntries(ctx context.Context, arg RawUpdateUserTimeEntriesParams) error {
+	query := rawUpdateUserTimeEntries
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.DayTypeID)
 	queryParams = append(queryParams, arg.HoursWorked)
@@ -511,7 +511,7 @@ func (q *Queries) UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeE
 	return err
 }
 
-const updateUserTimeEntry = `-- name: UpdateUserTimeEntry :exec
+const rawUpdateUserTimeEntry = `-- name: RawUpdateUserTimeEntry :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
@@ -522,7 +522,7 @@ WHERE
   AND user_id = ?
 `
 
-type UpdateUserTimeEntryParams struct {
+type RawUpdateUserTimeEntryParams struct {
 	DayTypeID    string         `json:"dayTypeId"`
 	HoursWorked  string         `json:"hoursWorked"`
 	WorkLocation sql.NullString `json:"workLocation"`
@@ -530,8 +530,8 @@ type UpdateUserTimeEntryParams struct {
 	UserID       string         `json:"userId"`
 }
 
-func (q *Queries) UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserTimeEntry,
+func (q *Queries) RawUpdateUserTimeEntry(ctx context.Context, arg RawUpdateUserTimeEntryParams) error {
+	_, err := q.db.ExecContext(ctx, rawUpdateUserTimeEntry,
 		arg.DayTypeID,
 		arg.HoursWorked,
 		arg.WorkLocation,

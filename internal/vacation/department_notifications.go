@@ -23,7 +23,7 @@ func (s *vacationService) notifyDepartmentManagers(ctx context.Context, id, user
 	if !ok {
 		return
 	}
-	assignments, err := s.repo.ListDepartmentManagersByScope(ctx, repo.ListDepartmentManagersByScopeParams{Company: department.Company, Department: department.Name})
+	assignments, err := s.repo.ListDepartmentManagersByScope(ctx, department.Name)
 	if err != nil {
 		return
 	}
@@ -33,8 +33,8 @@ func (s *vacationService) notifyDepartmentManagers(ctx context.Context, id, user
 	}
 	recipients := make([]string, 0, len(assignments))
 	for _, assignment := range assignments {
-		current, ok := directory[assignment.UserID]
-		if !ok || current != department || seen[assignment.UserID] {
+		_, ok := directory[assignment.UserID]
+		if !ok || seen[assignment.UserID] {
 			continue
 		}
 		seen[assignment.UserID] = true

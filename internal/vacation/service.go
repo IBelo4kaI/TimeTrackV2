@@ -17,6 +17,7 @@ import (
 	"timetrack/internal/notification"
 	"timetrack/internal/parser"
 	"timetrack/internal/service"
+	"timetrack/internal/timeaudit"
 	usertimeentry "timetrack/internal/user_time_entry"
 	"timetrack/internal/vk"
 
@@ -546,6 +547,12 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 	if len(transactionQueries) > 0 {
 		q = transactionQueries[0]
 	}
+	ctx = timeaudit.WithSource(ctx, "vacation")
+	if len(transactionQueries) > 0 {
+		if err := q.LockTimeEntryRange(ctx, userID, startDate, endDate); err != nil {
+			return err
+		}
+	}
 	// Получаем day_type_id для типа "vacation"
 	dayType, err := q.GetDayTypeBySystemName(ctx, "vacation")
 	if err != nil {
@@ -593,11 +600,7 @@ func (s *vacationService) createOrUpdateVacationTimeEntries(ctx context.Context,
 		}
 
 		firstDayOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, startDate.Location())
-		existingEntries, err := q.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
-			UserID: userID,
-			Year:   firstDayOfMonth,
-			Month:  firstDayOfMonth,
-		})
+		existingEntries, err := q.LockTimeEntriesForMonth(ctx, repo.LockTimeEntriesForMonthParams{UserID: userID, FromDate: firstDayOfMonth, ToDate: firstDayOfMonth.AddDate(0, 1, 0)})
 		if err != nil {
 			return fmt.Errorf("failed to get user time entries for month %s: %w", monthKey, err)
 		}
@@ -676,6 +679,12 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 	if len(transactionQueries) > 0 {
 		q = transactionQueries[0]
 	}
+	ctx = timeaudit.WithSource(ctx, "vacation")
+	if len(transactionQueries) > 0 {
+		if err := q.LockTimeEntryRange(ctx, userID, startDate, endDate); err != nil {
+			return err
+		}
+	}
 	// Используем CalculateVacationDays для определения, какие дни являются отпускными
 	vacationDays, err := s.CalculateVacationDays(ctx, startDate, endDate)
 	if err != nil {
@@ -734,11 +743,7 @@ func (s *vacationService) deleteVacationTimeEntries(ctx context.Context, userID 
 		}
 
 		firstDayOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, startDate.Location())
-		existingEntries, err := q.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
-			UserID: userID,
-			Year:   firstDayOfMonth,
-			Month:  firstDayOfMonth,
-		})
+		existingEntries, err := q.LockTimeEntriesForMonth(ctx, repo.LockTimeEntriesForMonthParams{UserID: userID, FromDate: firstDayOfMonth, ToDate: firstDayOfMonth.AddDate(0, 1, 0)})
 		if err != nil {
 			return fmt.Errorf("failed to get user time entries for month %s: %w", monthKey, err)
 		}
@@ -945,31 +950,28 @@ func (s *vacationService) SendApprovalEmailIfReady(ctx context.Context, vacation
 }
 
 func (s *vacationService) DeleteVacation(ctx context.Context, vacationID string) error {
-	// Получаем отпуск по ID, чтобы проверить его статус
-	vacation, err := s.repo.GetVacationByID(ctx, vacationID)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		// Если отпуск не найден, возвращаем ошибку
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("vacation not found")
-		}
-		return fmt.Errorf("failed to get vacation: %w", err)
+		return err
 	}
-
-	// Если отпуск был утвержден, удаляем связанные userTimeEntry
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	if _, err := q.LockVacation(ctx, vacationID); err != nil {
+		return err
+	}
+	vacation, err := q.GetVacationByID(ctx, vacationID)
+	if err != nil {
+		return err
+	}
 	if vacation.Status == repo.VacationsStatusApproved {
-		err = s.deleteVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate)
-		if err != nil {
-			return fmt.Errorf("failed to delete vacation time entries: %w", err)
+		if err := s.deleteVacationTimeEntries(ctx, vacation.UserID, vacation.StartDate, vacation.EndDate, q); err != nil {
+			return err
 		}
 	}
-
-	// Удаляем отпуск
-	err = s.repo.DeleteVacation(ctx, vacationID)
-	if err != nil {
-		return fmt.Errorf("failed to delete vacation: %w", err)
+	if err := q.DeleteVacation(ctx, vacationID); err != nil {
+		return err
 	}
-
-	return nil
+	return tx.Commit()
 }
 
 // calculateExcessDays считает только дни новой заявки, не накопленный долг.

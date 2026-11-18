@@ -11,6 +11,7 @@ import (
 	"timetrack/internal/middleware"
 	"timetrack/internal/response"
 	"timetrack/internal/service"
+	"timetrack/internal/timeaudit"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -27,6 +28,11 @@ func NewHandler(svc Service, fileService *service.FileService, permission *permi
 }
 
 func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
+	ctx, err := timeaudit.RequestActor(c.RequestCtx(), timeaudit.Actor{ID: sickLeaveActor(c), Type: "admin", Source: "sick_leave"})
+	if err != nil {
+		return fiber.ErrUnauthorized
+	}
+
 	var body struct {
 		UserID      string    `json:"userId"`
 		StartDate   time.Time `json:"startDate"`
@@ -50,7 +56,7 @@ func (h *Handler) CreateSickLeave(c fiber.Ctx) error {
 		status = repo.SickLeavesStatusUnofficial
 	}
 
-	if err := h.service.CreateSickLeave(c.RequestCtx(), CreateSickLeaveParams{
+	if err := h.service.CreateSickLeave(timeaudit.WithUser(ctx, sickLeaveActor(c), body.UserID, "sick_leave"), CreateSickLeaveParams{
 		UserID:        body.UserID,
 		StartDate:     body.StartDate,
 		EndDate:       body.EndDate,
@@ -152,6 +158,11 @@ func (h *Handler) authorizeOwnerOrAll(c fiber.Ctx, id, action string) error {
 }
 
 func (h *Handler) DeleteSickLeave(c fiber.Ctx) error {
+	ctx, err := timeaudit.RequestActor(c.RequestCtx(), timeaudit.Actor{ID: sickLeaveActor(c), Type: "admin", Source: "sick_leave"})
+	if err != nil {
+		return fiber.ErrUnauthorized
+	}
+
 	id := c.Params("id")
 	if id == "" {
 		return response.BadRequest(c)
@@ -161,7 +172,7 @@ func (h *Handler) DeleteSickLeave(c fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.service.DeleteSickLeave(c.RequestCtx(), id); err != nil {
+	if err := h.service.DeleteSickLeave(ctx, id); err != nil {
 		return response.ServerError(c)
 	}
 
@@ -209,3 +220,5 @@ func (h *Handler) UploadSickLeaveFile(c fiber.Ctx) error {
 		"sizeBytes":    f.SizeBytes,
 	})
 }
+
+func sickLeaveActor(c fiber.Ctx) string { id, _ := c.Locals("user_id").(string); return id }

@@ -153,13 +153,13 @@ WHERE
   AND YEAR(ute.entry_date) = YEAR(sqlc.arg (year))
   AND MONTH(ute.entry_date) = MONTH(sqlc.arg (month));
 
--- name: CreateUserTimeEntry :exec
+-- name: RawCreateUserTimeEntry :exec
 INSERT INTO
   user_time_entries (user_id, entry_date, day_type_id, hours_worked, work_location)
 VALUES
   (?, ?, ?, ?, ?);
 
--- name: UpdateUserTimeEntry :exec
+-- name: RawUpdateUserTimeEntry :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
@@ -169,7 +169,7 @@ WHERE
   entry_date = ?
   AND user_id = ?;
 
--- name: UpdateUserTimeEntries :exec
+-- name: RawUpdateUserTimeEntries :exec
 UPDATE user_time_entries
 SET
   day_type_id = ?,
@@ -179,13 +179,13 @@ WHERE
   entry_date IN (sqlc.slice ('entry_date'))
   AND user_id = ?;
 
--- name: DeleteUserTimeEntry :exec
+-- name: RawDeleteUserTimeEntry :exec
 DELETE FROM user_time_entries
 WHERE
   entry_date = ?
   AND user_id = ?;
 
--- name: DeleteUserTimeEntries :exec
+-- name: RawDeleteUserTimeEntries :exec
 DELETE FROM user_time_entries
 WHERE
   entry_date IN (sqlc.slice ('entry_date'))

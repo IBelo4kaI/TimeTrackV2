@@ -11,14 +11,19 @@ import (
 	"github.com/gofiber/fiber/v3"
 	repo "timetrack/internal/adapter/mysql/sqlc"
 	"timetrack/internal/middleware"
+	"timetrack/internal/timeaudit"
 )
 
 type workflowKey struct{}
 type workflowActor struct{ ID, Comment, Session string }
 
-func actionContext(c fiber.Ctx, comment string) context.Context {
+func actionContext(c fiber.Ctx, comment string) (context.Context, error) {
 	id, _ := c.Locals("user_id").(string)
-	return context.WithValue(c.RequestCtx(), workflowKey{}, workflowActor{ID: id, Comment: strings.TrimSpace(comment), Session: c.Cookies(middleware.SessionCookieName)})
+	ctx, err := timeaudit.RequestActor(c.RequestCtx(), timeaudit.Actor{ID: id, Type: "admin", Source: "vacation", Comment: strings.TrimSpace(comment)})
+	if err != nil {
+		return nil, fiber.ErrUnauthorized
+	}
+	return context.WithValue(ctx, workflowKey{}, workflowActor{ID: id, Comment: strings.TrimSpace(comment), Session: c.Cookies(middleware.SessionCookieName)}), nil
 }
 func actorFrom(ctx context.Context) workflowActor {
 	a, _ := ctx.Value(workflowKey{}).(workflowActor)

@@ -3,6 +3,7 @@ package permission
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"time"
 )
+
+var ErrUnauthenticated = errors.New("authenticated session user is missing")
 
 type Client struct {
 	host      string
@@ -74,7 +77,7 @@ func (c *Client) get(ctx context.Context, path, token string, result any) error 
 
 func (c *Client) Validate(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
 	if req.SessionToken == "" {
-		return nil, fmt.Errorf("session is required")
+		return nil, ErrUnauthenticated
 	}
 	var user struct {
 		ID string `json:"id"`
@@ -82,8 +85,8 @@ func (c *Client) Validate(ctx context.Context, req *PermissionRequest) (*Permiss
 	if err := c.get(ctx, "/api/as/users/me", req.SessionToken, &user); err != nil {
 		return nil, err
 	}
-	if user.ID == "" {
-		return nil, fmt.Errorf("auth service returned an empty user ID")
+	if strings.TrimSpace(user.ID) == "" {
+		return nil, ErrUnauthenticated
 	}
 	var permissions []struct {
 		Code string `json:"code"`

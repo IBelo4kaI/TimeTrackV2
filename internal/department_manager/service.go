@@ -33,10 +33,10 @@ func NewService(queries *repo.Queries, db *sql.DB, directory *reference.Departme
 
 type AssignmentRequest struct {
 	UserID     string `json:"userId"`
-	Company    string `json:"company"`
 	Department string `json:"department"`
 }
 type Candidate struct {
+	FullName   string `json:"fullName"`
 	UserID     string `json:"userId"`
 	Company    string `json:"company"`
 	Department string `json:"department"`
@@ -50,19 +50,16 @@ func (s *Service) List(ctx context.Context) ([]repo.DepartmentManager, error) {
 	return rows, err
 }
 func (s *Service) Candidates(ctx context.Context, session string) ([]Candidate, error) {
-	directory, err := s.directory.Directory(ctx, session)
+	directory, err := s.directory.Employees(ctx, session)
 	if err != nil {
 		return nil, fiber.NewError(503, "Не удалось получить однозначные данные сотрудников из справочника")
 	}
 	result := make([]Candidate, 0, len(directory))
 	for id, dept := range directory {
-		result = append(result, Candidate{UserID: id, Company: dept.Company, Department: dept.Name})
+		result = append(result, Candidate{UserID: id, Company: dept.Company, Department: dept.Name, FullName: dept.FullName})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		a, b := result[i], result[j]
-		if a.Company != b.Company {
-			return a.Company < b.Company
-		}
 		if a.Department != b.Department {
 			return a.Department < b.Department
 		}
@@ -71,21 +68,29 @@ func (s *Service) Candidates(ctx context.Context, session string) ([]Candidate, 
 	return result, nil
 }
 func (s *Service) Create(ctx context.Context, body AssignmentRequest, actorID, session string) (repo.DepartmentManager, error) {
-	body.Company = strings.TrimSpace(body.Company)
 	body.Department = strings.TrimSpace(body.Department)
-	if _, err := uuid.Parse(body.UserID); err != nil || body.Company == "" || body.Department == "" || utf8.RuneCountInString(body.Company) > 255 || utf8.RuneCountInString(body.Department) > 255 {
-		return repo.DepartmentManager{}, fiber.NewError(400, "Укажите сотрудника, компанию и отдел")
+	if _, err := uuid.Parse(body.UserID); err != nil || body.Department == "" || utf8.RuneCountInString(body.Department) > 255 {
+		return repo.DepartmentManager{}, fiber.NewError(400, "Укажите сотрудника и отдел")
 	}
 	directory, err := s.directory.Directory(ctx, session)
 	if err != nil {
 		return repo.DepartmentManager{}, fiber.NewError(503, "Кадровый справочник недоступен")
 	}
-	dept, ok := directory[body.UserID]
-	if !ok || dept.Company != body.Company || dept.Name != body.Department {
-		return repo.DepartmentManager{}, fiber.NewError(409, "Компания или отдел сотрудника не подтверждены справочником")
+	if _, ok := directory[body.UserID]; !ok {
+		return repo.DepartmentManager{}, fiber.NewError(409, "Сотрудник не подтверждён кадровым справочником")
+	}
+	targetExists := false
+	for _, department := range directory {
+		if department.Name == body.Department {
+			targetExists = true
+			break
+		}
+	}
+	if !targetExists {
+		return repo.DepartmentManager{}, fiber.NewError(409, "Целевой отдел не подтверждён справочником")
 	}
 	id := uuid.NewString()
-	err = s.repo.CreateDepartmentManager(ctx, repo.CreateDepartmentManagerParams{ID: id, Company: body.Company, Department: body.Department, UserID: body.UserID, CreatedBy: actorID})
+	err = s.repo.CreateDepartmentManager(ctx, repo.CreateDepartmentManagerParams{ID: id, Company: "", Department: body.Department, UserID: body.UserID, CreatedBy: actorID})
 	if err != nil {
 		var duplicate *mysql.MySQLError
 		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
@@ -135,6 +140,11 @@ func (s *Service) SyncRole(ctx context.Context, id string) (repo.DepartmentManag
 			}
 		}
 	}
+	if status != repo.DepartmentManagersRoleSyncStatusFailed {
+		if err := s.releaseMergedRoles(ctx, q, assignment, current); err != nil {
+			status = repo.DepartmentManagersRoleSyncStatusFailed
+		}
+	}
 	if err := q.UpdateDepartmentManagerRole(ctx, repo.UpdateDepartmentManagerRoleParams{ID: id, RoleSyncStatus: status, AuthRoleID: current}); err != nil {
 		return repo.DepartmentManager{}, err
 	}
@@ -159,6 +169,29 @@ func (s *Service) removeRoleIfUnused(ctx context.Context, q *repo.Queries, assig
 	}
 	return s.roles.RemoveRole(ctx, assignment.UserID, assignment.AuthRoleID)
 }
+
+// Merged rows keep historical role bindings until transferred or released.
+func (s *Service) releaseMergedRoles(ctx context.Context, q *repo.Queries, assignment repo.DepartmentManager, retainedRole string) error {
+	rows, err := q.ListMergedDepartmentManagerRoles(ctx, assignment.ID)
+	if err != nil {
+		return err
+	}
+	released := map[string]bool{}
+	for _, row := range rows {
+		if row.AuthRoleID != retainedRole && !released[row.AuthRoleID] {
+			binding := assignment
+			binding.AuthRoleID = row.AuthRoleID
+			if err := s.removeRoleIfUnused(ctx, q, binding); err != nil {
+				return err
+			}
+		}
+		released[row.AuthRoleID] = true
+		if err := q.ReleaseMergedDepartmentManagerRole(ctx, row.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (s *Service) Delete(ctx context.Context, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -173,7 +206,11 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.removeRoleIfUnused(ctx, q, assignment); err != nil {
+	err = s.releaseMergedRoles(ctx, q, assignment, assignment.AuthRoleID)
+	if err == nil {
+		err = s.removeRoleIfUnused(ctx, q, assignment)
+	}
+	if err != nil {
 		if updateErr := q.SetDepartmentManagerRoleSync(ctx, repo.SetDepartmentManagerRoleSyncParams{ID: id, RoleSyncStatus: repo.DepartmentManagersRoleSyncStatusFailed}); updateErr != nil {
 			return updateErr
 		}

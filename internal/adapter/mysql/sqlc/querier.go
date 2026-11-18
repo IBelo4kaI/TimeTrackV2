@@ -16,6 +16,8 @@ type Querier interface {
 	// ============================================
 	AddChatParticipant(ctx context.Context, arg AddChatParticipantParams) error
 	AddVacationHistory(ctx context.Context, arg AddVacationHistoryParams) error
+	AppendTimeEntryHistory(ctx context.Context, arg AppendTimeEntryHistoryParams) error
+	ApproveTimesheetMonth(ctx context.Context, arg ApproveTimesheetMonthParams) error
 	AssignVacationType(ctx context.Context, arg AssignVacationTypeParams) error
 	CountCalendarEventsByDayType(ctx context.Context, dayTypeID string) (int64, error)
 	CountFileCategoryChildren(ctx context.Context, parentID sql.NullString) (int64, error)
@@ -24,7 +26,7 @@ type Querier interface {
 	// Дедуп: напоминание за месяц шлётся один раз — не повторяем, если уже
 	// отправляли это пользователю за эту сущность (см. internal/timesheetreminder).
 	CountNotificationsByEntity(ctx context.Context, arg CountNotificationsByEntityParams) (int64, error)
-	CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int64, error)
+	CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int32, error)
 	CountUnreadChatMessages(ctx context.Context, arg CountUnreadChatMessagesParams) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID string) (int64, error)
 	CountUserTimeEntriesByDayType(ctx context.Context, dayTypeID string) (int64, error)
@@ -62,7 +64,6 @@ type Querier interface {
 	// уведомлений админам).
 	CreateSickLeave(ctx context.Context, arg CreateSickLeaveParams) error
 	CreateSystemSetting(ctx context.Context, arg CreateSystemSettingParams) error
-	CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error
 	// id передаём явно (не полагаемся на DEFAULT(uuid())) — нужен сразу после
 	// вставки, чтобы привязать к нему уведомления админам (см. internal/vacation
 	// /service.go CreateVacationReport).
@@ -89,12 +90,11 @@ type Querier interface {
 	DeleteReceiptCategoryLinks(ctx context.Context, receiptID string) error
 	DeleteSickLeave(ctx context.Context, id string) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
-	DeleteUserTimeEntries(ctx context.Context, arg DeleteUserTimeEntriesParams) error
-	DeleteUserTimeEntry(ctx context.Context, arg DeleteUserTimeEntryParams) error
 	DeleteVacation(ctx context.Context, id string) error
 	DeleteVacationType(ctx context.Context, id string) error
 	DeleteWorkStandard(ctx context.Context, id string) error
 	EditPendingVacation(ctx context.Context, arg EditPendingVacationParams) error
+	EnsureTimesheetMonth(ctx context.Context, arg EnsureTimesheetMonthParams) error
 	GetActiveBusinessCardAssignment(ctx context.Context, cardID string) (BusinessCardAssignment, error)
 	GetActiveVacationTypes(ctx context.Context) ([]VacationType, error)
 	GetAllUsersSickLeavesByYear(ctx context.Context, arg GetAllUsersSickLeavesByYearParams) ([]GetAllUsersSickLeavesByYearRow, error)
@@ -149,6 +149,7 @@ type Querier interface {
 	// ============================================
 	GetSystemSettings(ctx context.Context) ([]SystemSetting, error)
 	GetSystemSettingsByCategory(ctx context.Context, category sql.NullString) ([]SystemSetting, error)
+	GetTimesheetMonth(ctx context.Context, arg GetTimesheetMonthParams) (TimesheetMonth, error)
 	GetTotalDaysByMonthWithSystemName(ctx context.Context, arg GetTotalDaysByMonthWithSystemNameParams) (interface{}, error)
 	GetTotalDaysByYearWithSystemName(ctx context.Context, arg GetTotalDaysByYearWithSystemNameParams) (interface{}, error)
 	GetTotalHoursByMonth(ctx context.Context, arg GetTotalHoursByMonthParams) (interface{}, error)
@@ -202,7 +203,8 @@ type Querier interface {
 	ListChatParticipants(ctx context.Context, chatID string) ([]ChatParticipant, error)
 	ListChatsByUser(ctx context.Context, userID string) ([]ListChatsByUserRow, error)
 	ListDepartmentManagers(ctx context.Context) ([]DepartmentManager, error)
-	ListDepartmentManagersByScope(ctx context.Context, arg ListDepartmentManagersByScopeParams) ([]DepartmentManager, error)
+	ListDepartmentManagersByScope(ctx context.Context, department string) ([]DepartmentManager, error)
+	ListDepartmentManagersByUser(ctx context.Context, userID string) ([]DepartmentManager, error)
 	ListEntityRefsByFile(ctx context.Context, fileID string) ([]ListEntityRefsByFileRow, error)
 	ListFilesByCategory(ctx context.Context, arg ListFilesByCategoryParams) ([]ListFilesByCategoryRow, error)
 	ListFilesByEntity(ctx context.Context, arg ListFilesByEntityParams) ([]ListFilesByEntityRow, error)
@@ -228,6 +230,7 @@ type Querier interface {
 	// новых покупок. seller_name IS NULL — в конец, чтобы не показывать пусто,
 	// когда есть чек с реальным именем продавца.
 	ListMerchantCategories(ctx context.Context) ([]ListMerchantCategoriesRow, error)
+	ListMergedDepartmentManagerRoles(ctx context.Context, retainedID string) ([]ListMergedDepartmentManagerRolesRow, error)
 	ListNewsPosts(ctx context.Context) ([]NewsPost, error)
 	ListNotificationTemplates(ctx context.Context) ([]NotificationTemplate, error)
 	ListNotificationsByUser(ctx context.Context, arg ListNotificationsByUserParams) ([]Notification, error)
@@ -239,6 +242,7 @@ type Querier interface {
 	ListReceiptsByBusinessCard(ctx context.Context, businessCardID sql.NullString) ([]Receipt, error)
 	ListReceiptsByUser(ctx context.Context, userID string) ([]Receipt, error)
 	ListSickLeaveIDsByUser(ctx context.Context, userID string) ([]string, error)
+	ListTimeEntryHistory(ctx context.Context, arg ListTimeEntryHistoryParams) ([]TimeEntryHistory, error)
 	// Пакетно для рассылки уведомлений участникам чата одним запросом вместо
 	// N+1 (по аналогии с ListFilesByEntityIDs в file_entity_refs.sql).
 	ListVKIDsByUsers(ctx context.Context, userIds []string) ([]ListVKIDsByUsersRow, error)
@@ -260,7 +264,11 @@ type Querier interface {
 	ListWorkStandardsByUserAndYear(ctx context.Context, arg ListWorkStandardsByUserAndYearParams) ([]WorkStandard, error)
 	LockDepartmentManager(ctx context.Context, id string) (DepartmentManager, error)
 	LockDepartmentManagerRoleSetting(ctx context.Context) (sql.NullString, error)
+	LockTimeEntriesForMonth(ctx context.Context, arg LockTimeEntriesForMonthParams) ([]UserTimeEntry, error)
+	LockTimeEntryByDate(ctx context.Context, arg LockTimeEntryByDateParams) (UserTimeEntry, error)
+	LockTimesheetMonth(ctx context.Context, arg LockTimesheetMonthParams) (TimesheetMonth, error)
 	LockVacation(ctx context.Context, id string) (LockVacationRow, error)
+	ManagerProtectedTimeEntry(ctx context.Context, arg ManagerProtectedTimeEntryParams) (int64, error)
 	MarkAllNotificationsRead(ctx context.Context, userID string) error
 	MarkChatRead(ctx context.Context, arg MarkChatReadParams) error
 	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) error
@@ -268,10 +276,17 @@ type Querier interface {
 	// уведомления о новых сообщениях в чате — при открытии/прочтении чата).
 	MarkNotificationsReadByEntity(ctx context.Context, arg MarkNotificationsReadByEntityParams) error
 	MarkVacationApprovalEmailSent(ctx context.Context, arg MarkVacationApprovalEmailSentParams) error
+	RawCreateUserTimeEntry(ctx context.Context, arg RawCreateUserTimeEntryParams) error
+	RawDeleteUserTimeEntries(ctx context.Context, arg RawDeleteUserTimeEntriesParams) error
+	RawDeleteUserTimeEntry(ctx context.Context, arg RawDeleteUserTimeEntryParams) error
+	RawUpdateUserTimeEntries(ctx context.Context, arg RawUpdateUserTimeEntriesParams) error
+	RawUpdateUserTimeEntry(ctx context.Context, arg RawUpdateUserTimeEntryParams) error
 	ReleaseBusinessCardAssignment(ctx context.Context, arg ReleaseBusinessCardAssignmentParams) error
+	ReleaseMergedDepartmentManagerRole(ctx context.Context, id string) error
 	RemoveChatParticipant(ctx context.Context, arg RemoveChatParticipantParams) error
 	RenameCategory(ctx context.Context, arg RenameCategoryParams) error
 	ResetDepartmentDecision(ctx context.Context, id string) error
+	ReviseTimesheetMonth(ctx context.Context, arg ReviseTimesheetMonthParams) error
 	SetChatParticipantMuted(ctx context.Context, arg SetChatParticipantMutedParams) error
 	SetChatParticipantVKMuted(ctx context.Context, arg SetChatParticipantVKMutedParams) error
 	SetDepartmentDecision(ctx context.Context, arg SetDepartmentDecisionParams) error
@@ -281,6 +296,7 @@ type Querier interface {
 	SoftDeleteChatMessage(ctx context.Context, id uint64) error
 	SoftDeleteFile(ctx context.Context, id string) error
 	TouchChatLastMessage(ctx context.Context, arg TouchChatLastMessageParams) error
+	UnapproveTimesheetMonth(ctx context.Context, arg UnapproveTimesheetMonthParams) error
 	UnlinkUserVK(ctx context.Context, userID string) error
 	UpdateAffectsVacationDayType(ctx context.Context, arg UpdateAffectsVacationDayTypeParams) error
 	UpdateBusinessCard(ctx context.Context, arg UpdateBusinessCardParams) error
@@ -302,8 +318,6 @@ type Querier interface {
 	UpdateSickLeaveStatus(ctx context.Context, arg UpdateSickLeaveStatusParams) error
 	UpdateSystemNameDayType(ctx context.Context, arg UpdateSystemNameDayTypeParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) error
-	UpdateUserTimeEntries(ctx context.Context, arg UpdateUserTimeEntriesParams) error
-	UpdateUserTimeEntry(ctx context.Context, arg UpdateUserTimeEntryParams) error
 	UpdateVacationStatus(ctx context.Context, arg UpdateVacationStatusParams) error
 	UpdateVacationType(ctx context.Context, arg UpdateVacationTypeParams) error
 	// INSERT ... ON DUPLICATE, а не голый UPDATE: та настройка, которую ещё ни

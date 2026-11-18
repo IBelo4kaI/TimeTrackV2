@@ -9,7 +9,7 @@ import (
 	"timetrack/internal/date"
 	"timetrack/internal/notification"
 	"timetrack/internal/parser"
-	usertimeentry "timetrack/internal/user_time_entry"
+	"timetrack/internal/timeaudit"
 	"timetrack/internal/vk"
 
 	"github.com/google/uuid"
@@ -35,20 +35,20 @@ type CreateSickLeaveParams struct {
 }
 
 type sickLeaveService struct {
-	repo                 *repo.Queries
-	userTimeEntryService usertimeentry.Service
-	notificationService  notification.Service
-	vkService            vk.Service
-	frontendURL          string
+	repo                *repo.Queries
+	db                  *sql.DB
+	notificationService notification.Service
+	vkService           vk.Service
+	frontendURL         string
 }
 
-func NewService(r *repo.Queries, userTimeEntryService usertimeentry.Service, notificationService notification.Service, vkService vk.Service, frontendURL string) Service {
+func NewService(r *repo.Queries, db *sql.DB, notificationService notification.Service, vkService vk.Service, frontendURL string) Service {
 	return &sickLeaveService{
-		repo:                 r,
-		userTimeEntryService: userTimeEntryService,
-		notificationService:  notificationService,
-		vkService:            vkService,
-		frontendURL:          frontendURL,
+		repo:                r,
+		db:                  db,
+		notificationService: notificationService,
+		vkService:           vkService,
+		frontendURL:         frontendURL,
 	}
 }
 
@@ -122,8 +122,15 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 	}
 
 	id := uuid.NewString()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	ctx = timeaudit.WithSource(ctx, "sick_leave")
 
-	if err := s.repo.CreateSickLeave(ctx, repo.CreateSickLeaveParams{
+	if err := q.CreateSickLeave(ctx, repo.CreateSickLeaveParams{
 		ID:          id,
 		UserID:      p.UserID,
 		StartDate:   p.StartDate,
@@ -135,10 +142,13 @@ func (s *sickLeaveService) CreateSickLeave(ctx context.Context, p CreateSickLeav
 		return fmt.Errorf("create sick leave: %w", err)
 	}
 
-	if err := s.createSickLeaveTimeEntries(ctx, p.UserID, p.StartDate, p.EndDate); err != nil {
+	if err := s.createSickLeaveTimeEntries(ctx, p.UserID, p.StartDate, p.EndDate, q); err != nil {
 		return fmt.Errorf("create time entries: %w", err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	s.notifyAdminsNewApplication(ctx, id, p.StartDate, p.EndDate, p.ApplicantName)
 
 	return nil
@@ -171,7 +181,13 @@ func (s *sickLeaveService) UpdateSickLeaveStatus(ctx context.Context, id string,
 }
 
 func (s *sickLeaveService) DeleteSickLeave(ctx context.Context, id string) error {
-	sl, err := s.repo.GetSickLeaveByID(ctx, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.repo.WithTx(tx)
+	sl, err := q.GetSickLeaveByID(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("sick leave not found")
@@ -179,16 +195,27 @@ func (s *sickLeaveService) DeleteSickLeave(ctx context.Context, id string) error
 		return fmt.Errorf("get sick leave: %w", err)
 	}
 
-	if err := s.deleteSickLeaveTimeEntries(ctx, sl.UserID, sl.StartDate, sl.EndDate); err != nil {
+	actor := timeaudit.FromContext(ctx)
+	if actor.Type != "system" {
+		ctx = timeaudit.WithUser(ctx, actor.ID, sl.UserID, "sick_leave")
+	}
+	if err := s.deleteSickLeaveTimeEntries(ctx, sl.UserID, sl.StartDate, sl.EndDate, q); err != nil {
 		return fmt.Errorf("delete time entries: %w", err)
 	}
 
-	return s.repo.DeleteSickLeave(ctx, id)
+	if err := q.DeleteSickLeave(ctx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // createSickLeaveTimeEntries создаёт user_time_entries с типом дня "medical" за период больничного.
-func (s *sickLeaveService) createSickLeaveTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time) error {
-	medicalDayType, err := s.repo.GetDayTypeBySystemName(ctx, "medical")
+func (s *sickLeaveService) createSickLeaveTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time, q *repo.Queries) error {
+	ctx = timeaudit.WithSource(ctx, "sick_leave")
+	if err := q.LockTimeEntryRange(ctx, userID, startDate, endDate); err != nil {
+		return err
+	}
+	medicalDayType, err := q.GetDayTypeBySystemName(ctx, "medical")
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -196,7 +223,7 @@ func (s *sickLeaveService) createSickLeaveTimeEntries(ctx context.Context, userI
 		return fmt.Errorf("get medical day type: %w", err)
 	}
 
-	existingMap, err := s.loadExistingEntries(ctx, userID, startDate, endDate)
+	existingMap, err := s.loadExistingEntries(ctx, userID, startDate, endDate, q)
 	if err != nil {
 		return err
 	}
@@ -224,21 +251,29 @@ func (s *sickLeaveService) createSickLeaveTimeEntries(ctx context.Context, userI
 	}
 
 	if len(toCreate) > 0 {
-		if err := s.userTimeEntryService.CreateUserTimeEntry(ctx, toCreate); err != nil {
-			return fmt.Errorf("create entries: %w", err)
+		for _, entry := range toCreate {
+			if err := q.CreateUserTimeEntry(ctx, entry); err != nil {
+				return fmt.Errorf("create entries: %w", err)
+			}
 		}
 	}
 	if len(toUpdate) > 0 {
-		if err := s.userTimeEntryService.UpdateUserTimeEntries(ctx, toUpdate); err != nil {
-			return fmt.Errorf("update entries: %w", err)
+		for _, entry := range toUpdate {
+			if err := q.UpdateUserTimeEntry(ctx, entry); err != nil {
+				return fmt.Errorf("update entries: %w", err)
+			}
 		}
 	}
 	return nil
 }
 
 // deleteSickLeaveTimeEntries удаляет/восстанавливает user_time_entries с типом "medical".
-func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time) error {
-	medicalDayType, err := s.repo.GetDayTypeBySystemName(ctx, "medical")
+func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userID string, startDate, endDate time.Time, q *repo.Queries) error {
+	ctx = timeaudit.WithSource(ctx, "sick_leave")
+	if err := q.LockTimeEntryRange(ctx, userID, startDate, endDate); err != nil {
+		return err
+	}
+	medicalDayType, err := q.GetDayTypeBySystemName(ctx, "medical")
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -246,12 +281,12 @@ func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userI
 		return fmt.Errorf("get medical day type: %w", err)
 	}
 
-	workDayType, err := s.repo.GetDayTypeBySystemName(ctx, "work")
+	workDayType, err := q.GetDayTypeBySystemName(ctx, "work")
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("get work day type: %w", err)
 	}
 
-	existingMap, err := s.loadExistingEntries(ctx, userID, startDate, endDate)
+	existingMap, err := s.loadExistingEntries(ctx, userID, startDate, endDate, q)
 	if err != nil {
 		return err
 	}
@@ -268,6 +303,9 @@ func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userI
 
 		hoursWorked := parseHours(entry.HoursWorked)
 		if hoursWorked > 0 && workDayType.ID != "" {
+			if !entry.WorkLocation.Valid || entry.WorkLocation.String == "" {
+				entry.WorkLocation = sql.NullString{String: "office", Valid: true}
+			}
 			toUpdate = append(toUpdate, repo.UpdateUserTimeEntryParams{
 				DayTypeID:    workDayType.ID,
 				HoursWorked:  entry.HoursWorked,
@@ -281,12 +319,14 @@ func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userI
 	}
 
 	if len(toUpdate) > 0 {
-		if err := s.userTimeEntryService.UpdateUserTimeEntries(ctx, toUpdate); err != nil {
-			return fmt.Errorf("update entries: %w", err)
+		for _, entry := range toUpdate {
+			if err := q.UpdateUserTimeEntry(ctx, entry); err != nil {
+				return fmt.Errorf("update entries: %w", err)
+			}
 		}
 	}
 	if len(toDelete) > 0 {
-		if err := s.userTimeEntryService.DeleteUserTimeEntries(ctx, repo.DeleteUserTimeEntriesParams{
+		if err := q.DeleteUserTimeEntries(ctx, repo.DeleteUserTimeEntriesParams{
 			EntryDate: toDelete,
 			UserID:    userID,
 		}); err != nil {
@@ -297,7 +337,7 @@ func (s *sickLeaveService) deleteSickLeaveTimeEntries(ctx context.Context, userI
 }
 
 // loadExistingEntries загружает существующие записи за период в map[date]entry.
-func (s *sickLeaveService) loadExistingEntries(ctx context.Context, userID string, startDate, endDate time.Time) (map[time.Time]repo.UserTimeEntry, error) {
+func (s *sickLeaveService) loadExistingEntries(ctx context.Context, userID string, startDate, endDate time.Time, q *repo.Queries) (map[time.Time]repo.UserTimeEntry, error) {
 	result := make(map[time.Time]repo.UserTimeEntry)
 
 	monthSet := make(map[string]bool)
@@ -309,11 +349,7 @@ func (s *sickLeaveService) loadExistingEntries(ctx context.Context, userID strin
 		var year, month int
 		fmt.Sscanf(key, "%d-%02d", &year, &month)
 		firstDay := date.FirstDayOfMonth(month, year)
-		entries, err := s.repo.GetUserTimeEntriesForMonth(ctx, repo.GetUserTimeEntriesForMonthParams{
-			UserID: userID,
-			Year:   firstDay,
-			Month:  firstDay,
-		})
+		entries, err := q.LockTimeEntriesForMonth(ctx, repo.LockTimeEntriesForMonthParams{UserID: userID, FromDate: firstDay, ToDate: firstDay.AddDate(0, 1, 0)})
 		if err != nil {
 			return nil, fmt.Errorf("get entries for %s: %w", key, err)
 		}

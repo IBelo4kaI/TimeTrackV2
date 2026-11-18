@@ -11,7 +11,12 @@ import (
 )
 
 const countOtherDepartmentManagersWithRole = `-- name: CountOtherDepartmentManagersWithRole :one
-SELECT COUNT(*) FROM department_managers WHERE user_id = ? AND auth_role_id = ? AND id <> ?
+SELECT
+  (SELECT COUNT(*) FROM department_managers d WHERE d.user_id = ? AND d.auth_role_id = ? AND d.id <> ?) +
+  (SELECT COUNT(*) FROM department_manager_merged_assignments a
+   JOIN department_managers m ON m.id = a.retained_id
+   WHERE a.user_id = ? AND a.auth_role_id = ?
+     AND a.retained_id <> ? AND a.role_released = FALSE) AS count
 `
 
 type CountOtherDepartmentManagersWithRoleParams struct {
@@ -20,9 +25,16 @@ type CountOtherDepartmentManagersWithRoleParams struct {
 	ID         string `json:"id"`
 }
 
-func (q *Queries) CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countOtherDepartmentManagersWithRole, arg.UserID, arg.AuthRoleID, arg.ID)
-	var count int64
+func (q *Queries) CountOtherDepartmentManagersWithRole(ctx context.Context, arg CountOtherDepartmentManagersWithRoleParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, countOtherDepartmentManagersWithRole,
+		arg.UserID,
+		arg.AuthRoleID,
+		arg.ID,
+		arg.UserID,
+		arg.AuthRoleID,
+		arg.ID,
+	)
+	var count int32
 	err := row.Scan(&count)
 	return count, err
 }
@@ -84,24 +96,23 @@ func (q *Queries) GetDepartmentManager(ctx context.Context, id string) (Departme
 }
 
 const hasDepartmentManager = `-- name: HasDepartmentManager :one
-SELECT COUNT(*) FROM department_managers WHERE user_id = ? AND company = ? AND department = ?
+SELECT COUNT(*) FROM department_managers WHERE user_id = ? AND department = ?
 `
 
 type HasDepartmentManagerParams struct {
 	UserID     string `json:"userId"`
-	Company    string `json:"company"`
 	Department string `json:"department"`
 }
 
 func (q *Queries) HasDepartmentManager(ctx context.Context, arg HasDepartmentManagerParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, hasDepartmentManager, arg.UserID, arg.Company, arg.Department)
+	row := q.db.QueryRowContext(ctx, hasDepartmentManager, arg.UserID, arg.Department)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const listDepartmentManagers = `-- name: ListDepartmentManagers :many
-SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers ORDER BY company, department, created_at, id
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers ORDER BY department, created_at, id
 `
 
 func (q *Queries) ListDepartmentManagers(ctx context.Context) ([]DepartmentManager, error) {
@@ -138,16 +149,11 @@ func (q *Queries) ListDepartmentManagers(ctx context.Context) ([]DepartmentManag
 }
 
 const listDepartmentManagersByScope = `-- name: ListDepartmentManagersByScope :many
-SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE company = ? AND department = ? ORDER BY id
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE department = ? ORDER BY id
 `
 
-type ListDepartmentManagersByScopeParams struct {
-	Company    string `json:"company"`
-	Department string `json:"department"`
-}
-
-func (q *Queries) ListDepartmentManagersByScope(ctx context.Context, arg ListDepartmentManagersByScopeParams) ([]DepartmentManager, error) {
-	rows, err := q.db.QueryContext(ctx, listDepartmentManagersByScope, arg.Company, arg.Department)
+func (q *Queries) ListDepartmentManagersByScope(ctx context.Context, department string) ([]DepartmentManager, error) {
+	rows, err := q.db.QueryContext(ctx, listDepartmentManagersByScope, department)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +172,76 @@ func (q *Queries) ListDepartmentManagersByScope(ctx context.Context, arg ListDep
 			&i.UpdatedAt,
 			&i.AuthRoleID,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDepartmentManagersByUser = `-- name: ListDepartmentManagersByUser :many
+SELECT id, company, department, user_id, created_by, role_sync_status, created_at, updated_at, auth_role_id FROM department_managers WHERE user_id = ? ORDER BY department, id
+`
+
+func (q *Queries) ListDepartmentManagersByUser(ctx context.Context, userID string) ([]DepartmentManager, error) {
+	rows, err := q.db.QueryContext(ctx, listDepartmentManagersByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DepartmentManager
+	for rows.Next() {
+		var i DepartmentManager
+		if err := rows.Scan(
+			&i.ID,
+			&i.Company,
+			&i.Department,
+			&i.UserID,
+			&i.CreatedBy,
+			&i.RoleSyncStatus,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AuthRoleID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMergedDepartmentManagerRoles = `-- name: ListMergedDepartmentManagerRoles :many
+SELECT id, auth_role_id FROM department_manager_merged_assignments
+WHERE retained_id = ? AND role_released = FALSE ORDER BY id
+`
+
+type ListMergedDepartmentManagerRolesRow struct {
+	ID         string `json:"id"`
+	AuthRoleID string `json:"authRoleId"`
+}
+
+func (q *Queries) ListMergedDepartmentManagerRoles(ctx context.Context, retainedID string) ([]ListMergedDepartmentManagerRolesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMergedDepartmentManagerRoles, retainedID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMergedDepartmentManagerRolesRow
+	for rows.Next() {
+		var i ListMergedDepartmentManagerRolesRow
+		if err := rows.Scan(&i.ID, &i.AuthRoleID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -209,6 +285,15 @@ func (q *Queries) LockDepartmentManagerRoleSetting(ctx context.Context) (sql.Nul
 	var setting_value sql.NullString
 	err := row.Scan(&setting_value)
 	return setting_value, err
+}
+
+const releaseMergedDepartmentManagerRole = `-- name: ReleaseMergedDepartmentManagerRole :exec
+UPDATE department_manager_merged_assignments SET role_released = TRUE WHERE id = ?
+`
+
+func (q *Queries) ReleaseMergedDepartmentManagerRole(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, releaseMergedDepartmentManagerRole, id)
+	return err
 }
 
 const setDepartmentManagerRoleSync = `-- name: SetDepartmentManagerRoleSync :exec

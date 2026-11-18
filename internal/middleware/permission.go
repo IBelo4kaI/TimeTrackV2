@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"errors"
+	"strings"
 	permissionClient "timetrack/internal/adapter/permission"
 
 	"github.com/gofiber/fiber/v3"
@@ -54,6 +56,9 @@ func Require(
 		})
 
 		if err != nil {
+			if errors.Is(err, permissionClient.ErrUnauthenticated) {
+				return fiber.ErrUnauthorized
+			}
 			// auth/permission сервис недоступен → deny by default
 			return fiber.ErrForbidden
 		}
@@ -65,6 +70,9 @@ func Require(
 			})
 		}
 
+		if strings.TrimSpace(resp.UserId) == "" {
+			return fiber.ErrUnauthorized
+		}
 		c.Locals("user_id", resp.UserId)
 
 		return c.Next()
@@ -112,6 +120,9 @@ func RequireFromBody(
 		})
 
 		if err != nil {
+			if errors.Is(err, permissionClient.ErrUnauthenticated) {
+				return fiber.ErrUnauthorized
+			}
 			return fiber.ErrForbidden
 		}
 
@@ -122,6 +133,9 @@ func RequireFromBody(
 			})
 		}
 
+		if strings.TrimSpace(resp.UserId) == "" {
+			return fiber.ErrUnauthorized
+		}
 		c.Locals("user_id", resp.UserId)
 
 		// 5️⃣ ВАЖНО: восстанавливаем body для следующего handler

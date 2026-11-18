@@ -45,7 +45,11 @@ func (h *Handler) CreateVacation(c fiber.Ctx) error {
 	if body.Status != repo.VacationsStatusPending && body.Status != repo.VacationsStatusApproved {
 		return response.Error(c, 400, errors.New("Некорректный начальный статус"))
 	}
-	err := h.service.CreateVacationReport(actionContext(c, ""), body)
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	err = h.service.CreateVacationReport(ctx, body)
 	if err != nil {
 		return workflowResponseError(c, err)
 	}
@@ -241,7 +245,11 @@ func (h *Handler) ApproveVacation(c fiber.Ctx) error {
 	}
 
 	// Используем UpdateVacationStatus с статусом "approved"
-	err := h.service.UpdateVacationStatus(actionContext(c, c.Query("comment")), vacationID, repo.VacationsStatusApproved)
+	ctx, err := actionContext(c, c.Query("comment"))
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	err = h.service.UpdateVacationStatus(ctx, vacationID, repo.VacationsStatusApproved)
 	if err != nil {
 		return workflowResponseError(c, err)
 	}
@@ -281,7 +289,11 @@ func (h *Handler) UpdateVacationStatus(c fiber.Ctx) error {
 			fiber.NewError(http.StatusBadRequest, "Invalid status. Must be one of: pending, approved, rejected"))
 	}
 
-	err := h.service.UpdateVacationStatus(actionContext(c, body.Comment), vacationID, status)
+	ctx, err := actionContext(c, body.Comment)
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	err = h.service.UpdateVacationStatus(ctx, vacationID, status)
 	if err != nil {
 		return workflowResponseError(c, err)
 	}
@@ -314,7 +326,11 @@ func (h *Handler) UpdateVacationType(c fiber.Ctx) error {
 			fiber.NewError(http.StatusBadRequest, "vacationTypeId обязателен"))
 	}
 
-	err := h.service.UpdateVacationType(actionContext(c, ""), vacationID, body.VacationTypeID)
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	err = h.service.UpdateVacationType(ctx, vacationID, body.VacationTypeID)
 	if err != nil {
 		return workflowResponseError(c, err)
 	}
@@ -363,7 +379,11 @@ func (h *Handler) DeleteVacation(c fiber.Ctx) error {
 		return response.Error(c, http.StatusForbidden, fiber.NewError(http.StatusForbidden, "удалить можно только заявку на рассмотрении"))
 	}
 
-	err = h.service.DeleteVacation(c.RequestCtx(), vacationID)
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	err = h.service.DeleteVacation(ctx, vacationID)
 	if err != nil {
 		return workflowResponseError(c, err)
 	}
@@ -489,7 +509,11 @@ func (h *Handler) EditApplication(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return response.BadRequest(c)
 	}
-	if err := h.service.EditApplication(actionContext(c, ""), c.Params("id"), body); err != nil {
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	if err := h.service.EditApplication(ctx, c.Params("id"), body); err != nil {
 		return workflowResponseError(c, err)
 	}
 	return response.Updated(c)
@@ -503,7 +527,11 @@ func (h *Handler) Withdraw(c fiber.Ctx) error {
 	if caller != v.UserID {
 		return response.Error(c, 403, errors.New("Отозвать заявку может только её автор"))
 	}
-	if err := h.service.UpdateVacationStatus(actionContext(c, ""), v.ID, repo.VacationsStatusWithdrawn); err != nil {
+	ctx, err := actionContext(c, "")
+	if err != nil {
+		return workflowResponseError(c, err)
+	}
+	if err := h.service.UpdateVacationStatus(ctx, v.ID, repo.VacationsStatusWithdrawn); err != nil {
 		return workflowResponseError(c, err)
 	}
 	return response.Updated(c)

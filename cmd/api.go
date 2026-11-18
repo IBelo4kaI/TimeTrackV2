@@ -28,6 +28,8 @@ import (
 	sickleave "timetrack/internal/sick_leave"
 	smtpsettings "timetrack/internal/smtp_settings"
 	systemsetting "timetrack/internal/system_setting"
+	"timetrack/internal/timeaccess"
+	"timetrack/internal/timesheet"
 	"timetrack/internal/timesheetreminder"
 	usertimeentry "timetrack/internal/user_time_entry"
 	vacation "timetrack/internal/vacation"
@@ -88,8 +90,10 @@ func (app *application) mount() *fiber.App {
 
 	v1 := fiberApp.Group("v1")
 
+	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference, repo.New(app.db))
+	timePolicy := timeaccess.NewPolicy(app.permissionClient, departmentScope, app.config.prefix)
 	calendarService := calendar.NewService(repo.New(app.db))
-	calendar.SetupRoutes(v1, calendarService, app.permissionClient, app.config.prefix)
+	calendar.SetupRoutes(v1, calendarService, app.permissionClient, app.config.prefix, timePolicy)
 
 	calendarEventService := calendarevent.NewService(repo.New(app.db))
 	calendarevent.SetupRoutes(v1, calendarEventService, app.permissionClient, app.config.prefix)
@@ -98,7 +102,7 @@ func (app *application) mount() *fiber.App {
 	daytype.SetupRoutes(v1, dayTypeService, app.permissionClient, app.config.prefix)
 
 	userTimeEntryService := usertimeentry.NewService(repo.New(app.db), app.db)
-	usertimeentry.SetupRoutes(v1, userTimeEntryService, app.logger, app.permissionClient, app.config.prefix)
+	usertimeentry.SetupRoutes(v1, userTimeEntryService, app.logger, app.permissionClient, app.config.prefix, timePolicy)
 
 	fileService := service.NewFileService(app.db, "docs")
 
@@ -114,6 +118,7 @@ func (app *application) mount() *fiber.App {
 	// internal/authservice. Раньше ФИО для текста уведомлений передавал
 	// фронт (уже знал из usersAll), теперь vacation резолвит сам.
 	authService := authservice.NewService(app.config.auth.host, app.config.auth.apiKey)
+	timesheet.SetupRoutes(v1, app.db, timePolicy, authService, userTimeEntryService)
 
 	// VK-бот и notifications нужны раньше vacation/sick_leave — те шлют в
 	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication
@@ -138,7 +143,6 @@ func (app *application) mount() *fiber.App {
 	news.SetupRoutes(v1, newsService, app.permissionClient, app.config.prefix)
 
 	// Vacation routes
-	departmentScope := reference.NewDepartmentScopeResolver(app.config.reference, repo.New(app.db))
 	departmentManagers := departmentmanager.NewService(repo.New(app.db), app.db, departmentScope, authService)
 	departmentmanager.SetupRoutes(v1, departmentManagers, app.permissionClient, app.config.prefix)
 	vacationService := vacation.NewService(repo.New(app.db), app.db, userTimeEntryService, notificationService, vkService, fileService, mailService, authService, app.config.frontendURL, departmentScope)
@@ -152,7 +156,7 @@ func (app *application) mount() *fiber.App {
 	go runTimesheetReminderTicker(reminderService)
 
 	// Sick leave routes
-	sickLeaveService := sickleave.NewService(repo.New(app.db), userTimeEntryService, notificationService, vkService, app.config.frontendURL)
+	sickLeaveService := sickleave.NewService(repo.New(app.db), app.db, notificationService, vkService, app.config.frontendURL)
 	sickleave.SetupRoutes(v1, sickLeaveService, fileService, app.permissionClient, app.config.prefix)
 
 	// File routes

@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations/*.sql migrations/*.ddl
 var migrationsFS embed.FS
 
 // RunMigrations applies all pending SQL files from migrations/ in lexicographic
@@ -61,7 +61,7 @@ func collectSQLFiles() ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && strings.HasSuffix(path, ".sql") {
+		if !d.IsDir() && (strings.HasSuffix(path, ".sql") || strings.HasSuffix(path, ".ddl")) {
 			names = append(names, path)
 		}
 		return nil
@@ -104,6 +104,27 @@ func applyFile(ctx context.Context, db *sql.DB, path string) error {
 	defer tx.Rollback()
 
 	for _, stmt := range splitStatements(string(data)) {
+		if path == "migrations/043_timesheet_approval_audit.sql" {
+			handled, err := ensureTimeEntryForeignKey(ctx, tx, stmt)
+			if err != nil {
+				return fmt.Errorf("ensure audited time entry FK: %w", err)
+			}
+			if handled {
+				continue
+			}
+		}
+		if path == "migrations/044_time_entry_history_immutability.ddl" {
+			if err := ensureTimeEntryHistoryTrigger(ctx, tx, stmt); err != nil {
+				return fmt.Errorf("ensure audit trigger: %w", err)
+			}
+			continue
+		}
+		if path == "migrations/045_department_manager_department_only.sql" && strings.HasPrefix(stmt, "ALTER TABLE department_managers") {
+			if err := ensureDepartmentOnlyManagerIndex(ctx, tx, stmt); err != nil {
+				return fmt.Errorf("ensure department manager uniqueness: %w", err)
+			}
+			continue
+		}
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			if resumableWorkflowColumn(path, stmt, err) {
 				continue
@@ -162,4 +183,148 @@ func resumableWorkflowColumn(path, stmt string, err error) bool {
 	}
 	return stmt == "ALTER TABLE vacations ADD COLUMN available_days INT NULL AFTER excess_days" ||
 		stmt == "ALTER TABLE vacations ADD COLUMN decision_comment VARCHAR(4000) NOT NULL DEFAULT ''"
+}
+
+// Migration 044 never drops an existing audit guard while resuming partial DDL.
+func ensureTimeEntryHistoryTrigger(ctx context.Context, tx *sql.Tx, stmt string) error {
+	const action = "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Time entry history is append-only'"
+	var name, event string
+	for _, operation := range []string{"UPDATE", "DELETE"} {
+		triggerName := "time_entry_history_no_" + strings.ToLower(operation)
+		expected := "CREATE TRIGGER " + triggerName + " BEFORE " + operation + " ON time_entry_history FOR EACH ROW " + action
+		if stmt == expected {
+			name, event = triggerName, operation
+			break
+		}
+	}
+	if name == "" {
+		return errors.New("unexpected statement in audit trigger migration")
+	}
+	verify := func() (bool, error) {
+		var timing, operation, table, body string
+		err := tx.QueryRowContext(ctx, `SELECT ACTION_TIMING, EVENT_MANIPULATION, EVENT_OBJECT_TABLE, ACTION_STATEMENT
+FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME = ?`, name).Scan(&timing, &operation, &table, &body)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if timing != "BEFORE" || operation != event || table != "time_entry_history" || !strings.EqualFold(strings.Join(strings.Fields(body), " "), action) {
+			return false, fmt.Errorf("audit trigger %s has an unexpected definition", name)
+		}
+		return true, nil
+	}
+	exists, err := verify()
+	if err != nil || exists {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, stmt)
+	if err != nil {
+		var dbErr *mysql.MySQLError
+		if errors.As(err, &dbErr) && dbErr.Number == 1359 {
+			exists, verifyErr := verify()
+			if verifyErr != nil {
+				return verifyErr
+			}
+			if exists {
+				return nil
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+func ensureTimeEntryForeignKey(ctx context.Context, tx *sql.Tx, stmt string) (bool, error) {
+	const replacement = "user_time_entries_day_type_audit_fk"
+	const old = "user_time_entries_ibfk_1"
+	const add = "ALTER TABLE user_time_entries ADD CONSTRAINT " + replacement + " FOREIGN KEY (day_type_id) REFERENCES day_types (id) ON DELETE RESTRICT ON UPDATE RESTRICT"
+	const drop = "ALTER TABLE user_time_entries DROP FOREIGN KEY " + old
+	normalized := strings.Join(strings.Fields(stmt), " ")
+	if normalized != add && normalized != drop {
+		return false, nil
+	}
+	verify := func(name string, restrict bool) (bool, error) {
+		var onDelete, onUpdate, column, parent, parentColumn string
+		var count int
+		err := tx.QueryRowContext(ctx, `SELECT rc.DELETE_RULE, rc.UPDATE_RULE, COUNT(*),
+MAX(k.COLUMN_NAME), MAX(k.REFERENCED_TABLE_NAME), MAX(k.REFERENCED_COLUMN_NAME)
+FROM information_schema.REFERENTIAL_CONSTRAINTS rc
+JOIN information_schema.KEY_COLUMN_USAGE k
+ON k.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA AND k.CONSTRAINT_NAME = rc.CONSTRAINT_NAME AND k.TABLE_NAME = rc.TABLE_NAME
+WHERE rc.CONSTRAINT_SCHEMA = DATABASE() AND rc.TABLE_NAME = 'user_time_entries' AND rc.CONSTRAINT_NAME = ?
+AND k.REFERENCED_TABLE_SCHEMA = DATABASE()
+GROUP BY rc.DELETE_RULE, rc.UPDATE_RULE`, name).Scan(&onDelete, &onUpdate, &count, &column, &parent, &parentColumn)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if count != 1 || column != "day_type_id" || parent != "day_types" || parentColumn != "id" || (restrict && (onDelete != "RESTRICT" || onUpdate != "RESTRICT")) {
+			return false, fmt.Errorf("foreign key %s has an unexpected definition", name)
+		}
+		return true, nil
+	}
+	exists, err := verify(replacement, true)
+	if err != nil {
+		return true, err
+	}
+	if normalized == add {
+		if exists {
+			return true, nil
+		}
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			exists, verifyErr := verify(replacement, true)
+			if verifyErr != nil {
+				return true, verifyErr
+			}
+			if exists {
+				return true, nil
+			}
+			return true, err
+		}
+		return true, nil
+	}
+	if !exists {
+		return true, errors.New("replacement foreign key is missing; refusing to drop the old constraint")
+	}
+	exists, err = verify(old, false)
+	if err != nil || !exists {
+		return true, err
+	}
+	if _, err := tx.ExecContext(ctx, stmt); err != nil {
+		exists, verifyErr := verify(old, false)
+		if verifyErr != nil {
+			return true, verifyErr
+		}
+		if !exists {
+			return true, nil
+		}
+		return true, err
+	}
+	return true, nil
+}
+
+func ensureDepartmentOnlyManagerIndex(ctx context.Context, tx *sql.Tx, stmt string) error {
+	var columns string
+	var nonUnique int
+	err := tx.QueryRowContext(ctx, `SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX), MAX(NON_UNIQUE)
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'department_managers' AND INDEX_NAME = 'uq_department_manager'`).Scan(&columns, &nonUnique)
+	if err != nil {
+		return err
+	}
+	if nonUnique != 0 {
+		return errors.New("department manager index is not unique")
+	}
+	if columns == "department,user_id" {
+		return nil
+	}
+	if columns != "company,department,user_id" {
+		return fmt.Errorf("unexpected department manager index: %s", columns)
+	}
+	_, err = tx.ExecContext(ctx, stmt)
+	return err
 }

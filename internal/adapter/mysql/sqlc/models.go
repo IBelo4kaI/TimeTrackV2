@@ -7,6 +7,7 @@ package repo
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -93,6 +94,50 @@ func (ns NullChatsType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.ChatsType), nil
+}
+
+type DepartmentManagerMergedAssignmentsRoleSyncStatus string
+
+const (
+	DepartmentManagerMergedAssignmentsRoleSyncStatusPending       DepartmentManagerMergedAssignmentsRoleSyncStatus = "pending"
+	DepartmentManagerMergedAssignmentsRoleSyncStatusNotConfigured DepartmentManagerMergedAssignmentsRoleSyncStatus = "not_configured"
+	DepartmentManagerMergedAssignmentsRoleSyncStatusSynced        DepartmentManagerMergedAssignmentsRoleSyncStatus = "synced"
+	DepartmentManagerMergedAssignmentsRoleSyncStatusFailed        DepartmentManagerMergedAssignmentsRoleSyncStatus = "failed"
+)
+
+func (e *DepartmentManagerMergedAssignmentsRoleSyncStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DepartmentManagerMergedAssignmentsRoleSyncStatus(s)
+	case string:
+		*e = DepartmentManagerMergedAssignmentsRoleSyncStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DepartmentManagerMergedAssignmentsRoleSyncStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDepartmentManagerMergedAssignmentsRoleSyncStatus struct {
+	DepartmentManagerMergedAssignmentsRoleSyncStatus DepartmentManagerMergedAssignmentsRoleSyncStatus `json:"departmentManagerMergedAssignmentsRoleSyncStatus"`
+	Valid                                            bool                                             `json:"valid"` // Valid is true if DepartmentManagerMergedAssignmentsRoleSyncStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDepartmentManagerMergedAssignmentsRoleSyncStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DepartmentManagerMergedAssignmentsRoleSyncStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DepartmentManagerMergedAssignmentsRoleSyncStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDepartmentManagerMergedAssignmentsRoleSyncStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DepartmentManagerMergedAssignmentsRoleSyncStatus), nil
 }
 
 type DepartmentManagersRoleSyncStatus string
@@ -268,6 +313,136 @@ func (ns NullSystemSettingsSettingType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.SystemSettingsSettingType), nil
+}
+
+type TimeEntryHistoryActorType string
+
+const (
+	TimeEntryHistoryActorTypeEmployee TimeEntryHistoryActorType = "employee"
+	TimeEntryHistoryActorTypeManager  TimeEntryHistoryActorType = "manager"
+	TimeEntryHistoryActorTypeAdmin    TimeEntryHistoryActorType = "admin"
+	TimeEntryHistoryActorTypeSystem   TimeEntryHistoryActorType = "system"
+)
+
+func (e *TimeEntryHistoryActorType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TimeEntryHistoryActorType(s)
+	case string:
+		*e = TimeEntryHistoryActorType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TimeEntryHistoryActorType: %T", src)
+	}
+	return nil
+}
+
+type NullTimeEntryHistoryActorType struct {
+	TimeEntryHistoryActorType TimeEntryHistoryActorType `json:"timeEntryHistoryActorType"`
+	Valid                     bool                      `json:"valid"` // Valid is true if TimeEntryHistoryActorType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTimeEntryHistoryActorType) Scan(value interface{}) error {
+	if value == nil {
+		ns.TimeEntryHistoryActorType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TimeEntryHistoryActorType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTimeEntryHistoryActorType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TimeEntryHistoryActorType), nil
+}
+
+type TimeEntryHistoryOperation string
+
+const (
+	TimeEntryHistoryOperationCreate TimeEntryHistoryOperation = "create"
+	TimeEntryHistoryOperationUpdate TimeEntryHistoryOperation = "update"
+	TimeEntryHistoryOperationDelete TimeEntryHistoryOperation = "delete"
+)
+
+func (e *TimeEntryHistoryOperation) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TimeEntryHistoryOperation(s)
+	case string:
+		*e = TimeEntryHistoryOperation(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TimeEntryHistoryOperation: %T", src)
+	}
+	return nil
+}
+
+type NullTimeEntryHistoryOperation struct {
+	TimeEntryHistoryOperation TimeEntryHistoryOperation `json:"timeEntryHistoryOperation"`
+	Valid                     bool                      `json:"valid"` // Valid is true if TimeEntryHistoryOperation is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTimeEntryHistoryOperation) Scan(value interface{}) error {
+	if value == nil {
+		ns.TimeEntryHistoryOperation, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TimeEntryHistoryOperation.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTimeEntryHistoryOperation) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TimeEntryHistoryOperation), nil
+}
+
+type TimesheetMonthsStatus string
+
+const (
+	TimesheetMonthsStatusPending     TimesheetMonthsStatus = "pending"
+	TimesheetMonthsStatusApproved    TimesheetMonthsStatus = "approved"
+	TimesheetMonthsStatusNeedsReview TimesheetMonthsStatus = "needs_review"
+)
+
+func (e *TimesheetMonthsStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TimesheetMonthsStatus(s)
+	case string:
+		*e = TimesheetMonthsStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TimesheetMonthsStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTimesheetMonthsStatus struct {
+	TimesheetMonthsStatus TimesheetMonthsStatus `json:"timesheetMonthsStatus"`
+	Valid                 bool                  `json:"valid"` // Valid is true if TimesheetMonthsStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTimesheetMonthsStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TimesheetMonthsStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TimesheetMonthsStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTimesheetMonthsStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TimesheetMonthsStatus), nil
 }
 
 type VacationsDepartmentStatus string
@@ -457,6 +632,20 @@ type DepartmentManager struct {
 	AuthRoleID     string                           `json:"authRoleId"`
 }
 
+type DepartmentManagerMergedAssignment struct {
+	ID             string                                           `json:"id"`
+	Company        string                                           `json:"company"`
+	Department     string                                           `json:"department"`
+	UserID         string                                           `json:"userId"`
+	CreatedBy      string                                           `json:"createdBy"`
+	RoleSyncStatus DepartmentManagerMergedAssignmentsRoleSyncStatus `json:"roleSyncStatus"`
+	CreatedAt      time.Time                                        `json:"createdAt"`
+	UpdatedAt      time.Time                                        `json:"updatedAt"`
+	AuthRoleID     string                                           `json:"authRoleId"`
+	RetainedID     string                                           `json:"retainedId"`
+	RoleReleased   bool                                             `json:"roleReleased"`
+}
+
 type File struct {
 	ID               string         `json:"id"`
 	OriginalName     string         `json:"originalName"`
@@ -613,6 +802,34 @@ type SystemSetting struct {
 	IsPublic     sql.NullBool                  `json:"isPublic"`
 	CreatedAt    sql.NullTime                  `json:"createdAt"`
 	UpdatedAt    sql.NullTime                  `json:"updatedAt"`
+}
+
+type TimeEntryHistory struct {
+	ID            int64                     `json:"id"`
+	UserID        string                    `json:"userId"`
+	EntryDate     time.Time                 `json:"entryDate"`
+	EntryID       sql.NullString            `json:"entryId"`
+	ActorID       sql.NullString            `json:"actorId"`
+	ActorType     TimeEntryHistoryActorType `json:"actorType"`
+	Source        string                    `json:"source"`
+	Operation     TimeEntryHistoryOperation `json:"operation"`
+	BeforeValues  json.RawMessage           `json:"beforeValues"`
+	AfterValues   json.RawMessage           `json:"afterValues"`
+	Comment       string                    `json:"comment"`
+	MonthRevision int64                     `json:"monthRevision"`
+	CreatedAt     time.Time                 `json:"createdAt"`
+}
+
+type TimesheetMonth struct {
+	UserID           string                `json:"userId"`
+	Year             int16                 `json:"year"`
+	Month            int8                  `json:"month"`
+	Status           TimesheetMonthsStatus `json:"status"`
+	Revision         int64                 `json:"revision"`
+	ApprovedRevision sql.NullInt64         `json:"approvedRevision"`
+	ApprovedBy       sql.NullString        `json:"approvedBy"`
+	ApprovedAt       sql.NullTime          `json:"approvedAt"`
+	UpdatedAt        time.Time             `json:"updatedAt"`
 }
 
 type UserTimeEntry struct {
