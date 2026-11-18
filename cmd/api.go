@@ -118,7 +118,7 @@ func (app *application) mount() *fiber.App {
 	// internal/authservice. Раньше ФИО для текста уведомлений передавал
 	// фронт (уже знал из usersAll), теперь vacation резолвит сам.
 	authService := authservice.NewService(app.config.auth.host, app.config.auth.apiKey)
-	timesheet.SetupRoutes(v1, app.db, timePolicy, authService, userTimeEntryService)
+	timesheet.SetupRoutes(v1, app.db, timePolicy, authService, userTimeEntryService, app.logger)
 
 	// VK-бот и notifications нужны раньше vacation/sick_leave — те шлют в
 	// них уведомления админам о новых заявках (см. notifyAdminsNewApplication

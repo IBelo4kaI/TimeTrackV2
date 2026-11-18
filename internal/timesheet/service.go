@@ -36,10 +36,13 @@ func (s *Service) History(ctx context.Context, userID string, year, month int) (
 		return nil, err
 	}
 	result, err := s.repo.ListTimeEntryHistory(ctx, repo.ListTimeEntryHistoryParams{UserID: userID, FromDate: start, ToDate: start.AddDate(0, 1, 0)})
+	if err != nil {
+		return nil, err
+	}
 	if result == nil {
 		result = []repo.TimeEntryHistory{}
 	}
-	return result, err
+	return result, nil
 }
 
 // Decide locks the same month row used by every audited time writer.

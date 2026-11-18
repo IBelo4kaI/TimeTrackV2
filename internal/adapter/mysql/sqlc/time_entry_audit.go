@@ -221,7 +221,7 @@ func sameTimeEntry(a, b *UserTimeEntry) bool {
 	}
 	return a.ID == b.ID && a.DayTypeID == b.DayTypeID && a.HoursWorked == b.HoursWorked && a.WorkLocation == b.WorkLocation
 }
-func snapshotJSON(entry *UserTimeEntry) (json.RawMessage, error) {
+func snapshotJSON(entry *UserTimeEntry) (*json.RawMessage, error) {
 	if entry == nil {
 		return nil, nil
 	}
@@ -239,7 +239,8 @@ func snapshotJSON(entry *UserTimeEntry) (json.RawMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode time entry audit: %w", err)
 	}
-	return data, nil
+	snapshot := json.RawMessage(data)
+	return &snapshot, nil
 }
 func (q *Queries) CreateUserTimeEntry(ctx context.Context, arg CreateUserTimeEntryParams) error {
 	arg.EntryDate = entryDate(arg.EntryDate)

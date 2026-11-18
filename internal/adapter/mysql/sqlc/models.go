@@ -813,8 +813,8 @@ type TimeEntryHistory struct {
 	ActorType     TimeEntryHistoryActorType `json:"actorType"`
 	Source        string                    `json:"source"`
 	Operation     TimeEntryHistoryOperation `json:"operation"`
-	BeforeValues  json.RawMessage           `json:"beforeValues"`
-	AfterValues   json.RawMessage           `json:"afterValues"`
+	BeforeValues  *json.RawMessage          `json:"beforeValues"`
+	AfterValues   *json.RawMessage          `json:"afterValues"`
 	Comment       string                    `json:"comment"`
 	MonthRevision int64                     `json:"monthRevision"`
 	CreatedAt     time.Time                 `json:"createdAt"`

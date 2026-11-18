@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/gofiber/fiber/v3"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 )
 
 type Handler struct {
+	logger  *slog.Logger
 	service *Service
 	db      *sql.DB
 	policy  *timeaccess.Policy
@@ -90,13 +92,16 @@ func (h *Handler) History(c fiber.Ctx) error {
 		return err
 	}
 	if _, err = h.policy.Authorize(c, c.Params("userId"), "read", ""); err != nil {
-		return apiError(c, err)
+		return h.historyError(c, "authorize", err)
 	}
 	rows, err := h.service.History(c.RequestCtx(), c.Params("userId"), year, month)
 	if err != nil {
-		return apiError(c, err)
+		return h.historyError(c, "read_history", err)
 	}
-	return response.Success(c, rows)
+	if err := response.Success(c, rows); err != nil {
+		return h.historyError(c, "encode_response", err)
+	}
+	return nil
 }
 func (h *Handler) decision(approve bool) fiber.Handler {
 	return func(c fiber.Ctx) error {

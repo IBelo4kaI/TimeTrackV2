@@ -11,3 +11,14 @@ sql:
         emit_interface: true
         emit_pointers_for_null_types: true
         json_tags_case_style: camel
+        overrides:
+          - column: "time_entry_history.before_values"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
+              pointer: true
+          - column: "time_entry_history.after_values"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
+              pointer: true
