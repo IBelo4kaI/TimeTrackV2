@@ -28,6 +28,7 @@ type Handler struct {
 }
 
 type monthResponse struct {
+	RequiresApproval bool                       `json:"requiresApproval"`
 	UserID           string                     `json:"userId"`
 	Year             int16                      `json:"year"`
 	Month            int8                       `json:"month"`
@@ -38,8 +39,8 @@ type monthResponse struct {
 	ApprovedAt       *time.Time                 `json:"approvedAt"`
 }
 
-func monthDTO(state repo.TimesheetMonth) monthResponse {
-	result := monthResponse{UserID: state.UserID, Year: state.Year, Month: state.Month, Status: state.Status, Revision: state.Revision}
+func monthDTO(state repo.TimesheetMonth, requiresApproval bool) monthResponse {
+	result := monthResponse{RequiresApproval: requiresApproval, UserID: state.UserID, Year: state.Year, Month: state.Month, Status: state.Status, Revision: state.Revision}
 	if state.ApprovedRevision.Valid {
 		result.ApprovedRevision = &state.ApprovedRevision.Int64
 	}
@@ -84,7 +85,11 @@ func (h *Handler) Month(c fiber.Ctx) error {
 	if err != nil {
 		return apiError(c, err)
 	}
-	return response.Success(c, monthDTO(state))
+	required, err := h.service.RequiresApproval(c.RequestCtx(), state.UserID)
+	if err != nil {
+		return apiError(c, err)
+	}
+	return response.Success(c, monthDTO(state, required))
 }
 func (h *Handler) History(c fiber.Ctx) error {
 	year, month, err := period(c)
@@ -119,15 +124,19 @@ func (h *Handler) decision(approve bool) fiber.Handler {
 		if err := c.Bind().Body(&body); err != nil || body.ExpectedRevision == nil || *body.ExpectedRevision < 0 {
 			return fiber.ErrBadRequest
 		}
+		required, err := h.service.RequiresApproval(c.RequestCtx(), c.Params("userId"))
+		if err != nil {
+			return apiError(c, err)
+		}
 		state, err := h.service.Decide(ctx, h.db, c.Params("userId"), year, month, *body.ExpectedRevision, approve)
 		if err != nil {
 			var api *fiber.Error
 			if errors.As(err, &api) && api.Code == 409 {
-				return c.Status(409).JSON(fiber.Map{"error": api.Message, "current": monthDTO(state)})
+				return c.Status(409).JSON(fiber.Map{"error": api.Message, "current": monthDTO(state, required)})
 			}
 			return apiError(c, err)
 		}
-		return response.Success(c, monthDTO(state))
+		return response.Success(c, monthDTO(state, required))
 	}
 }
 
@@ -186,6 +195,10 @@ func (h *Handler) List(c fiber.Ctx) error {
 	if allRead && (!allEdit || !allApprove) {
 		members, _ = h.policy.Members(c, actor)
 	}
+	exempt, err := h.service.ApprovalExemptUsers(c.RequestCtx())
+	if err != nil {
+		return apiError(c, err)
+	}
 	rows := make([]listRow, 0, len(ids))
 	for _, id := range ids {
 		state, e := h.service.GetMonth(c.RequestCtx(), id, year, month)
@@ -193,7 +206,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 			return apiError(c, e)
 		}
 		user := byID[id]
-		row := listRow{monthResponse: monthDTO(state), Name: user.Name, Surname: user.Surname, Patronymic: user.Patronymic, CanEdit: allEdit || members[id], CanApprove: allApprove || members[id]}
+		row := listRow{monthResponse: monthDTO(state, !exempt[id]), Name: user.Name, Surname: user.Surname, Patronymic: user.Patronymic, CanEdit: allEdit || members[id], CanApprove: allApprove || members[id]}
 		gender, e := strconv.Atoi(user.Gender.ID)
 		if e != nil || gender < 1 {
 			row.StatisticsUnavailable = true

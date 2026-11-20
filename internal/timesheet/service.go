@@ -14,6 +14,23 @@ import (
 type Service struct{ repo *repo.Queries }
 
 func NewService(queries *repo.Queries) *Service { return &Service{repo: queries} }
+
+// Approval exemption follows current assignments, independently of access permissions.
+func (s *Service) RequiresApproval(ctx context.Context, userID string) (bool, error) {
+	rows, err := s.repo.ListDepartmentManagersByUser(ctx, userID)
+	return len(rows) == 0, err
+}
+func (s *Service) ApprovalExemptUsers(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.repo.ListDepartmentManagers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]bool)
+	for _, row := range rows {
+		result[row.UserID] = true
+	}
+	return result, nil
+}
 func monthStart(userID string, year, month int) (time.Time, error) {
 	if userID == "" || year < 1 || year > 9999 || month < 1 || month > 12 {
 		return time.Time{}, fmt.Errorf("invalid timesheet owner or month")
